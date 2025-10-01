@@ -5,7 +5,7 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: npm install && cd frontend && npm install && npm run build && cd ../api && npm install && npm run build
+    buildCommand: npm install && cd frontend && npm install && npm run build && cd ../api && npm install && npm run build && cd ..
     startCommand: node start-dev.js
     envVars:
       - key: NODE_ENV
@@ -15,10 +15,4 @@ services:
       - key: API_PORT
         value: 3001
     healthCheckPath: /api/health
-    
-  # Disk storage for screenshots
-    disk:
-      name: screenshots
-      mountPath: /app/api/screenshots
-      sizeGB: 1
 
