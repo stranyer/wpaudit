@@ -1,0 +1,24 @@
+services:
+  # Web Service - Combines Frontend + API
+  - type: web
+    name: justspeedit
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && cd frontend && npm install && npm run build && cd ../api && npm install && npm run build
+    startCommand: node start-dev.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: API_PORT
+        value: 3001
+    healthCheckPath: /api/health
+    
+  # Disk storage for screenshots
+    disk:
+      name: screenshots
+      mountPath: /app/api/screenshots
+      sizeGB: 1
+

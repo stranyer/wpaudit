@@ -1,15 +1,38 @@
+# Dependencies
 node_modules/
+package-lock.json
+
+# Build outputs
+api/dist/
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log
+api/debug.log
+api/logs/
+frontend/logs/
+
+# Environment variables
 .env
 .env.local
-.next/
-dist/
-build/
-*.log
-debug.log
+.env.production.local
+.env.development.local
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Screenshots (except .gitkeep)
+# Screenshots (generated at runtime)
 api/screenshots/*
 !api/screenshots/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
