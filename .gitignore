@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.local
+.next/
+dist/
+build/
+*.log
+debug.log
+.DS_Store
+.vscode/
+.idea/
+
+# Screenshots (except .gitkeep)
+api/screenshots/*
+!api/screenshots/.gitkeep
