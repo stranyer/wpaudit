@@ -12,7 +12,11 @@ import {
   Brain,
   CheckCircle,
   Clock,
-  Loader2
+  Loader2,
+  Lightbulb,
+  Shield,
+  Search,
+  AlertTriangle
 } from 'lucide-react'
 
 interface ScanStatus {
@@ -27,11 +31,26 @@ interface ScanStatus {
   }
 }
 
+const funFacts = [
+  { icon: Zap, text: "A 1-second delay in page load time can reduce conversions by 7%", source: "Google Research" },
+  { icon: Activity, text: "53% of mobile users abandon sites that take longer than 3 seconds to load", source: "Google/SOASTA" },
+  { icon: Shield, text: "WordPress powers 43% of all websites on the internet", source: "W3Techs" },
+  { icon: Search, text: "Page speed is a direct ranking factor for Google search results", source: "Google" },
+  { icon: Lightbulb, text: "Optimizing images can reduce page weight by 50-80% on average", source: "HTTP Archive" },
+  { icon: Zap, text: "Amazon found that every 100ms delay costs them 1% in sales", source: "Amazon" },
+  { icon: Activity, text: "The average webpage is now over 2MB in size", source: "HTTP Archive 2024" },
+  { icon: Shield, text: "80% of WordPress vulnerabilities come from plugins", source: "WPScan" },
+  { icon: Search, text: "Google uses over 200 ranking factors in their algorithm", source: "Google" },
+  { icon: Lightbulb, text: "Lazy loading images can improve initial page load by 50%", source: "Web.dev" }
+]
+
 export default function ScanningPage() {
   const params = useParams()
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null)
   const [currentStep, setCurrentStep] = useState(0)
   const [timeRemaining, setTimeRemaining] = useState(60)
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const [currentFactIndex, setCurrentFactIndex] = useState(0)
 
   const steps = [
     { id: 'scanning', label: 'SCANNING WEBSITE', icon: Globe, description: 'Connecting and analyzing your website...' },
@@ -77,7 +96,7 @@ export default function ScanningPage() {
     // Start polling
     pollStatus()
 
-    // Countdown timer
+    // Countdown timer and elapsed timer
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
@@ -86,9 +105,18 @@ export default function ScanningPage() {
         }
         return prev - 1
       })
+      setElapsedTime(prev => prev + 1)
     }, 1000)
 
-    return () => clearInterval(timer)
+    // Rotate fun facts every 6 seconds
+    const factTimer = setInterval(() => {
+      setCurrentFactIndex(prev => (prev + 1) % funFacts.length)
+    }, 6000)
+
+    return () => {
+      clearInterval(timer)
+      clearInterval(factTimer)
+    }
   }, [params.jobId])
 
   const getStepStatus = (stepIndex: number) => {
@@ -107,6 +135,24 @@ export default function ScanningPage() {
     } else {
       return <Icon className="h-6 w-6 text-gray-400" />
     }
+  }
+
+  const getSubTask = () => {
+    const progress = scanStatus?.progress || 0
+    
+    if (progress < 10) return "Connecting to website..."
+    if (progress < 20) return "Analyzing page structure and HTML..."
+    if (progress < 30) return "Detecting WordPress installation..."
+    if (progress < 35) return "Identifying theme and plugins..."
+    if (progress < 40) return "Checking security headers..."
+    if (progress < 45) return "Starting performance analysis..."
+    if (progress < 60) return "Running mobile Lighthouse audit..."
+    if (progress < 75) return "Running desktop Lighthouse audit..."
+    if (progress < 80) return "Analyzing SEO factors..."
+    if (progress < 85) return "Checking accessibility..."
+    if (progress < 90) return "Verifying GDPR compliance..."
+    if (progress < 95) return "Generating report..."
+    return "Finalizing results..."
   }
 
   return (
@@ -171,14 +217,44 @@ export default function ScanningPage() {
               <div className="text-lg font-semibold text-gray-900 mb-3">
                 {scanStatus?.message || 'Initializing analysis...'}
               </div>
-              <div className="flex items-center justify-center space-x-6 text-sm text-gray-600">
+              <div className="flex items-center justify-center space-x-6 text-sm text-gray-600 mb-6">
                 <div className="flex items-center">
-                  <Clock className="h-4 w-4 mr-2" />
+                  <Clock className="h-4 w-4 mr-2 text-blue-600" />
+                  <span className="font-medium">{elapsedTime}s elapsed</span>
+                </div>
+                <div className="w-px h-4 bg-gray-300"></div>
+                <div className="flex items-center">
+                  <Clock className="h-4 w-4 mr-2 text-orange-600" />
                   <span>{timeRemaining}s remaining</span>
                 </div>
+                <div className="w-px h-4 bg-gray-300"></div>
                 <div className="flex items-center">
-                  <Activity className="h-4 w-4 mr-2" />
+                  <Activity className="h-4 w-4 mr-2 text-green-600" />
                   <span>{scanStatus?.progress || 0}% complete</span>
+                </div>
+              </div>
+
+              {/* Fun Fact */}
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200 max-w-2xl mx-auto">
+                <div className="flex items-start gap-3">
+                  {(() => {
+                    const CurrentIcon = funFacts[currentFactIndex].icon
+                    return <CurrentIcon className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  })()}
+                  <div className="text-left">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Lightbulb className="h-4 w-4 text-yellow-600" />
+                      <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                        Did you know?
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed mb-1">
+                      {funFacts[currentFactIndex].text}
+                    </p>
+                    <p className="text-xs text-gray-500 italic">
+                      — {funFacts[currentFactIndex].source}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -190,28 +266,38 @@ export default function ScanningPage() {
           <Card className="border-gray-200">
             <CardContent className="p-8">
               <div className="text-center">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6">
-                  {steps[currentStep]?.description || 'Processing your website...'}
-                </h3>
+                {/* Sub-task indicator */}
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-full text-sm font-medium">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{getSubTask()}</span>
+                  </div>
+                </div>
                 
-                <div className="grid md:grid-cols-3 gap-4 mb-8">
-                  <div className="text-center p-6 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="text-3xl font-bold text-gray-900 mb-1">
+                <div className="grid md:grid-cols-4 gap-4 mb-8">
+                  <div className="text-center p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                    <div className="text-3xl font-bold text-green-700 mb-1">
                       {scanStatus.progress}%
                     </div>
-                    <div className="text-sm text-gray-600">Complete</div>
+                    <div className="text-sm text-gray-700 font-medium">Complete</div>
                   </div>
-                  <div className="text-center p-6 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="text-3xl font-bold text-gray-900 mb-1">
+                  <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                    <div className="text-3xl font-bold text-blue-700 mb-1">
+                      {elapsedTime}s
+                    </div>
+                    <div className="text-sm text-gray-700 font-medium">Elapsed</div>
+                  </div>
+                  <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+                    <div className="text-3xl font-bold text-orange-700 mb-1">
                       {timeRemaining}s
                     </div>
-                    <div className="text-sm text-gray-600">Remaining</div>
+                    <div className="text-sm text-gray-700 font-medium">Remaining</div>
                   </div>
-                  <div className="text-center p-6 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="text-3xl font-bold text-gray-900 mb-1">
-                      <Zap className="h-8 w-8 mx-auto" />
+                  <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                    <div className="flex justify-center mb-1">
+                      <Zap className="h-8 w-8 text-purple-700" />
                     </div>
-                    <div className="text-sm text-gray-600">Lighthouse</div>
+                    <div className="text-sm text-gray-700 font-medium">Lighthouse</div>
                   </div>
                 </div>
 
