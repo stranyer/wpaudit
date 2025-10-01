@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.next
+.git
+.gitignore
+README.md
+*.md
+.env
+.env.local
+api/dist
+api/node_modules
+api/screenshots
+api/debug.log
+frontend/node_modules
+frontend/.next
+frontend/out
+
