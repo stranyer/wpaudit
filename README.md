@@ -77,17 +77,19 @@ This will start:
 ### Why Render.com?
 - ✅ **100% FREE** tier (750 hours/month)
 - ✅ **Chromium included** (Lighthouse works out-of-the-box)
-- ✅ **Auto-deploy** from GitHub
+- ✅ **Auto-deploy** from GitHub/GitLab
 - ✅ **SSL included** (free Let's Encrypt)
 - ✅ **Custom domain** support (free)
 
 ### Deploy in 15 Minutes
 
-**Full guide**: See [RENDER_DEPLOY.md](./RENDER_DEPLOY.md)
+**Full guides**:
+- [RENDER_DEPLOY.md](./RENDER_DEPLOY.md) - GitHub version
+- [GITLAB_RENDER_DEPLOY.md](./GITLAB_RENDER_DEPLOY.md) - GitLab version
 
 **Quick steps**:
 
-1. Push to GitHub
+1. Push to GitHub or GitLab
 2. Connect to Render.com
 3. Configure cron-job.org (keep app awake)
 4. Add custom domain
