@@ -6,7 +6,7 @@ services:
     region: oregon
     plan: free
     buildCommand: npm install --production=false && npm run build:all
-    startCommand: node start-dev.js
+    startCommand: node start-prod.js
     envVars:
       - key: NODE_ENV
         value: production
