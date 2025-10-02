@@ -1330,19 +1330,11 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {report.gdpr.tracking && (
+            {report.gdpr.tracking.present && (
               <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h4 className="font-semibold text-gray-900 mb-2">Tracking Scripts Detected</h4>
                 <div className="flex items-center gap-2">
-                  {report.gdpr.tracking.googleAnalytics && (
-                    <Badge variant="secondary">Google Analytics</Badge>
-                  )}
-                  {report.gdpr.tracking.facebookPixel && (
-                    <Badge variant="secondary">Facebook Pixel</Badge>
-                  )}
-                  {report.gdpr.tracking.other > 0 && (
-                    <Badge variant="secondary">{report.gdpr.tracking.other} other scripts</Badge>
-                  )}
+                  <Badge variant="secondary">{report.gdpr.tracking.scripts} tracking script{report.gdpr.tracking.scripts !== 1 ? 's' : ''}</Badge>
                 </div>
               </div>
             )}
