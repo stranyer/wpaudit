@@ -8,6 +8,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:api": "cd api && npm run dev",
     "build": "cd frontend && npm run build",
+    "build:all": "cd frontend && npm install && npm run build && cd ../api && npm install && npm run build",
     "start": "cd frontend && npm run start"
   },
   "devDependencies": {
