@@ -622,6 +622,7 @@ class ScanService {
       
       // Enable performance monitoring with proper Core Web Vitals
           await page.evaluateOnNewDocument(() => {
+            // @ts-ignore - Browser code
             (window as any).performanceMetrics = {
               resources: [],
               navigation: null,
@@ -640,10 +641,11 @@ class ScanService {
           const entries = list.getEntries()
           if (entries.length > 0) {
             const lastEntry = entries[entries.length - 1] as any
+            // @ts-ignore - Browser code
             (window as any).performanceMetrics.webVitals.lcp = lastEntry.startTime
           }
         })
-        lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] })
+        lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] } as any)
         
         // CLS Observer
         let clsValue = 0
@@ -654,33 +656,38 @@ class ScanService {
               clsValue += layoutShiftEntry.value
             }
           }
+          // @ts-ignore - Browser code
           (window as any).performanceMetrics.webVitals.cls = clsValue
         })
-        clsObserver.observe({ entryTypes: ['layout-shift'] })
+        clsObserver.observe({ entryTypes: ['layout-shift'] } as any)
         
         // FCP Observer
         const fcpObserver = new PerformanceObserver((list) => {
           const entries = list.getEntries()
           if (entries.length > 0) {
+            // @ts-ignore - Browser code
             (window as any).performanceMetrics.webVitals.fcp = entries[0].startTime
           }
         })
-        fcpObserver.observe({ entryTypes: ['paint'] })
+        fcpObserver.observe({ entryTypes: ['paint'] } as any)
         
         // General observer for other metrics
         const observer = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
             const performanceEntry = entry as any
             if (performanceEntry.entryType === 'resource') {
+              // @ts-ignore - Browser code
               (window as any).performanceMetrics.resources.push(performanceEntry)
             } else if (performanceEntry.entryType === 'navigation') {
+              // @ts-ignore - Browser code
               (window as any).performanceMetrics.navigation = performanceEntry
+              // @ts-ignore - Browser code
               (window as any).performanceMetrics.webVitals.ttfb = performanceEntry.responseStart - performanceEntry.requestStart
             }
           }
         })
         
-        observer.observe({ entryTypes: ['resource', 'navigation'] })
+        observer.observe({ entryTypes: ['resource', 'navigation'] } as any)
       })
       
       const startTime = Date.now()
@@ -689,7 +696,7 @@ class ScanService {
       
       // Get comprehensive metrics with proper Core Web Vitals
       const metrics = await page.evaluate(() => {
-        const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming
+        const navigation = (performance.getEntriesByType('navigation' as any)[0] || {}) as any
         const resources = performance.getEntriesByType('resource')
         
         // Calculate resource sizes
@@ -712,12 +719,13 @@ class ScanService {
         })
         
         // Get Core Web Vitals from our observers
+        // @ts-ignore - Browser code
         const webVitals = (window as any).performanceMetrics?.webVitals || {}
         
         // Fallback to direct performance API if observers didn't work
         const lcpEntry = performance.getEntriesByName('largest-contentful-paint')[0]
         const fcpEntry = performance.getEntriesByName('first-contentful-paint')[0]
-        const clsEntries = performance.getEntriesByType('layout-shift') as any[]
+        const clsEntries = performance.getEntriesByType('layout-shift' as any) as any[]
         
         let cls = 0
         clsEntries.forEach((entry: any) => {

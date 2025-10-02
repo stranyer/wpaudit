@@ -4,11 +4,7 @@ import * as chromeLauncher from 'chrome-launcher'
 import puppeteer from 'puppeteer'
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
-
-// Fix for __dirname in ES modules
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// __dirname is available in CommonJS (tsconfig target: commonjs)
 
 interface LighthouseTask {
   url: string
@@ -68,8 +64,8 @@ async function runLighthouse(task: LighthouseTask) {
             uploadThroughputKbps: 0,
             cpuSlowdownMultiplier: 1
           },
-      throttlingMethod: 'simulate'
-    }
+      throttlingMethod: 'simulate' as any
+    } as any
 
     // Run Lighthouse
     const result = await lighthouse(task.url, options)
