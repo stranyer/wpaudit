@@ -5,7 +5,7 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: npm install --production=false && npm run build:all
+    buildCommand: npm install --production=false && npm run build:all && cd api && npm install --production
     startCommand: node start-prod.js
     envVars:
       - key: NODE_ENV

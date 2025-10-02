@@ -3,7 +3,7 @@ node_modules/
 package-lock.json
 
 # Build outputs
-api/dist/
+# api/dist/ - Now tracked for Render deployment
 frontend/.next/
 frontend/out/
 
