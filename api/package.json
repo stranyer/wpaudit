@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "echo 'Starting TypeScript compilation...' && tsc --listFiles && echo 'TypeScript compilation complete!'",
     "start": "node dist/index.js"
   },
   "dependencies": {
