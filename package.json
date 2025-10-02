@@ -8,7 +8,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:api": "cd api && npm run dev",
     "build": "cd frontend && npm run build",
-    "build:all": "cd frontend && npm install && npm run build && cd ../api && npm install && npm run build",
+    "build:all": "echo '==> Building Frontend...' && cd frontend && npm install && npm run build && echo '==> Frontend build complete!' && cd ../api && echo '==> Building API...' && npm install && npm run build && echo '==> API build complete!'",
     "start": "cd frontend && npm run start"
   },
   "devDependencies": {
