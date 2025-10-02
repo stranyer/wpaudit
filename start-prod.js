@@ -2,7 +2,13 @@ const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+console.log('='.repeat(60));
 console.log('🚀 Starting Just Speed It Production Environment...');
+console.log('Node version:', process.version);
+console.log('Working directory:', __dirname);
+console.log('PORT:', process.env.PORT || 3000);
+console.log('API_PORT:', process.env.API_PORT || 3001);
+console.log('='.repeat(60));
 
 // Check if API dependencies are installed
 const apiNodeModulesPath = path.join(__dirname, 'api', 'node_modules');

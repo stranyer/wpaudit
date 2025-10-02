@@ -14,5 +14,4 @@ services:
         value: 3000
       - key: API_PORT
         value: 3001
-    healthCheckPath: /api/health
 
