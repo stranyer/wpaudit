@@ -5,7 +5,7 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: npm install --production=false && npm run build:all && echo '==> Installing API production dependencies...' && cd api && npm install --production && echo '==> API dependencies installed!' && cd ..
+    buildCommand: npm install --production=false && npm run build:all && echo '==> Build complete, dependencies will install on first start'
     startCommand: node start-prod.js
     envVars:
       - key: NODE_ENV

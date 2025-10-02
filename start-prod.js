@@ -1,7 +1,24 @@
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 console.log('🚀 Starting Just Speed It Production Environment...');
+
+// Check if API dependencies are installed
+const apiNodeModulesPath = path.join(__dirname, 'api', 'node_modules');
+if (!fs.existsSync(apiNodeModulesPath)) {
+  console.log('📦 Installing API dependencies (first time only)...');
+  try {
+    execSync('npm install --production', {
+      cwd: path.join(__dirname, 'api'),
+      stdio: 'inherit'
+    });
+    console.log('✅ API dependencies installed!');
+  } catch (error) {
+    console.error('❌ Failed to install API dependencies:', error);
+    process.exit(1);
+  }
+}
 
 // Start API server in production mode
 console.log('📡 Starting API server on port', process.env.API_PORT || 3001, '...');
