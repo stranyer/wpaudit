@@ -4,9 +4,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { jobId: string } }
+  context: { params: Promise<{ jobId: string }> }
 ) {
   try {
+    const params = await context.params
     const jobId = params.jobId
     
     console.log('Proxying status request for jobId:', jobId)

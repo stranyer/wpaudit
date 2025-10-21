@@ -4,9 +4,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { reportId: string } }
+  context: { params: Promise<{ reportId: string }> }
 ) {
   try {
+    const params = await context.params
     const reportId = params.reportId
     
     console.log('Proxying report request for reportId:', reportId)
