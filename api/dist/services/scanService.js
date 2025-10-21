@@ -621,10 +621,10 @@ class ScanService {
         };
         // Save report to reportService
         const savedReport = await reportService_1.reportService.createReport(url, scanResult);
-        console.log('✅ Report saved with ID:', savedReport.id);
-        logger_1.logger.info('Report saved to reportService', { reportId: savedReport.id, scanResultId: scanResult.id });
-        // Update scanResult.id to match the saved report's ID
-        scanResult.id = savedReport.id;
+        console.log('✅ Report saved with ID:', savedReport.publicId);
+        logger_1.logger.info('Report saved to reportService', { reportId: savedReport.publicId, scanResultId: scanResult.id });
+        // Update scanResult.id to match the saved report's PUBLIC ID (for frontend redirect)
+        scanResult.id = savedReport.publicId;
         return scanResult;
     }
     generateReportId() {

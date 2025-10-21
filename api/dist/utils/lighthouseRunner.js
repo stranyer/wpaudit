@@ -42,6 +42,9 @@ const chromeLauncher = __importStar(require("chrome-launcher"));
 const puppeteer_1 = __importDefault(require("puppeteer"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+// Use process.cwd() for compatibility with both CommonJS and ES modules
+const projectRoot = process.cwd();
+const screenshotsBaseDir = path_1.default.join(projectRoot, 'screenshots');
 async function runLighthouse(task) {
     let chrome = null;
     try {
@@ -110,7 +113,7 @@ async function runLighthouse(task) {
         let filmstripFrames = [];
         if (task.jobId && finalScreenshot?.data) {
             try {
-                const screenshotsDir = path_1.default.join(__dirname, '../../screenshots', task.jobId);
+                const screenshotsDir = path_1.default.join(screenshotsBaseDir, task.jobId);
                 if (!fs_1.default.existsSync(screenshotsDir)) {
                     fs_1.default.mkdirSync(screenshotsDir, { recursive: true });
                 }

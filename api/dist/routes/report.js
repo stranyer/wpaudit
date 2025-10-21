@@ -8,12 +8,17 @@ const express_1 = __importDefault(require("express"));
 const reportService_1 = require("../services/reportService");
 const router = express_1.default.Router();
 exports.reportRoutes = router;
-// Get report by ID
+// Get report by ID (tries publicId first, then internal ID)
 router.get('/:reportId', async (req, res) => {
     try {
         const { reportId } = req.params;
         console.log('📋 Fetching report:', reportId);
-        const report = await reportService_1.reportService.getReport(reportId);
+        // Try public ID first
+        let report = await reportService_1.reportService.getPublicReport(reportId);
+        // If not found, try internal ID
+        if (!report) {
+            report = await reportService_1.reportService.getReport(reportId);
+        }
         if (!report) {
             console.log('❌ Report not found:', reportId);
             return res.status(404).json({ error: 'Report not found' });

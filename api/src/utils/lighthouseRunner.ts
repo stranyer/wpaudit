@@ -4,7 +4,10 @@ import * as chromeLauncher from 'chrome-launcher'
 import puppeteer from 'puppeteer'
 import fs from 'fs'
 import path from 'path'
-// __dirname is available in CommonJS (tsconfig target: commonjs)
+
+// Use process.cwd() for compatibility with both CommonJS and ES modules
+const projectRoot = process.cwd()
+const screenshotsBaseDir = path.join(projectRoot, 'screenshots')
 
 interface LighthouseTask {
   url: string
@@ -89,7 +92,7 @@ async function runLighthouse(task: LighthouseTask) {
     
     if (task.jobId && finalScreenshot?.data) {
       try {
-        const screenshotsDir = path.join(__dirname, '../../screenshots', task.jobId)
+        const screenshotsDir = path.join(screenshotsBaseDir, task.jobId)
         if (!fs.existsSync(screenshotsDir)) {
           fs.mkdirSync(screenshotsDir, { recursive: true })
         }

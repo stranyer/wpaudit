@@ -3,12 +3,19 @@ import { reportService } from '../services/reportService'
 
 const router = express.Router()
 
-// Get report by ID
+// Get report by ID (tries publicId first, then internal ID)
 router.get('/:reportId', async (req, res) => {
   try {
     const { reportId } = req.params
     console.log('📋 Fetching report:', reportId)
-    const report = await reportService.getReport(reportId)
+    
+    // Try public ID first
+    let report = await reportService.getPublicReport(reportId)
+    
+    // If not found, try internal ID
+    if (!report) {
+      report = await reportService.getReport(reportId)
+    }
     
     if (!report) {
       console.log('❌ Report not found:', reportId)
