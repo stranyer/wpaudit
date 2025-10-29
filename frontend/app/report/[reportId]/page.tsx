@@ -286,6 +286,12 @@ export default function ReportPage() {
     return 'text-red-600'
   }
 
+  const getScoreBorderColor = (score: number) => {
+    if (score >= 90) return 'border-green-600'
+    if (score >= 70) return 'border-yellow-600'
+    return 'border-red-600'
+  }
+
   const getScoreBadge = (score: number) => {
     if (score >= 90) return 'bg-green-100 text-green-800'
     if (score >= 70) return 'bg-yellow-100 text-yellow-800'
@@ -532,9 +538,9 @@ export default function ReportPage() {
                   
                   {/* Score Column */}
                   <div className="flex-1 flex flex-col items-center justify-center py-2">
-                    <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full border-4 ${getScoreColor(report.performance.scores.mobile, 'border')}`}>
+                    <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full border-4 ${getScoreBorderColor(report.performance.scores.mobile)}`}>
                       <div className="text-center">
-                        <div className={`text-3xl font-bold ${getScoreColor(report.performance.scores.mobile, 'text')}`}>
+                        <div className={`text-3xl font-bold ${getScoreColor(report.performance.scores.mobile)}`}>
                           {report.performance.scores.mobile}
                         </div>
                       </div>
@@ -568,9 +574,9 @@ export default function ReportPage() {
                   
                   {/* Score Column */}
                   <div className="flex-1 flex flex-col items-center justify-center py-2">
-                    <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full border-4 ${getScoreColor(report.performance.scores.desktop, 'border')}`}>
+                    <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full border-4 ${getScoreBorderColor(report.performance.scores.desktop)}`}>
                       <div className="text-center">
-                        <div className={`text-3xl font-bold ${getScoreColor(report.performance.scores.desktop, 'text')}`}>
+                        <div className={`text-3xl font-bold ${getScoreColor(report.performance.scores.desktop)}`}>
                           {report.performance.scores.desktop}
                         </div>
                       </div>
