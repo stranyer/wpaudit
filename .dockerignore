@@ -1,17 +1,41 @@
-node_modules
-npm-debug.log
-.next
-.git
-.gitignore
-README.md
-*.md
+# Node modules
+node_modules/
+*/node_modules/
+
+# Build outputs
+dist/
+.next/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files
 .env
 .env.local
-api/dist
-api/node_modules
-api/screenshots
-api/debug.log
-frontend/node_modules
-frontend/.next
-frontend/out
+.env*.local
 
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Screenshots
+screenshots/
+api/screenshots/
+
+# Cache
+.cache/
+.turbo/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp

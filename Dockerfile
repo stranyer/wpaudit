@@ -1,8 +1,23 @@
-# Just Audit It - Production Dockerfile
-# Build: docker build -t wpaudit .
-# Run: docker run -p 3000:3000 -p 3001:3001 wpaudit
+# Multi-stage build for production
 
-FROM node:18-alpine AS base
+# Stage 1: Build API
+FROM node:18-alpine AS api-builder
+WORKDIR /app/api
+COPY api/package*.json ./
+RUN npm ci --only=production
+COPY api/ ./
+RUN npm run build
+
+# Stage 2: Build Frontend
+FROM node:18-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 3: Production - API with Chromium
+FROM node:18-alpine AS production
 
 # Install Chromium and dependencies for Lighthouse
 RUN apk add --no-cache \
@@ -13,37 +28,37 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-freefont
 
-# Tell Puppeteer to skip installing Chrome, we'll use the installed package
+# Tell Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    NODE_ENV=production
 
+# Create app directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY api/package*.json ./api/
-COPY frontend/package*.json ./frontend/
+# Copy API built files
+COPY --from=api-builder /app/api/dist ./api/dist
+COPY --from=api-builder /app/api/node_modules ./api/node_modules
+COPY --from=api-builder /app/api/package.json ./api/
 
-# Install dependencies
-RUN npm install
-RUN cd api && npm install
-RUN cd frontend && npm install
+# Copy Frontend built files
+COPY --from=frontend-builder /app/frontend/.next ./frontend/.next
+COPY --from=frontend-builder /app/frontend/node_modules ./frontend/node_modules
+COPY --from=frontend-builder /app/frontend/package.json ./frontend/
+COPY --from=frontend-builder /app/frontend/public ./frontend/public
+COPY --from=frontend-builder /app/frontend/next.config.js ./frontend/
 
-# Copy source code
-COPY . .
+# Create screenshots directory
+RUN mkdir -p /app/api/screenshots && chmod 777 /app/api/screenshots
 
-# Build API
-RUN cd api && npm run build
+# Install PM2 to run both services
+RUN npm install -g pm2
 
-# Build Frontend
-RUN cd frontend && npm run build
+# Copy PM2 ecosystem file
+COPY ecosystem.config.js ./
 
 # Expose ports
 EXPOSE 3000 3001
 
-# Start script
-COPY docker-entrypoint.sh /
-RUN chmod +x /docker-entrypoint.sh
-
-CMD ["/docker-entrypoint.sh"]
-
+# Start both services with PM2
+CMD ["pm2-runtime", "start", "ecosystem.config.js"]

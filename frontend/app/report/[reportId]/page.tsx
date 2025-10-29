@@ -292,6 +292,12 @@ export default function ReportPage() {
     return 'bg-red-100 text-red-800'
   }
 
+  const getScoreLabel = (score: number) => {
+    if (score >= 90) return 'Good'
+    if (score >= 70) return 'Needs Work'
+    return 'Poor'
+  }
+
   const getImpactBadge = (impact: string) => {
     switch (impact) {
       case 'high': return 'bg-red-100 text-red-800'
@@ -328,23 +334,23 @@ export default function ReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gradient-to-b from-white via-gray-50 to-white">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 bg-black rounded-md flex items-center justify-center">
+            <a href="/" className="flex items-center space-x-2">
+              <div className="h-9 w-9 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                 <Zap className="h-5 w-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-gray-900">Just Audit It</span>
-            </div>
+              <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Just Speed It</span>
+            </a>
             <div className="flex items-center space-x-3">
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => window.open(`/api/pdf/${params.reportId}`, '_blank')}
-                className="border-gray-200"
+                className="border-gray-300 hover:bg-gray-50"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download PDF
@@ -353,7 +359,7 @@ export default function ReportPage() {
                 variant="outline" 
                 size="sm"
                 onClick={() => window.location.href = '/'}
-                className="border-gray-200"
+                className="border-gray-300 hover:bg-gray-50"
               >
                 Run New Test
               </Button>
@@ -364,7 +370,7 @@ export default function ReportPage() {
                   variant="outline" 
                   size="sm"
                   onClick={copyLink}
-                  className="border-gray-200"
+                  className="border-gray-300 hover:bg-gray-50"
                 >
                   {copied ? (
                     <>
@@ -383,7 +389,7 @@ export default function ReportPage() {
                   variant="outline" 
                   size="sm"
                   onClick={shareOnTwitter}
-                  className="border-gray-200"
+                  className="border-gray-300 hover:bg-gray-50"
                   title="Share on Twitter"
                 >
                   <Twitter className="h-4 w-4" />
@@ -393,14 +399,14 @@ export default function ReportPage() {
                   variant="outline" 
                   size="sm"
                   onClick={shareOnLinkedIn}
-                  className="border-gray-200"
+                  className="border-gray-300 hover:bg-gray-50"
                   title="Share on LinkedIn"
                 >
                   <Linkedin className="h-4 w-4" />
                 </Button>
               </div>
               
-              <Button size="sm" className="bg-black hover:bg-gray-800 text-white">
+              <Button size="sm" className="bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-semibold shadow-lg">
                 Get Fix Plan
               </Button>
             </div>
@@ -489,11 +495,11 @@ export default function ReportPage() {
         </div>
 
         {/* Performance Section */}
-        <Card className="mb-8 border-gray-200">
+        <Card className="mb-8 border-2 border-gray-200 hover:border-green-400 transition-all duration-300 bg-gradient-to-br from-white to-gray-50 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center text-gray-900">
-              <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                <Zap className="h-5 w-5 text-gray-900" />
+              <div className="h-12 w-12 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center mr-3 shadow-lg">
+                <Zap className="h-6 w-6 text-white" />
               </div>
               Performance Analysis
             </CardTitle>
@@ -502,70 +508,78 @@ export default function ReportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Mobile and Desktop Scores */}
+            {/* Mobile and Desktop Scores - Compact 2 Column Layout */}
             <div className="grid md:grid-cols-2 gap-6 mb-8">
               {/* Mobile Score */}
-              <div className="text-center p-6 bg-gray-50 rounded-lg border border-gray-100">
-                <div className="flex items-center justify-center mb-4">
-                  <Smartphone className="h-5 w-5 mr-2 text-gray-700" />
-                  <h3 className="text-lg font-semibold text-gray-900">Mobile</h3>
-                </div>
-                
-                {/* Mobile Screenshot Thumbnail */}
-                {report.performance.screenshots?.mobile && (
-                  <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm max-w-[200px] mx-auto">
-                    <img 
-                      src={`http://localhost:3001${report.performance.screenshots.mobile}`}
-                      alt="Mobile screenshot"
-                      className="w-full h-auto"
-                    />
+              <div className="bg-white rounded-xl border-2 border-gray-200 p-5 hover:border-green-400 transition-all">
+                <div className="flex items-start gap-4">
+                  {/* Preview Column */}
+                  <div className="flex-shrink-0 w-24">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Smartphone className="h-4 w-4 text-gray-600" />
+                      <span className="text-sm font-semibold text-gray-900">Mobile</span>
+                    </div>
+                    {report.performance.screenshots?.mobile && (
+                      <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                        <img 
+                          src={`http://localhost:3001${report.performance.screenshots.mobile}`}
+                          alt="Mobile Preview"
+                          className="w-full h-auto"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                <div className={`text-5xl font-bold mb-4 ${getScoreColor(report.performance.scores.mobile)}`}>
-                  {report.performance.scores.mobile}
+                  
+                  {/* Score Column */}
+                  <div className="flex-1 flex flex-col items-center justify-center py-2">
+                    <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full border-4 ${getScoreColor(report.performance.scores.mobile, 'border')}`}>
+                      <div className="text-center">
+                        <div className={`text-3xl font-bold ${getScoreColor(report.performance.scores.mobile, 'text')}`}>
+                          {report.performance.scores.mobile}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge className={`mt-3 ${getScoreBadge(report.performance.scores.mobile)}`}>
+                      {getScoreLabel(report.performance.scores.mobile)}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-                  <div 
-                    className={`h-2 rounded-full ${report.performance.scores.mobile >= 90 ? 'bg-black' : report.performance.scores.mobile >= 70 ? 'bg-gray-600' : 'bg-gray-400'}`}
-                    style={{ width: `${report.performance.scores.mobile}%` }}
-                  ></div>
-                </div>
-                <Badge className={getScoreBadge(report.performance.scores.mobile)}>
-                  {report.performance.scores.mobile >= 90 ? 'Excellent' : report.performance.scores.mobile >= 70 ? 'Good' : 'Needs Improvement'}
-                </Badge>
               </div>
 
               {/* Desktop Score */}
-              <div className="text-center p-6 bg-gray-50 rounded-lg border border-gray-100">
-                <div className="flex items-center justify-center mb-4">
-                  <Monitor className="h-5 w-5 mr-2 text-gray-700" />
-                  <h3 className="text-lg font-semibold text-gray-900">Desktop</h3>
-                </div>
-                
-                {/* Desktop Screenshot Thumbnail */}
-                {report.performance.screenshots?.desktop && (
-                  <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm max-w-[280px] mx-auto">
-                    <img 
-                      src={`http://localhost:3001${report.performance.screenshots.desktop}`}
-                      alt="Desktop screenshot"
-                      className="w-full h-auto"
-                    />
+              <div className="bg-white rounded-xl border-2 border-gray-200 p-5 hover:border-blue-400 transition-all">
+                <div className="flex items-start gap-4">
+                  {/* Preview Column */}
+                  <div className="flex-shrink-0 w-24">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Monitor className="h-4 w-4 text-gray-600" />
+                      <span className="text-sm font-semibold text-gray-900">Desktop</span>
+                    </div>
+                    {report.performance.screenshots?.desktop && (
+                      <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                        <img 
+                          src={`http://localhost:3001${report.performance.screenshots.desktop}`}
+                          alt="Desktop Preview"
+                          className="w-full h-auto"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                <div className={`text-5xl font-bold mb-4 ${getScoreColor(report.performance.scores.desktop)}`}>
-                  {report.performance.scores.desktop}
+                  
+                  {/* Score Column */}
+                  <div className="flex-1 flex flex-col items-center justify-center py-2">
+                    <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full border-4 ${getScoreColor(report.performance.scores.desktop, 'border')}`}>
+                      <div className="text-center">
+                        <div className={`text-3xl font-bold ${getScoreColor(report.performance.scores.desktop, 'text')}`}>
+                          {report.performance.scores.desktop}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge className={`mt-3 ${getScoreBadge(report.performance.scores.desktop)}`}>
+                      {getScoreLabel(report.performance.scores.desktop)}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-                  <div 
-                    className={`h-2 rounded-full ${report.performance.scores.desktop >= 90 ? 'bg-black' : report.performance.scores.desktop >= 70 ? 'bg-gray-600' : 'bg-gray-400'}`}
-                    style={{ width: `${report.performance.scores.desktop}%` }}
-                  ></div>
-                </div>
-                <Badge className={getScoreBadge(report.performance.scores.desktop)}>
-                  {report.performance.scores.desktop >= 90 ? 'Excellent' : report.performance.scores.desktop >= 70 ? 'Good' : 'Needs Improvement'}
-                </Badge>
               </div>
             </div>
 
@@ -1953,6 +1967,32 @@ export default function ReportPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-200 bg-gradient-to-b from-gray-50 to-white mt-16">
+        <div className="container mx-auto px-4 py-12">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center space-x-2 mb-6 md:mb-0">
+              <div className="h-8 w-8 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
+                <Zap className="h-5 w-5 text-white" />
+              </div>
+              <span className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                Just Speed It
+              </span>
+            </div>
+            
+            <div className="flex items-center space-x-8 text-sm text-gray-600 mb-6 md:mb-0">
+              <a href="/documentation" className="hover:text-gray-900 transition-colors font-medium">Documentation</a>
+              <a href="/privacy" className="hover:text-gray-900 transition-colors font-medium">Privacy</a>
+              <a href="/terms" className="hover:text-gray-900 transition-colors font-medium">Terms</a>
+            </div>
+          </div>
+          
+          <div className="mt-8 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
+            <p>&copy; {new Date().getFullYear()} Just Speed It. Free WordPress Performance Audits Powered by Google Lighthouse.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

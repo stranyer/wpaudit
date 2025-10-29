@@ -267,37 +267,10 @@ export default function ScanningPage() {
             <CardContent className="p-8">
               <div className="text-center">
                 {/* Sub-task indicator */}
-                <div className="mb-6">
+                <div className="mb-8">
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-full text-sm font-medium">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>{getSubTask()}</span>
-                  </div>
-                </div>
-                
-                <div className="grid md:grid-cols-4 gap-4 mb-8">
-                  <div className="text-center p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                    <div className="text-3xl font-bold text-green-700 mb-1">
-                      {scanStatus.progress}%
-                    </div>
-                    <div className="text-sm text-gray-700 font-medium">Complete</div>
-                  </div>
-                  <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
-                    <div className="text-3xl font-bold text-blue-700 mb-1">
-                      {elapsedTime}s
-                    </div>
-                    <div className="text-sm text-gray-700 font-medium">Elapsed</div>
-                  </div>
-                  <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
-                    <div className="text-3xl font-bold text-orange-700 mb-1">
-                      {timeRemaining}s
-                    </div>
-                    <div className="text-sm text-gray-700 font-medium">Remaining</div>
-                  </div>
-                  <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                    <div className="flex justify-center mb-1">
-                      <Zap className="h-8 w-8 text-purple-700" />
-                    </div>
-                    <div className="text-sm text-gray-700 font-medium">Lighthouse</div>
                   </div>
                 </div>
 
