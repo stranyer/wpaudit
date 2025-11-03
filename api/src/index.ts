@@ -14,8 +14,33 @@ const PORT = process.env.PORT || 3001
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }))
+// Configure CORS to allow requests from WordPress and local development
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://wpaudit.test:3000',
+  'http://wpaudit.test',
+  'https://justspeedit.com',
+  'http://justspeedit.com',
+  'https://www.justspeedit.com',
+  'http://www.justspeedit.com'
+]
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://wpaudit.test:3000', 'http://wpaudit.test'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true)
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true)
+    } else {
+      // For development, allow all origins
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true)
+      } else {
+        callback(new Error('Not allowed by CORS'))
+      }
+    }
+  },
   credentials: true
 }))
 app.use(express.json())

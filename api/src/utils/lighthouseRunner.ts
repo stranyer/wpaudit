@@ -37,24 +37,34 @@ async function runLighthouse(task: LighthouseTask) {
       ]
     })
 
+    // Use the EXACT same config as PageSpeed Insights
     const options = {
       logLevel: 'error' as const,
       output: 'json' as const,
-      onlyCategories: ['performance'],
+      onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
       port: chrome.port,
       formFactor: task.formFactor,
-      screenEmulation: {
-        mobile: task.formFactor === 'mobile',
-        width: task.formFactor === 'mobile' ? 375 : 1350,
-        height: task.formFactor === 'mobile' ? 667 : 940,
-        deviceScaleFactor: task.formFactor === 'mobile' ? 2 : 1,
-        disabled: false
-      },
+      screenEmulation: task.formFactor === 'mobile' 
+        ? {
+            mobile: true,
+            width: 360,
+            height: 640,
+            deviceScaleFactor: 3,
+            disabled: false
+          }
+        : {
+            mobile: false,
+            width: 1920,
+            height: 1080,
+            deviceScaleFactor: 1,
+            disabled: false
+          },
+      // PageSpeed Insights throttling settings
       throttling: task.formFactor === 'mobile' 
         ? {
             rttMs: 150,
             throughputKbps: 1638.4,
-            requestLatencyMs: 150 * 3.75,
+            requestLatencyMs: 562.5,
             downloadThroughputKbps: 1638.4,
             uploadThroughputKbps: 675,
             cpuSlowdownMultiplier: 4
@@ -78,9 +88,15 @@ async function runLighthouse(task: LighthouseTask) {
     }
 
     const metrics = result.lhr.audits
-    const score = result.lhr.categories?.performance?.score 
-      ? Math.round(result.lhr.categories.performance.score * 100) 
-      : 0
+    const categories = result.lhr.categories
+    
+    // Get scores for all categories
+    const scores = {
+      performance: categories?.performance?.score ? Math.round(categories.performance.score * 100) : 0,
+      accessibility: categories?.accessibility?.score ? Math.round(categories.accessibility.score * 100) : 0,
+      bestPractices: categories?.['best-practices']?.score ? Math.round(categories['best-practices'].score * 100) : 0,
+      seo: categories?.seo?.score ? Math.round(categories.seo.score * 100) : 0
+    }
 
     // Extract screenshot data
     const finalScreenshot = metrics['final-screenshot']?.details as any
@@ -139,36 +155,49 @@ async function runLighthouse(task: LighthouseTask) {
       'render-blocking-resources'
     ]
 
+    // Only include opportunities with significant savings (>100ms OR >10KB)
     opportunityAudits.forEach(auditKey => {
       const audit = metrics[auditKey]
-      if (audit && audit.details && audit.numericValue > 0) {
-        const details = audit.details as any
-        opportunities.push({
-          id: auditKey,
-          title: audit.title || auditKey,
-          description: audit.description || '',
-          savings: {
-            ms: audit.numericValue || 0,
-            bytes: details.overallSavingsBytes || 0
-          },
-          items: details.items?.slice(0, 5) || [] // Top 5 items
-        })
+      if (audit && audit.details) {
+        const savingsMs = audit.numericValue || 0
+        const savingsBytes = (audit.details as any)?.overallSavingsBytes || 0
+        
+        // Only include if there are actual savings
+        if (savingsMs > 100 || savingsBytes > 10240) {
+          const details = audit.details as any
+          opportunities.push({
+            id: auditKey,
+            title: audit.title || auditKey,
+            description: audit.description || '',
+            savings: {
+              ms: savingsMs,
+              bytes: savingsBytes
+            },
+            items: details.items?.slice(0, 3) || [] // Top 3 items only
+          })
+        }
       }
     })
+    
+    // Sort by savings (prioritize time savings)
+    opportunities.sort((a, b) => b.savings.ms - a.savings.ms)
+    
+    // Keep only top 5 opportunities
+    const topOpportunities = opportunities.slice(0, 5)
 
     const data = {
-      score,
-      lcp: metrics['largest-contentful-paint']?.numericValue || 0,
-      cls: metrics['cumulative-layout-shift']?.numericValue || 0,
-      fcp: metrics['first-contentful-paint']?.numericValue || 0,
-      si: metrics['speed-index']?.numericValue || 0,
-      tbt: metrics['total-blocking-time']?.numericValue || 0,
-      tti: metrics['interactive']?.numericValue || 0,
-      ttfb: metrics['server-response-time']?.numericValue || 0,
-      resourceSummary: (metrics['resource-summary']?.details as any)?.items?.[0] || {},
+      scores, // All category scores
+      metrics: {
+        lcp: metrics['largest-contentful-paint']?.numericValue || 0,
+        cls: metrics['cumulative-layout-shift']?.numericValue || 0,
+        fcp: metrics['first-contentful-paint']?.numericValue || 0,
+        si: metrics['speed-index']?.numericValue || 0,
+        tbt: metrics['total-blocking-time']?.numericValue || 0,
+        tti: metrics['interactive']?.numericValue || 0
+      },
       screenshot: screenshotPath ? `/screenshots/${task.jobId}/${task.formFactor}-final.jpg` : null,
       filmstrip: filmstripFrames.map((frame, i) => `/screenshots/${task.jobId}/${task.formFactor}-frame-${i}.jpg`),
-      opportunities: opportunities // Add opportunities
+      opportunities: topOpportunities
     }
 
     return data

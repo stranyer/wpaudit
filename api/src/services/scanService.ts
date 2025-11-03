@@ -538,21 +538,21 @@ class ScanService {
               // Combine results
               const performanceData: PerformanceData = {
                 scores: {
-                  mobile: mobileResult.score,
-                  desktop: desktopResult.score
+                  mobile: mobileResult.scores.performance,
+                  desktop: desktopResult.scores.performance
                 },
                 coreWebVitals: {
-                  lcp: mobileResult.lcp / 1000,
-                  cls: mobileResult.cls,
-                  inp: mobileResult.tbt
+                  lcp: mobileResult.metrics.lcp / 1000,
+                  cls: mobileResult.metrics.cls,
+                  inp: mobileResult.metrics.tbt
                 },
-                requests: mobileResult.resourceSummary?.requestCount || 0,
-                transferMB: (mobileResult.resourceSummary?.size || 0) / 1024 / 1024,
-                ttfb: mobileResult.ttfb,
-                fcp: mobileResult.fcp / 1000,
-                si: mobileResult.si / 1000,
-                tti: mobileResult.tti / 1000,
-                tbt: mobileResult.tbt,
+                requests: 0, // Will be calculated separately if needed
+                transferMB: 0, // Will be calculated separately if needed
+                ttfb: 0,
+                fcp: mobileResult.metrics.fcp / 1000,
+                si: mobileResult.metrics.si / 1000,
+                tti: mobileResult.metrics.tti / 1000,
+                tbt: mobileResult.metrics.tbt,
                 imageSize: 0,
                 scriptSize: 0,
                 cssSize: 0,
@@ -564,13 +564,14 @@ class ScanService {
                   mobile: mobileResult.filmstrip,
                   desktop: desktopResult.filmstrip
                 },
-                opportunities: mobileResult.opportunities || [] // Add opportunities from mobile scan
+                opportunities: mobileResult.opportunities || []
               }
               
-              console.log('✅ Lighthouse Mobile Score:', mobileResult.score)
-              console.log('✅ Lighthouse Desktop Score:', desktopResult.score)
-              console.log('✅ Mobile LCP:', mobileResult.lcp, 'ms')
-              console.log('✅ Mobile CLS:', mobileResult.cls)
+              console.log('✅ Lighthouse Mobile Score:', mobileResult.scores.performance)
+              console.log('✅ Lighthouse Desktop Score:', desktopResult.scores.performance)
+              console.log('✅ All Mobile Scores:', mobileResult.scores)
+              console.log('✅ Mobile LCP:', mobileResult.metrics.lcp, 'ms')
+              console.log('✅ Mobile CLS:', mobileResult.metrics.cls)
               
               desktopWorker.terminate()
               resolve(performanceData)

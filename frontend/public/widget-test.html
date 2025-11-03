@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Widget - Just Speed It</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(to bottom, #f0fdf4, #ffffff);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            color: #111827;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #6B7280;
+            font-size: 1.125rem;
+        }
+        
+        .features {
+            margin-top: 80px;
+            text-align: center;
+        }
+        
+        .features h2 {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 40px;
+            color: #111827;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        
+        .feature-card {
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 10px;
+            color: #111827;
+        }
+        
+        .feature-card p {
+            color: #6B7280;
+            line-height: 1.6;
+        }
+        
+        .debug-info {
+            margin-top: 60px;
+            padding: 20px;
+            background: #F3F4F6;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .debug-info h3 {
+            margin-top: 0;
+            color: #374151;
+        }
+        
+        .debug-info code {
+            display: block;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Test Widget - Just Speed It</h1>
+            <p>Prueba local del widget antes de instalarlo en WordPress</p>
+        </div>
+
+        <!-- WIDGET CONTAINER -->
+        <div id="justspeedit-widget"></div>
+
+        <!-- Features Section -->
+        <div class="features">
+            <h2>Powered by Google Lighthouse</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>⚡ Core Web Vitals</h3>
+                    <p>Get real LCP, CLS, FID scores. See exactly what's slowing down your site.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔒 Security Scan</h3>
+                    <p>Find exposed wp-config.php, vulnerable plugins, and outdated versions.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📈 SEO Analysis</h3>
+                    <p>Check meta tags, Open Graph, Twitter Cards, and structured data.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔍 WordPress Deep Dive</h3>
+                    <p>Identify active plugins, detect your theme, get WP-specific recommendations.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Info -->
+        <div class="debug-info">
+            <h3>📋 Debug Information</h3>
+            <div>
+                <strong>Widget Container:</strong> <span id="debug-container">-</span><br>
+                <strong>API URL:</strong> <span id="debug-api">-</span><br>
+                <strong>Widget Loaded:</strong> <span id="debug-loaded">-</span><br>
+                <strong>Environment:</strong> <span id="debug-env">-</span>
+            </div>
+            
+            <h4>Código para WordPress:</h4>
+            <code>&lt;div id="justspeedit-widget"&gt;&lt;/div&gt;
+&lt;script&gt;
+  window.JUSTSPEEDIT_API_URL = 'http://localhost:3000';
+&lt;/script&gt;
+&lt;script src="http://localhost:3000/api/widget" defer&gt;&lt;/script&gt;</code>
+        </div>
+    </div>
+
+    <!-- Widget Scripts -->
+    <script>
+        // Configure API URL for local testing
+        window.JUSTSPEEDIT_API_URL = 'http://localhost:3000';
+        
+        // Debug information
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('debug-container').textContent = 
+                document.getElementById('justspeedit-widget') ? 'Found ✓' : 'Not found ✗';
+            document.getElementById('debug-api').textContent = window.JUSTSPEEDIT_API_URL;
+            document.getElementById('debug-env').textContent = 
+                window.location.hostname === 'localhost' ? 'Local Development' : 'Production';
+            
+            // Check if widget loaded
+            setTimeout(function() {
+                const widgetContent = document.getElementById('justspeedit-widget').innerHTML;
+                document.getElementById('debug-loaded').textContent = 
+                    widgetContent.length > 0 ? 'Yes ✓' : 'No ✗ (Check console for errors)';
+            }, 1000);
+        });
+    </script>
+    <script src="http://localhost:3000/api/widget" defer></script>
+</body>
+</html>
+

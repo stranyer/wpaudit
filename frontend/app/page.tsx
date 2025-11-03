@@ -1,571 +1,372 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { 
-  Search, 
-  Zap, 
-  Shield, 
-  Eye, 
-  Clock, 
   CheckCircle, 
-  ArrowRight,
-  Gauge,
-  Lock,
+  ArrowRight, 
+  Zap, 
+  Gauge, 
+  Lock, 
+  TrendingUp, 
   Code,
-  TrendingUp,
-  Sparkles,
-  BarChart3,
-  Camera,
-  DollarSign,
-  Users,
-  FileSearch,
-  Target
+  Clock
 } from 'lucide-react'
+import Link from 'next/link'
 
 export default function Home() {
   const [url, setUrl] = useState('')
   const [isScanning, setIsScanning] = useState(false)
-
-  const normalizeUrl = (inputUrl: string): string => {
-    let normalizedUrl = inputUrl.trim()
-    
-    if (normalizedUrl.includes('@') && !normalizedUrl.startsWith('http')) {
-      throw new Error('Please enter a website URL, not an email address')
-    }
-    
-    normalizedUrl = normalizedUrl.replace(/^(https?:\/\/)/, '')
-    normalizedUrl = normalizedUrl.replace(/^www\./, '')
-    normalizedUrl = normalizedUrl.replace(/\/+$/, '')
-    
-    if (!normalizedUrl.match(/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/)) {
-      throw new Error('Please enter a valid website URL (e.g., example.com)')
-    }
-    
-    normalizedUrl = 'https://www.' + normalizedUrl
-    
-    return normalizedUrl
-  }
+  const router = useRouter()
 
   const handleScan = async () => {
     if (!url) return
-    
+
     setIsScanning(true)
-    
     try {
-      const normalizedUrl = normalizeUrl(url)
-      console.log('Original URL:', url)
-      console.log('Normalized URL:', normalizedUrl)
-      
-      console.log('Making request to /api/scan')
-      const scanResponse = await fetch('/api/scan', {
+      const response = await fetch('/api/scan', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url: normalizedUrl }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
       })
-      
-      console.log('Scan response status:', scanResponse.status)
-      console.log('Scan response headers:', scanResponse.headers)
-      
-      if (!scanResponse.ok) {
-        const errorText = await scanResponse.text()
-        console.error('Scan response error:', errorText)
-        throw new Error(`Failed to start scan: ${scanResponse.status} - ${errorText}`)
+
+      const data = await response.json()
+
+      if (data.jobId) {
+        router.push(`/scanning/${data.jobId}`)
+      } else {
+        throw new Error('No jobId received')
       }
-      
-      const scanData = await scanResponse.json()
-      console.log('Scan data received:', scanData)
-      
-      const { jobId } = scanData
-      
-      if (!jobId) {
-        throw new Error('No job ID received from API')
-      }
-      
-      console.log('Job ID:', jobId)
-      console.log('Redirecting to scanning page...')
-      window.location.href = `/scanning/${jobId}`
-      
     } catch (error) {
       console.error('Error starting scan:', error)
       setIsScanning(false)
-      alert('Failed to start scan. Please try again.')
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-gray-50 to-white">
-      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <a href="/" className="flex items-center space-x-2">
-              <div className="h-9 w-9 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Zap className="h-5 w-5 text-white" />
+    <div className="min-h-screen bg-white overflow-x-hidden">
+      
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b border-gray-200">
+        <nav className="bg-white/80 backdrop-blur-sm">
+          <div style={{ height: '80px' }}>
+            <div className="container mx-auto px-4 lg:px-8">
+              <div className="flex items-center justify-between min-h-[80px]">
+                {/* Logo */}
+                <div className="flex items-center gap-2">
+                  <Link href="/" className="flex items-center gap-2 no-underline">
+                    <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg flex items-center justify-center">
+                      <Zap className="h-6 w-6 text-white" />
+                    </div>
+                    <span className="text-xl font-bold text-gray-900">Just Speed It</span>
+                  </Link>
+                </div>
+                
+                {/* Nav Right */}
+                <div className="flex items-center gap-8">
+                  <Link href="/documentation" className="hidden lg:flex text-base text-gray-700 hover:text-gray-900 transition-colors font-medium no-underline">
+                    Documentation
+                  </Link>
+                </div>
               </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Just Speed It
-              </span>
-            </a>
-            <div className="flex items-center space-x-4">
-              <a href="/documentation" className="text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium">
-                Documentation
-              </a>
             </div>
           </div>
-        </div>
+        </nav>
       </header>
 
-      <main className="container mx-auto px-4 py-16">
-        <div className="grid lg:grid-cols-2 gap-12 items-center max-w-7xl mx-auto mb-24">
-          <div className="order-2 lg:order-1">
-            <div className="mb-6">
-              <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700 px-4 py-1.5 text-sm font-medium">
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                Powered by Google Lighthouse
-              </Badge>
-            </div>
+      {/* Main Content */}
+      <div id="wrapper" className="wrap">
 
-            <h1 className="text-5xl md:text-6xl font-extrabold mb-6 tracking-tight leading-tight">
-              <span className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent">
-                Make your
-              </span>
-              <br />
-              <span className="bg-gradient-to-r from-green-500 via-blue-500 to-purple-600 bg-clip-text text-transparent">
-                website faster
-              </span>
-            </h1>
-            
-            <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-              Get a comprehensive <span className="font-semibold text-gray-900">WordPress performance, SEO, and security audit</span> powered by 
-              Google Lighthouse in seconds.
-            </p>
-
-            <div className="mb-6">
-              <div className="flex gap-3 p-2 bg-white border-2 border-gray-300 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-                <Input
-                  type="url"
-                  placeholder="Enter your WordPress URL..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-                  className="flex-1 border-0 bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0 text-gray-900 placeholder:text-gray-400"
-                />
-                <Button 
-                  onClick={handleScan}
-                  disabled={!url || isScanning}
-                  size="lg"
-                  className="px-6 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-semibold rounded-lg shadow-md"
-                >
-                  {isScanning ? (
-                    <>
-                      <Clock className="mr-2 h-4 w-4 animate-spin" />
-                      Analyzing
-                    </>
-                  ) : (
-                    <>
-                      Get Started
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
+        {/* Hero Section */}
+        <div id="hero_header" className="relative overflow-hidden">
+          {/* Background Image */}
+          <div className="absolute top-0 left-0 right-0 h-screen">
+            <div className="absolute inset-0 bg-gradient-to-br from-lime-100 via-yellow-100 to-green-100 opacity-80"></div>
+          </div>
+          
+          {/* Gradient Overlays */}
+          <div className="absolute top-0 left-0 right-0 h-screen bg-gradient-to-b from-white via-transparent to-white"></div>
+          
+          {/* Content */}
+          <div className="relative z-10 pt-20 lg:pt-24 xl:pt-32">
+            <div className="container mx-auto px-4 lg:px-8">
+              <div className="flex justify-center">
+                <div className="w-full lg:w-10/12">
+                  <div className="flex flex-col gap-8 xl:gap-12">
+                    
+                    {/* Hero Text */}
+                    <div className="flex flex-col justify-center items-center gap-4 text-center mx-auto max-w-[650px] lg:max-w-[900px]">
+                      <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight leading-none m-0">
+                        Speed audit will never be the same again.
+                      </h1>
+                      <p className="text-lg lg:text-xl xl:text-2xl sm:mt-2 max-w-[550px] text-gray-700">
+                        Get a comprehensive <span className="font-semibold text-gray-900">WordPress performance, SEO, and security audit</span> powered by Google Lighthouse in seconds.
+                      </p>
+                      
+                      {/* CTA Form */}
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-0 bg-white rounded-3xl sm:rounded-2xl shadow-lg p-2 mx-auto mt-4 sm:mt-6 xl:mt-8 w-full max-w-[450px] lg:max-w-[550px]">
+                        <Input
+                          type="url"
+                          placeholder="https://your-wordpress-site.com"
+                          value={url}
+                          onChange={(e) => setUrl(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+                          className="flex-1 border-0 bg-transparent text-gray-900 rounded-2xl sm:rounded px-4 py-2 text-base focus-visible:ring-0 focus-visible:ring-offset-0 h-12"
+                        />
+                        <Button
+                          type="submit"
+                          onClick={handleScan}
+                          disabled={!url || isScanning}
+                          className="h-12 bg-gray-900 hover:bg-gray-800 text-white rounded-2xl sm:rounded px-6 py-2 sm:ml-2 lg:min-w-[200px] font-semibold"
+                        >
+                          {isScanning ? (
+                            <>
+                              <Clock className="mr-2 h-4 w-4 animate-spin" />
+                              Analyzing
+                            </>
+                          ) : (
+                            <>
+                              Get Started
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      
+                      {/* Trust Badges */}
+                      <div className="mt-6 sm:mt-12 xl:mt-16">
+                        <span className="text-base font-semibold text-gray-900 opacity-80">Powered by Google Lighthouse</span>
+                        <div className="flex items-center justify-center gap-4 mt-4 text-sm text-gray-600">
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="font-medium">Free forever</span>
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="font-medium">No credit card</span>
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="font-medium">Results in 60s</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Hero Image */}
+                    <div className="rounded-2xl mx-auto max-w-[1000px] mb-6 sm:mb-8 md:mb-12 xl:mb-16 overflow-hidden border border-gray-200 shadow-md lg:shadow-xl">
+                      <div className="w-full aspect-[12/7] bg-gradient-to-br from-emerald-50 via-lime-50 to-green-100 flex items-center justify-center">
+                        <div className="text-center px-4">
+                          <Gauge className="h-24 w-24 text-emerald-600 mx-auto mb-4 opacity-20" />
+                          <p className="text-lg font-semibold text-gray-500">Dashboard Preview</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mt-3">
-                <span className="inline-flex items-center gap-1">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  Free forever
-                </span>
-                <span className="mx-2">•</span>
-                <span className="inline-flex items-center gap-1">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  No credit card
-                </span>
-                <span className="mx-2">•</span>
-                <span className="inline-flex items-center gap-1">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  Results in 60s
-                </span>
-              </p>
             </div>
           </div>
+        </div>
 
-          <div className="order-1 lg:order-2">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-green-200 via-blue-200 to-purple-200 rounded-3xl blur-3xl opacity-30"></div>
+        {/* Key Features Section */}
+        <div id="key_features" className="overflow-hidden">
+          <div className="py-12 sm:py-16 xl:py-20">
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
+              <div className="max-w-[750px] xl:max-w-[900px] mx-auto">
+                
+                {/* Section Heading */}
+                <div className="flex flex-col items-center gap-4 xl:gap-6 mb-12 sm:mb-16 xl:mb-20 max-w-[500px] xl:max-w-[600px] mx-auto text-center">
+                  <span className="text-xs font-bold py-1 px-3 border border-gray-300 rounded uppercase bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                    Key features
+                  </span>
+                  <h2 className="text-3xl sm:text-4xl xl:text-5xl font-extrabold m-0 leading-tight">
+                    Powered by Google Lighthouse
+                  </h2>
+                </div>
+                
+                {/* Features Grid */}
+                <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                  
+                  {/* Feature 1 - 2 columns */}
+                  <div>
+                    <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl xl:rounded-[32px] border border-gray-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <div className="flex flex-col gap-6 justify-between p-4 sm:p-6 xl:p-8 z-10 relative">
+                            <div className="flex flex-col gap-2 sm:gap-4">
+                              <h4 className="text-2xl xl:text-3xl font-bold m-0">Core Web Vitals</h4>
+                              <p className="text-sm xl:text-base text-gray-600">
+                                Get real LCP, CLS, FID scores. See exactly what's slowing down your WordPress site.
+                              </p>
+                            </div>
+                            <Link href="/documentation" className="inline-flex items-center gap-2 text-sm font-bold text-transparent bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text no-underline hover:gap-3 transition-all">
+                              <span>Learn more</span>
+                              <ArrowRight className="h-4 w-4 text-green-600" />
+                            </Link>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="relative aspect-square overflow-hidden h-full bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center">
+                            <Gauge className="h-32 w-32 text-emerald-600" />
+                          </div>
+                        </div>
+                      </div>
+                      {/* Gradient Overlay */}
+                      <div className="absolute top-0 left-0 w-1/2 h-full bg-gradient-to-r from-gray-50 to-transparent z-0 hidden sm:block"></div>
+                      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-gray-50 to-transparent z-0 sm:hidden"></div>
+                    </div>
+                  </div>
+
+                  {/* Feature 2 - 2 columns */}
+                  <div className="sm:grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl xl:rounded-[32px] border border-gray-200">
+                        <div className="grid grid-cols-1 gap-4">
+                          <div className="order-2 sm:order-1">
+                            <div className="relative h-[450px] bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+                              <Lock className="h-32 w-32 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="order-1 sm:order-2">
+                            <div className="flex flex-col gap-6 justify-between p-4 sm:p-6 xl:p-8 z-10 relative">
+                              <div className="flex flex-col gap-2 sm:gap-4">
+                                <h4 className="text-2xl xl:text-3xl font-bold m-0">Security Scan</h4>
+                                <p className="text-sm xl:text-base text-gray-600">
+                                  Find exposed wp-config.php, vulnerable plugins, and outdated WordPress versions.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Gradient Overlay */}
+                        <div className="absolute bottom-0 right-0 w-full h-1/2 bg-gradient-to-t from-gray-50 to-transparent z-0 hidden sm:block"></div>
+                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-gray-50 to-transparent z-0 sm:hidden"></div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl xl:rounded-[32px] border border-gray-200">
+                        <div className="grid grid-cols-1 gap-4">
+                          <div>
+                            <div className="flex flex-col gap-6 justify-between p-4 sm:p-6 xl:p-8 z-10 relative">
+                              <div className="flex flex-col gap-2 sm:gap-4">
+                                <h4 className="text-2xl xl:text-3xl font-bold m-0">SEO Analysis</h4>
+                                <p className="text-sm xl:text-base text-gray-600">
+                                  Check meta tags, Open Graph, Twitter Cards, and schema.org structured data.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="relative h-[450px] bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center">
+                              <TrendingUp className="h-32 w-32 text-purple-600" />
+                            </div>
+                          </div>
+                        </div>
+                        {/* Gradient Overlay */}
+                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-gray-50 to-transparent z-0"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Feature 4 - Full width */}
+                  <div>
+                    <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl xl:rounded-[32px] border border-gray-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="order-2 sm:order-1">
+                          <div className="relative aspect-square overflow-hidden h-full bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center">
+                            <Code className="h-32 w-32 text-orange-600" />
+                          </div>
+                        </div>
+                        <div className="order-1 sm:order-2">
+                          <div className="flex flex-col gap-6 justify-between p-4 sm:p-6 xl:p-8 z-10 relative">
+                            <div className="flex flex-col gap-2 sm:gap-4">
+                              <h4 className="text-2xl xl:text-3xl font-bold m-0">WordPress Deep Dive</h4>
+                              <p className="text-sm xl:text-base text-gray-600">
+                                Identify active plugins, detect your theme, and get WP-specific speed recommendations.
+                              </p>
+                            </div>
+                            <Link href="/documentation" className="inline-flex items-center gap-2 text-sm font-bold text-transparent bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text no-underline hover:gap-3 transition-all">
+                              <span>See features in action</span>
+                              <ArrowRight className="h-4 w-4 text-green-600" />
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Gradient Overlay */}
+                      <div className="absolute top-0 right-0 w-3/4 h-full bg-gradient-to-l from-gray-50 to-transparent z-0 hidden sm:block"></div>
+                      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-gray-50 to-transparent z-0 sm:hidden"></div>
+                    </div>
+                  </div>
+
+                </div>
+                
+                {/* CTA Button */}
+                <div className="flex flex-col items-center mt-12 sm:mt-16 xl:mt-20">
+                  <Button 
+                    onClick={() => document.getElementById('hero_header')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="h-12 lg:h-14 bg-gray-900 hover:bg-gray-800 text-white rounded-2xl px-6 py-4 lg:min-w-[200px] font-semibold"
+                  >
+                    Start Auditing Now
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-gray-300 py-16">
+        <div className="container mx-auto px-4 lg:px-8">
+          <div className="max-w-6xl mx-auto">
+            <div className="grid md:grid-cols-4 gap-12">
               
-              <div className="relative grid grid-cols-2 gap-4">
-                <div className="bg-white/90 backdrop-blur-sm p-6 rounded-2xl border border-gray-200 shadow-lg">
-                  <div className="text-4xl font-extrabold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
-                    20M+
+              {/* Brand Column */}
+              <div className="md:col-span-2">
+                <Link href="/" className="flex items-center gap-2 mb-6 no-underline">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg flex items-center justify-center">
+                    <Zap className="h-6 w-6 text-white" />
                   </div>
-                  <div className="text-sm font-medium text-gray-700">Active Users</div>
-                </div>
-                <div className="bg-white/90 backdrop-blur-sm p-6 rounded-2xl border border-gray-200 shadow-lg">
-                  <div className="text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                    95%
-                  </div>
-                  <div className="text-sm font-medium text-gray-700">Satisfaction Rate</div>
-                </div>
-                <div className="col-span-2 bg-white/90 backdrop-blur-sm p-6 rounded-2xl border border-gray-200 shadow-lg">
-                  <div className="text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-                    5,000+
-                  </div>
-                  <div className="text-sm font-medium text-gray-700">Sites Optimized Daily</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-24 max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Everything you need in <span className="bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent">one place</span>
-            </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Comprehensive analysis powered by industry-leading tools
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="group bg-white rounded-2xl border-2 border-gray-100 p-8 hover:border-green-400 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                  <Gauge className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Performance</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Lighthouse-powered metrics. LCP, CLS, and INP analysis with actionable insights.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="group bg-white rounded-2xl border-2 border-gray-100 p-8 hover:border-blue-400 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                  <Lock className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Security</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Detect vulnerabilities, exposed files, and outdated plugins before they become problems.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="group bg-white rounded-2xl border-2 border-gray-100 p-8 hover:border-purple-400 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                  <TrendingUp className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">SEO</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Meta tags, schema markup, and crawlability checks to boost your rankings.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="group bg-white rounded-2xl border-2 border-gray-100 p-8 hover:border-orange-400 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                  <Code className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">WordPress</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Plugin detection, theme analysis, and WP-specific optimization recommendations.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-6xl mx-auto mb-24">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Follow the <span className="bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent">easy steps</span>
-            </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Get comprehensive insights in 3 easy steps - no technical knowledge required
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="relative">
-              <div className="bg-white rounded-2xl border-2 border-gray-100 p-8 hover:border-green-400 hover:shadow-2xl transition-all duration-300 h-full">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="h-14 w-14 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-                    1
-                  </div>
-                  <div className="h-12 w-12 bg-green-50 rounded-xl flex items-center justify-center">
-                    <Target className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">Enter Your URL</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Paste your WordPress site URL and hit analyze. We'll start scanning immediately with no signup required.
+                  <span className="text-xl font-bold text-white">
+                    Just Speed It
+                  </span>
+                </Link>
+                <p className="text-base text-gray-400 leading-relaxed">
+                  Comprehensive WordPress performance, SEO, and security audits powered by Google Lighthouse.
                 </p>
               </div>
-            </div>
 
-            <div className="relative">
-              <div className="bg-white rounded-2xl border-2 border-gray-100 p-8 hover:border-blue-400 hover:shadow-2xl transition-all duration-300 h-full">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="h-14 w-14 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-                    2
-                  </div>
-                  <div className="h-12 w-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                    <Zap className="h-6 w-6 text-blue-600" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">We Analyze</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Our AI-powered system runs comprehensive tests on performance, security, SEO, and accessibility in real-time.
-                </p>
+              {/* Links Column */}
+              <div>
+                <h4 className="font-bold text-white mb-4 text-base">Product</h4>
+                <ul className="space-y-3 text-base list-none p-0 m-0">
+                  <li><Link href="/documentation" className="hover:text-white transition-colors no-underline text-gray-300">Documentation</Link></li>
+                </ul>
               </div>
-            </div>
 
-            <div className="relative">
-              <div className="bg-white rounded-2xl border-2 border-gray-100 p-8 hover:border-purple-400 hover:shadow-2xl transition-all duration-300 h-full">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="h-14 w-14 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-                    3
-                  </div>
-                  <div className="h-12 w-12 bg-purple-50 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="h-6 w-6 text-purple-600" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">Get Results</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Receive a detailed report with actionable recommendations, prioritized by impact on your business goals.
-                </p>
+              {/* Legal Column */}
+              <div>
+                <h4 className="font-bold text-white mb-4 text-base">Legal</h4>
+                <ul className="space-y-3 text-base list-none p-0 m-0">
+                  <li><Link href="/privacy" className="hover:text-white transition-colors no-underline text-gray-300">Privacy Policy</Link></li>
+                  <li><Link href="/terms" className="hover:text-white transition-colors no-underline text-gray-300">Terms of Service</Link></li>
+                </ul>
               </div>
-            </div>
-          </div>
-        </div>
 
-        <div className="max-w-6xl mx-auto mb-24">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              What's in your <span className="bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent">audit report</span>
-            </h2>
-            <p className="text-lg text-gray-600">
-              Everything you need to boost performance, fix security issues, and improve SEO
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-2xl border-2 border-gray-100 p-6 hover:border-green-400 hover:shadow-xl transition-all">
-              <div className="h-12 w-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
-                <Gauge className="h-6 w-6 text-green-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-3">Performance Metrics</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Mobile & Desktop Scores
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Core Web Vitals (LCP, CLS, INP)
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Loading Times & Metrics
-                </li>
-              </ul>
             </div>
 
-            <div className="bg-white rounded-2xl border-2 border-gray-100 p-6 hover:border-blue-400 hover:shadow-xl transition-all">
-              <div className="h-12 w-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
-                <Camera className="h-6 w-6 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-3">Visual Analysis</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Mobile & Desktop Screenshots
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Loading Filmstrip
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  LCP Element Highlighting
-                </li>
-              </ul>
+            <div className="border-t border-gray-800 mt-12 pt-8 text-center text-sm text-gray-500">
+              <p className="m-0">&copy; 2025 Just Speed It. All rights reserved.</p>
             </div>
-
-            <div className="bg-white rounded-2xl border-2 border-gray-100 p-6 hover:border-purple-400 hover:shadow-xl transition-all">
-              <div className="h-12 w-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-3">Optimization Tips</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Top 10 Opportunities
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Time & Byte Savings
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Affected Resources
-                </li>
-              </ul>
-            </div>
-
-            <div className="bg-white rounded-2xl border-2 border-gray-100 p-6 hover:border-red-400 hover:shadow-xl transition-all">
-              <div className="h-12 w-12 bg-red-100 rounded-xl flex items-center justify-center mb-4">
-                <Shield className="h-6 w-6 text-red-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-3">Security Scan</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  SSL/HTTPS Configuration
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Security Headers Analysis
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Exposed Files Detection
-                </li>
-              </ul>
-            </div>
-
-            <div className="bg-white rounded-2xl border-2 border-gray-100 p-6 hover:border-yellow-400 hover:shadow-xl transition-all">
-              <div className="h-12 w-12 bg-yellow-100 rounded-xl flex items-center justify-center mb-4">
-                <Eye className="h-6 w-6 text-yellow-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-3">SEO Analysis</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Meta Tags & Schema
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Open Graph & Twitter Cards
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Robots.txt & Sitemap
-                </li>
-              </ul>
-            </div>
-
-            <div className="bg-white rounded-2xl border-2 border-gray-100 p-6 hover:border-indigo-400 hover:shadow-xl transition-all">
-              <div className="h-12 w-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-4">
-                <Code className="h-6 w-6 text-indigo-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-3">WordPress Specific</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Plugin & Theme Detection
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  Version & Security Checks
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-600 flex-shrink-0" />
-                  WP-Specific Optimizations
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-4xl mx-auto bg-gradient-to-br from-green-500 via-blue-600 to-purple-700 rounded-3xl p-12 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-          
-          <div className="relative z-10">
-            <Badge variant="outline" className="border-white/30 bg-white/20 text-white px-4 py-1.5 mb-6 font-medium backdrop-blur-sm">
-              <Sparkles className="h-3.5 w-3.5 mr-1.5 inline" />
-              Start Your Free Audit
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Ready to Speed Up Your WordPress Site?
-            </h2>
-            <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto">
-              Get your free comprehensive audit report in 60 seconds. No signup, no credit card, completely free forever.
-            </p>
-            <div className="max-w-lg mx-auto">
-              <div className="flex gap-3 p-2.5 bg-white rounded-2xl shadow-2xl">
-                <Input
-                  type="url"
-                  placeholder="Enter your WordPress URL..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-                  className="flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base"
-                />
-                <Button 
-                  onClick={handleScan}
-                  disabled={!url || isScanning}
-                  size="lg"
-                  className="px-8 bg-gray-900 hover:bg-black text-white font-semibold rounded-xl shadow-lg"
-                >
-                  {isScanning ? (
-                    <>
-                      <Clock className="mr-2 h-4 w-4 animate-spin" />
-                      Analyzing
-                    </>
-                  ) : (
-                    <>
-                      Analyze Now
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <footer className="border-t border-gray-200 bg-gradient-to-b from-gray-50 to-white mt-24">
-        <div className="container mx-auto px-4 py-12">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="flex items-center space-x-2 mb-6 md:mb-0">
-              <div className="h-8 w-8 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
-                <Zap className="h-5 w-5 text-white" />
-              </div>
-              <span className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Just Speed It
-              </span>
-            </div>
-            
-            <div className="flex items-center space-x-8 text-sm text-gray-600 mb-6 md:mb-0">
-              <a href="/documentation" className="hover:text-gray-900 transition-colors font-medium">Documentation</a>
-              <a href="/privacy" className="hover:text-gray-900 transition-colors font-medium">Privacy</a>
-              <a href="/terms" className="hover:text-gray-900 transition-colors font-medium">Terms</a>
-            </div>
-          </div>
-          
-          <div className="mt-8 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
-            <p>&copy; {new Date().getFullYear()} Just Speed It. Free WordPress Performance Audits Powered by Google Lighthouse.</p>
           </div>
         </div>
       </footer>
+
     </div>
   )
 }

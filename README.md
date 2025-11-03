@@ -1,287 +1,215 @@
-# Just Speed It - WordPress Performance Audit Tool
+# 🚀 Just Speed It - WordPress Performance Auditor
 
-> Audit your WordPress site. Fix what actually slows you down. A PageSpeed score won't pay your bills. Faster sites do.
+> Comprehensive WordPress performance, SEO, and security auditing powered by Google Lighthouse
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+## 📋 Features
 
----
-
-## 🚀 Features
-
-### Core Functionality
-- ✅ **Google Lighthouse Integration** - Real performance scores (mobile + desktop)
-- ✅ **WordPress Detection** - Automatic detection of WP version, theme, plugins
-- ✅ **Core Web Vitals** - LCP, CLS, INP, FCP, TBT analysis
-- ✅ **Security Analysis** - Vulnerabilities, outdated plugins, security headers
-- ✅ **SEO Analysis** - Meta tags, headings, Open Graph, Schema.org
-- ✅ **Accessibility Check** - WCAG compliance basics
-- ✅ **GDPR Compliance** - Privacy policy, cookies, tracking detection
-
-### Advanced Features
-- ✅ **Screenshots** - Mobile + Desktop thumbnails + filmstrip
-- ✅ **Optimization Opportunities** - Top 10 Lighthouse savings with estimates
-- ✅ **Revenue Loss Calculator** - Interactive calculator showing $ impact
-- ✅ **Share Results** - Twitter, LinkedIn, embeddable badges
-- ✅ **Real-time Progress** - Live updates with fun facts during scan
-- ✅ **Public Reports** - Shareable URLs with Open Graph meta tags
-
----
+- ⚡ **Performance Analysis** - Core Web Vitals (LCP, CLS, INP)
+- 🔒 **Security Scanning** - WordPress-specific vulnerabilities
+- 📈 **SEO Analysis** - Meta tags, structured data, Open Graph
+- 🔍 **WordPress Detection** - Theme, plugins, version
+- 📊 **Detailed Reports** - Actionable insights and optimization tips
+- 🌐 **Widget Integration** - Embeddable in any WordPress site
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui |
-| **Backend** | Node.js, Express, TypeScript |
-| **Analysis** | Google Lighthouse, Puppeteer, Cheerio |
-| **Performance** | Worker Threads (non-blocking Lighthouse) |
-| **Deployment** | Render.com (Free tier) |
+- **Frontend**: Next.js 14, React, Tailwind CSS
+- **Backend**: Node.js, Express, TypeScript
+- **Performance**: Google Lighthouse, Puppeteer
+- **Deployment**: Railway (Docker)
 
----
-
-## ⚡ Quick Start (Local Development)
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+
+
+- Node.js 20+
 - npm or yarn
-- Git
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/wpaudit.git
+git clone <your-repo-url>
 cd wpaudit
 
 # Install dependencies
 npm install
 
-# Install frontend dependencies
-cd frontend && npm install && cd ..
-
 # Install API dependencies
-cd api && npm install && cd ..
+cd api
+npm install
 
-# Start development servers
+# Install Frontend dependencies
+cd ../frontend
+npm install
+```
+
+### Development
+
+```bash
+# Terminal 1: Start API (port 3001)
+cd api
+npm run dev
+
+# Terminal 2: Start Frontend (port 3000)
+cd frontend
 npm run dev
 ```
 
-This will start:
-- Frontend: http://localhost:3000
-- API: http://localhost:3001
+Visit: `http://localhost:3000`
 
----
+## 📦 Deployment (Railway)
 
-## 🌐 Production Deployment (Render.com)
+### Auto-Deploy from Git
 
-### Why Render.com?
-- ✅ **100% FREE** tier (750 hours/month)
-- ✅ **Chromium included** (Lighthouse works out-of-the-box)
-- ✅ **Auto-deploy** from GitHub/GitLab
-- ✅ **SSL included** (free Let's Encrypt)
-- ✅ **Custom domain** support (free)
+1. Connect your repository to Railway
+2. Railway will auto-detect the Dockerfile
+3. Set environment variables (if needed)
+4. Deploy!
 
-### Deploy in 15 Minutes
+### Manual Deploy
 
-**Full guides**:
-- [RENDER_DEPLOY.md](./RENDER_DEPLOY.md) - GitHub version
-- [GITLAB_RENDER_DEPLOY.md](./GITLAB_RENDER_DEPLOY.md) - GitLab version
+```bash
+git add .
+git commit -m "your message"
+git push origin main
+```
 
-**Quick steps**:
+Railway will automatically build and deploy.
 
-1. Push to GitHub or GitLab
-2. Connect to Render.com
-3. Configure cron-job.org (keep app awake)
-4. Add custom domain
+## 🔧 Environment Variables
 
-**Setup cron job**: See [CRON_SETUP.md](./CRON_SETUP.md)
+### Backend (API)
 
----
+```env
+PORT=3001
+NODE_ENV=production
+```
 
-## 📁 Project Structure
+### Frontend
+
+```env
+NEXT_PUBLIC_API_URL=https://your-app.up.railway.app
+PORT=3000
+```
+
+## 📖 Widget Integration (WordPress)
+
+Add this to your WordPress site:
+
+```html
+<div id="justspeedit-widget"></div>
+<script>
+  window.JUSTSPEEDIT_API_URL = 'https://your-app.up.railway.app';
+</script>
+<script src="https://your-app.up.railway.app/api/widget" defer></script>
+```
+
+For detailed WordPress integration, see `WORDPRESS-INTEGRATION.md`
+
+## 📊 How It Works
+
+1. **Input**: User enters a WordPress URL
+2. **Analysis**: 
+   - Lighthouse audit (mobile + desktop)
+   - WordPress fingerprinting
+   - Security checks
+   - SEO analysis
+3. **Report**: Comprehensive report with:
+   - Performance scores
+   - Core Web Vitals
+   - Optimization opportunities
+   - WordPress-specific insights
+
+## 🏗️ Project Structure
 
 ```
 wpaudit/
-├── frontend/               # Next.js frontend
-│   ├── app/               # Next.js 14 App Router
-│   │   ├── page.tsx       # Landing page
-│   │   ├── scanning/      # Progress page
-│   │   └── report/        # Report page
-│   ├── components/        # shadcn/ui components
-│   └── lib/               # Utilities
-│
-├── api/                   # Express API
+├── api/                    # Backend API
 │   ├── src/
-│   │   ├── index.ts       # API entry point
 │   │   ├── routes/        # API routes
 │   │   ├── services/      # Business logic
-│   │   │   ├── scanService.ts    # Main scan orchestration
-│   │   │   └── reportService.ts  # Report generation
-│   │   └── utils/
-│   │       ├── lighthouseRunner.ts  # Lighthouse Worker Thread
-│   │       └── logger.ts            # Debug logging
-│   └── screenshots/       # Generated screenshots
-│
-├── RENDER_DEPLOY.md       # Render.com deployment guide
-├── CRON_SETUP.md          # Cron job configuration
-├── DEPLOYMENT.md          # General deployment options
-├── ROADMAP.md             # Future improvements
-└── start-dev.js           # Development server launcher
+│   │   └── utils/         # Lighthouse runner, etc.
+│   └── package.json
+├── frontend/              # Next.js frontend
+│   ├── app/
+│   │   ├── api/          # Next.js API routes (proxies)
+│   │   ├── report/       # Report page
+│   │   ├── scanning/     # Scanning progress page
+│   │   └── page.tsx      # Landing page
+│   ├── public/
+│   │   ├── widget.js     # Embeddable widget
+│   │   └── widget-test.html  # Test page
+│   └── package.json
+├── Dockerfile            # Production build
+├── ecosystem.config.js   # PM2 config
+├── railway.toml         # Railway config
+└── README.md
 ```
 
----
+## 📝 Key Files
 
-## 🎯 Usage
+- `api/src/utils/lighthouseRunner.ts` - Lighthouse configuration (exact PageSpeed Insights settings)
+- `api/src/services/scanService.ts` - Main scanning logic
+- `frontend/public/widget.js` - Embeddable widget
+- `frontend/app/page.tsx` - Landing page
+- `frontend/app/report/[reportId]/page.tsx` - Report viewer
 
-1. **Enter URL**: Visit your deployed site
-2. **Start Scan**: Enter any WordPress URL
-3. **Watch Progress**: Real-time updates with fun facts
-4. **View Report**: Comprehensive audit with scores
-5. **Share Results**: Tweet, LinkedIn, or embed badge
+## 🧪 Testing
 
----
+### Test Widget Locally
 
-## 📊 What Gets Analyzed?
+Open: `http://localhost:3000/widget-test.html`
 
-### Performance (Lighthouse)
-- Mobile & Desktop scores
-- Core Web Vitals (LCP, CLS, INP)
-- Time to Interactive, First Contentful Paint
-- Total Blocking Time, Speed Index
-- **Top 10 optimization opportunities** with savings
+### Test Full Flow
 
-### WordPress
-- Version detection
-- Theme identification
-- Plugin detection (Elementor, WooCommerce, Yoast, etc.)
-- Outdated components
+1. Go to `http://localhost:3000`
+2. Enter a WordPress URL (e.g., `wordpress.org`)
+3. Wait for scan to complete
+4. View report
 
-### Security
-- XML-RPC exposure
-- WordPress version leaks
-- Security headers (CSP, X-Frame-Options, etc.)
-- Known vulnerabilities
+### Compare with PageSpeed Insights
 
-### SEO
-- Meta tags (title, description)
-- Open Graph & Twitter Cards
-- Schema.org markup
-- Heading structure
-- Alt text on images
+1. Scan a site in Just Speed It
+2. Scan the same site at https://pagespeed.web.dev/
+3. Compare scores (should be ±3 points)
 
-### Accessibility
-- ARIA attributes
-- Color contrast
-- Form labels
-- Focus indicators
+## 🔍 Troubleshooting
 
-### GDPR
-- Privacy policy detection
-- Cookie notices
-- Contact information
-- Tracking scripts (GA, FB Pixel, etc.)
+### Port already in use
 
----
+```bash
+# Windows
+Get-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess | Stop-Process
 
-## 💰 Revenue Loss Calculator
-
-Interactive calculator showing:
-- Monthly revenue loss
-- Yearly impact
-- Lost conversions
-- Bounce rate increase
-- Recovery potential
-
-Based on industry research:
-- Amazon: 100ms delay = 1% sales loss
-- Google: 2s load time = 32% bounce rate increase
-
----
-
-## 🔐 Environment Variables
-
-### Frontend (.env.local)
-```env
-NEXT_PUBLIC_API_URL=https://your-api-domain.com
+# Linux/Mac
+lsof -ti:3000 | xargs kill
 ```
 
-### API (.env)
-```env
-NODE_ENV=production
-PORT=3001
-FRONTEND_URL=https://your-domain.com
+### Build errors
+
+```bash
+# Clean and rebuild
+rm -rf node_modules
+rm -rf frontend/node_modules
+rm -rf api/node_modules
+npm install
+cd api && npm install
+cd ../frontend && npm install
 ```
 
----
+## 📄 License
 
-## 🚧 Roadmap
-
-See [ROADMAP.md](./ROADMAP.md) for detailed future plans.
-
-**Completed (95%)**:
-- ✅ Lighthouse integration
-- ✅ Screenshots & filmstrip
-- ✅ Optimization opportunities
-- ✅ Revenue calculator
-- ✅ Share buttons
-- ✅ Progress page improvements
-
-**Planned**:
-- ⏳ Redis caching (24h)
-- ⏳ Comparison with industry average
-- ⏳ PDF export
-- ⏳ Historical tracking
-- ⏳ Competitor benchmarking
-
----
+MIT
 
 ## 🤝 Contributing
 
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
-
----
-
-## 📝 License
-
-MIT License - see [LICENSE](LICENSE) file for details
-
----
-
-## 🙏 Acknowledgments
-
-- **Google Lighthouse** - Performance analysis engine
-- **shadcn/ui** - Beautiful UI components
-- **Next.js** - React framework
-- **Render.com** - Free hosting platform
-- **RapidLoad.ai** - UI inspiration
-
----
+Contributions welcome! Please open an issue first to discuss changes.
 
 ## 📞 Support
 
-- **Issues**: https://github.com/yourusername/wpaudit/issues
-- **Discussions**: https://github.com/yourusername/wpaudit/discussions
-- **Email**: support@justspeedit.com
+For issues or questions, open a GitHub issue.
 
 ---
 
-## 📈 Stats
-
-- **Lines of Code**: 21,000+
-- **Files**: 45
-- **Commits**: 4+
-- **Features**: 95% Complete
-- **Deployment Time**: 15 minutes
-- **Monthly Cost**: $0 (with Render free tier)
-
----
-
-**Built with ❤️ for the WordPress community**
-
-Deploy your own: [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+Made with ⚡ by Just Speed It
