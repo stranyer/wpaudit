@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import { AppHeader } from '@/components/layout/AppHeader'
+import { AppFooter } from '@/components/layout/AppFooter'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -340,87 +342,10 @@ export default function ReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-gray-50 to-white">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <a href="/" className="flex items-center space-x-2">
-              <div className="h-9 w-9 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Zap className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Just Speed It</span>
-            </a>
-            <div className="flex items-center space-x-3">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => window.open(`/api/pdf/${params.reportId}`, '_blank')}
-                className="border-gray-300 hover:bg-gray-50"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download PDF
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => window.location.href = '/'}
-                className="border-gray-300 hover:bg-gray-50"
-              >
-                Run New Test
-              </Button>
-              
-              {/* Share Buttons */}
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={copyLink}
-                  className="border-gray-300 hover:bg-gray-50"
-                >
-                  {copied ? (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <LinkIcon className="h-4 w-4 mr-2" />
-                      Share
-                    </>
-                  )}
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={shareOnTwitter}
-                  className="border-gray-300 hover:bg-gray-50"
-                  title="Share on Twitter"
-                >
-                  <Twitter className="h-4 w-4" />
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={shareOnLinkedIn}
-                  className="border-gray-300 hover:bg-gray-50"
-                  title="Share on LinkedIn"
-                >
-                  <Linkedin className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <Button size="sm" className="bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-semibold shadow-lg">
-                Get Fix Plan
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-b from-white via-gray-50 to-white flex flex-col">
+      <AppHeader variant="app" showBackButton />
+      
+      <main className="container mx-auto px-4 py-8 pt-24">
         {/* Report Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -1974,31 +1899,7 @@ export default function ReportPage() {
         </Card>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-200 bg-gradient-to-b from-gray-50 to-white mt-16">
-        <div className="container mx-auto px-4 py-12">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="flex items-center space-x-2 mb-6 md:mb-0">
-              <div className="h-8 w-8 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
-                <Zap className="h-5 w-5 text-white" />
-              </div>
-              <span className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Just Speed It
-              </span>
-            </div>
-            
-            <div className="flex items-center space-x-8 text-sm text-gray-600 mb-6 md:mb-0">
-              <a href="/documentation" className="hover:text-gray-900 transition-colors font-medium">Documentation</a>
-              <a href="/privacy" className="hover:text-gray-900 transition-colors font-medium">Privacy</a>
-              <a href="/terms" className="hover:text-gray-900 transition-colors font-medium">Terms</a>
-            </div>
-          </div>
-          
-          <div className="mt-8 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
-            <p>&copy; {new Date().getFullYear()} Just Speed It. Free WordPress Performance Audits Powered by Google Lighthouse.</p>
-          </div>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   )
 }

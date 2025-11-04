@@ -1,22 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { useParams, useRouter } from 'next/navigation'
+import { AppHeader } from '@/components/layout/AppHeader'
+import { AppFooter } from '@/components/layout/AppFooter'
 import { 
-  Zap, 
   Globe, 
   Activity, 
-  Brain,
-  CheckCircle,
-  Clock,
-  Loader2,
-  Lightbulb,
   Shield,
   Search,
-  AlertTriangle
+  CheckCircle2,
+  Loader2
 } from 'lucide-react'
 
 interface ScanStatus {
@@ -31,33 +25,39 @@ interface ScanStatus {
   }
 }
 
-const funFacts = [
-  { icon: Zap, text: "A 1-second delay in page load time can reduce conversions by 7%", source: "Google Research" },
-  { icon: Activity, text: "53% of mobile users abandon sites that take longer than 3 seconds to load", source: "Google/SOASTA" },
-  { icon: Shield, text: "WordPress powers 43% of all websites on the internet", source: "W3Techs" },
-  { icon: Search, text: "Page speed is a direct ranking factor for Google search results", source: "Google" },
-  { icon: Lightbulb, text: "Optimizing images can reduce page weight by 50-80% on average", source: "HTTP Archive" },
-  { icon: Zap, text: "Amazon found that every 100ms delay costs them 1% in sales", source: "Amazon" },
-  { icon: Activity, text: "The average webpage is now over 2MB in size", source: "HTTP Archive 2024" },
-  { icon: Shield, text: "80% of WordPress vulnerabilities come from plugins", source: "WPScan" },
-  { icon: Search, text: "Google uses over 200 ranking factors in their algorithm", source: "Google" },
-  { icon: Lightbulb, text: "Lazy loading images can improve initial page load by 50%", source: "Web.dev" }
+const SCAN_STEPS = [
+  { 
+    id: 'performance', 
+    label: 'Performance Analysis', 
+    icon: Activity,
+    description: 'Testing mobile & desktop speed'
+  },
+  { 
+    id: 'security', 
+    label: 'Security Scan', 
+    icon: Shield,
+    description: 'Checking vulnerabilities'
+  },
+  { 
+    id: 'seo', 
+    label: 'SEO Audit', 
+    icon: Search,
+    description: 'Analyzing meta tags & structure'
+  },
+  { 
+    id: 'wordpress', 
+    label: 'WordPress Analysis', 
+    icon: Globe,
+    description: 'Detecting plugins & theme'
+  }
 ]
 
 export default function ScanningPage() {
   const params = useParams()
+  const router = useRouter()
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null)
-  const [currentStep, setCurrentStep] = useState(0)
-  const [timeRemaining, setTimeRemaining] = useState(60)
+  const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [elapsedTime, setElapsedTime] = useState(0)
-  const [currentFactIndex, setCurrentFactIndex] = useState(0)
-
-  const steps = [
-    { id: 'scanning', label: 'SCANNING WEBSITE', icon: Globe, description: 'Connecting and analyzing your website...' },
-    { id: 'speed', label: 'SPEED ANALYSIS', icon: Activity, description: 'Testing performance with Google PageSpeed Insights...' },
-    { id: 'ai', label: 'AI SCORE PREDICTION', icon: Brain, description: 'Analyzing potential performance improvements...' },
-    { id: 'report', label: 'AI REPORT', icon: Zap, description: 'Generating comprehensive audit report...' }
-  ]
 
   useEffect(() => {
     if (!params.jobId) return
@@ -67,262 +67,166 @@ export default function ScanningPage() {
         const response = await fetch(`/api/scan/${params.jobId}`)
         const data = await response.json()
         
-        console.log('Scan status:', data)
         setScanStatus(data)
 
         // Update current step based on progress
-        if (data.progress < 25) setCurrentStep(0)
-        else if (data.progress < 50) setCurrentStep(1)
-        else if (data.progress < 75) setCurrentStep(2)
-        else if (data.progress < 100) setCurrentStep(3)
-        else setCurrentStep(4)
+        const stepIndex = Math.min(
+          Math.floor((data.progress / 100) * SCAN_STEPS.length),
+          SCAN_STEPS.length - 1
+        )
+        setCurrentStepIndex(stepIndex)
 
         // Redirect when completed
-        if (data.status === 'completed' && data.result?.id) {
+        if (data.status === 'completed' && data.result?.publicId) {
           setTimeout(() => {
-            window.location.href = `/report/${data.result.id}`
-          }, 2000)
-        }
-
-        // Continue polling if not completed
-        if (data.status !== 'completed' && data.status !== 'failed') {
-          setTimeout(pollStatus, 2000)
+            router.push(`/report/${data.result.publicId}`)
+          }, 1000)
         }
       } catch (error) {
         console.error('Error polling scan status:', error)
       }
     }
 
-    // Start polling
+    // Initial poll
     pollStatus()
-
-    // Countdown timer and elapsed timer
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          return 0
-        }
-        return prev - 1
-      })
+    
+    // Poll every 2 seconds
+    const pollInterval = setInterval(pollStatus, 2000)
+    
+    // Elapsed time counter
+    const timeInterval = setInterval(() => {
       setElapsedTime(prev => prev + 1)
     }, 1000)
 
-    // Rotate fun facts every 6 seconds
-    const factTimer = setInterval(() => {
-      setCurrentFactIndex(prev => (prev + 1) % funFacts.length)
-    }, 6000)
-
     return () => {
-      clearInterval(timer)
-      clearInterval(factTimer)
+      clearInterval(pollInterval)
+      clearInterval(timeInterval)
     }
-  }, [params.jobId])
+  }, [params.jobId, router])
 
-  const getStepStatus = (stepIndex: number) => {
-    if (stepIndex < currentStep) return 'completed'
-    if (stepIndex === currentStep) return 'active'
-    return 'pending'
-  }
-
-  const getStepIcon = (stepIndex: number, Icon: any) => {
-    const status = getStepStatus(stepIndex)
-    
-    if (status === 'completed') {
-      return <CheckCircle className="h-6 w-6 text-white" />
-    } else if (status === 'active') {
-      return <Loader2 className="h-6 w-6 text-black animate-spin" />
-    } else {
-      return <Icon className="h-6 w-6 text-gray-400" />
-    }
-  }
-
-  const getSubTask = () => {
-    const progress = scanStatus?.progress || 0
-    
-    if (progress < 10) return "Connecting to website..."
-    if (progress < 20) return "Analyzing page structure and HTML..."
-    if (progress < 30) return "Detecting WordPress installation..."
-    if (progress < 35) return "Identifying theme and plugins..."
-    if (progress < 40) return "Checking security headers..."
-    if (progress < 45) return "Starting performance analysis..."
-    if (progress < 60) return "Running mobile Lighthouse audit..."
-    if (progress < 75) return "Running desktop Lighthouse audit..."
-    if (progress < 80) return "Analyzing SEO factors..."
-    if (progress < 85) return "Checking accessibility..."
-    if (progress < 90) return "Verifying GDPR compliance..."
-    if (progress < 95) return "Generating report..."
-    return "Finalizing results..."
-  }
+  const progress = scanStatus?.progress || 0
+  const isComplete = scanStatus?.status === 'completed'
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-6">
-            <div className="h-12 w-12 bg-black rounded-md flex items-center justify-center">
-              <Zap className="h-6 w-6 text-white" />
-            </div>
-          </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Analyzing Your Site</h1>
-          <p className="text-lg text-gray-600">Running comprehensive audit powered by Google Lighthouse</p>
-        </div>
-
-        {/* Progress Steps */}
-        <Card className="mb-8 border-gray-200">
-          <CardContent className="p-8">
-            <div className="flex items-center justify-between mb-8">
-              {steps.map((step, index) => (
-                <div key={step.id} className="flex flex-col items-center flex-1 relative">
-                  <div className="flex items-center justify-center w-14 h-14 rounded-lg border-2 mb-4 transition-all duration-300"
-                       style={{
-                         borderColor: getStepStatus(index) === 'completed' ? '#000' : 
-                                     getStepStatus(index) === 'active' ? '#000' : '#e5e7eb',
-                         backgroundColor: getStepStatus(index) === 'completed' ? '#000' : 
-                                        getStepStatus(index) === 'active' ? '#f3f4f6' : '#fff'
-                       }}>
-                    {getStepIcon(index, step.icon)}
-                  </div>
-                  <div className="text-center">
-                    <div className={`text-xs font-semibold mb-1 uppercase tracking-wide ${
-                      getStepStatus(index) === 'completed' ? 'text-black' :
-                      getStepStatus(index) === 'active' ? 'text-black' : 'text-gray-400'
-                    }`}>
-                      {step.label}
-                    </div>
-                    {getStepStatus(index) === 'active' && (
-                      <div className="text-xs text-gray-500 mt-1">{step.description}</div>
-                    )}
-                  </div>
-                  {index < steps.length - 1 && (
-                    <div className={`absolute top-7 left-1/2 h-0.5 -z-10 ${
-                      getStepStatus(index) === 'completed' ? 'bg-black' : 'bg-gray-200'
-                    }`} style={{ width: 'calc(100% - 3.5rem)', marginLeft: '1.75rem' }} />
-                  )}
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-emerald-50/30 to-white">
+      <AppHeader variant="app" showBackButton={false} />
+      
+      <main className="flex-1 flex items-center justify-center px-4 py-20">
+        <div className="w-full max-w-2xl">
+          
+          {/* Main Card */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-8 md:p-12">
+            
+            {/* Animated Icon */}
+            <div className="flex justify-center mb-8">
+              <div className="relative">
+                <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center animate-pulse">
+                  <Globe className="h-10 w-10 text-white" />
                 </div>
-              ))}
+                {/* Rotating border */}
+                <div className="absolute inset-0 rounded-2xl border-4 border-emerald-200 animate-spin" 
+                     style={{ animationDuration: '3s' }}></div>
+              </div>
+            </div>
+
+            {/* Status Text */}
+            <div className="text-center mb-8">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                {isComplete ? 'Analysis Complete!' : 'Analyzing Your Website'}
+              </h1>
+              <p className="text-gray-600">
+                {scanStatus?.message || 'Initializing scan...'}
+              </p>
             </div>
 
             {/* Progress Bar */}
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
-              <div 
-                className="bg-black h-2 rounded-full transition-all duration-500"
-                style={{ width: `${scanStatus?.progress || 0}%` }}
-              ></div>
-            </div>
-
-            {/* Status Message */}
-            <div className="text-center">
-              <div className="text-lg font-semibold text-gray-900 mb-3">
-                {scanStatus?.message || 'Initializing analysis...'}
+            <div className="mb-8">
+              <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                <span>Progress</span>
+                <span className="font-semibold">{Math.round(progress)}%</span>
               </div>
-              <div className="flex items-center justify-center space-x-6 text-sm text-gray-600 mb-6">
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 mr-2 text-blue-600" />
-                  <span className="font-medium">{elapsedTime}s elapsed</span>
-                </div>
-                <div className="w-px h-4 bg-gray-300"></div>
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 mr-2 text-orange-600" />
-                  <span>{timeRemaining}s remaining</span>
-                </div>
-                <div className="w-px h-4 bg-gray-300"></div>
-                <div className="flex items-center">
-                  <Activity className="h-4 w-4 mr-2 text-green-600" />
-                  <span>{scanStatus?.progress || 0}% complete</span>
-                </div>
-              </div>
-
-              {/* Fun Fact */}
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200 max-w-2xl mx-auto">
-                <div className="flex items-start gap-3">
-                  {(() => {
-                    const CurrentIcon = funFacts[currentFactIndex].icon
-                    return <CurrentIcon className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  })()}
-                  <div className="text-left">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Lightbulb className="h-4 w-4 text-yellow-600" />
-                      <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-                        Did you know?
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-700 leading-relaxed mb-1">
-                      {funFacts[currentFactIndex].text}
-                    </p>
-                    <p className="text-xs text-gray-500 italic">
-                      — {funFacts[currentFactIndex].source}
-                    </p>
-                  </div>
-                </div>
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Current Analysis Details */}
-        {scanStatus && (
-          <Card className="border-gray-200">
-            <CardContent className="p-8">
-              <div className="text-center">
-                {/* Sub-task indicator */}
-                <div className="mb-8">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-full text-sm font-medium">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{getSubTask()}</span>
-                  </div>
-                </div>
+            {/* Steps List */}
+            <div className="space-y-3 mb-8">
+              {SCAN_STEPS.map((step, index) => {
+                const isActive = index === currentStepIndex && !isComplete
+                const isDone = index < currentStepIndex || isComplete
+                const Icon = step.icon
 
-                {scanStatus.status === 'completed' && (
-                  <div className="text-center">
-                    <CheckCircle className="h-16 w-16 text-black mx-auto mb-4" />
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                      Analysis Complete!
-                    </h3>
-                    <p className="text-gray-600 mb-6">
-                      Your comprehensive WordPress audit report is ready.
-                    </p>
-                    <Button 
-                      onClick={() => window.location.href = `/report/${scanStatus.result?.id}`}
-                      size="lg"
-                      className="bg-black hover:bg-gray-800 text-white"
-                    >
-                      View Report
-                    </Button>
-                  </div>
-                )}
-
-                {scanStatus.status === 'failed' && (
-                  <div className="text-center">
-                    <div className="h-16 w-16 bg-red-50 rounded-lg flex items-center justify-center mx-auto mb-4">
-                      <AlertTriangle className="h-8 w-8 text-red-600" />
+                return (
+                  <div 
+                    key={step.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                      isActive ? 'bg-emerald-50 border border-emerald-200' : 
+                      isDone ? 'bg-gray-50' : 
+                      'bg-white'
+                    }`}
+                  >
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                      isDone ? 'bg-emerald-100' :
+                      isActive ? 'bg-emerald-500' :
+                      'bg-gray-100'
+                    }`}>
+                      {isDone ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      ) : isActive ? (
+                        <Loader2 className="h-5 w-5 text-white animate-spin" />
+                      ) : (
+                        <Icon className="h-5 w-5 text-gray-400" />
+                      )}
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                      Analysis Failed
-                    </h3>
-                    <p className="text-gray-600 mb-6">
-                      There was an error analyzing your website. Please try again.
-                    </p>
-                    <Button 
-                      onClick={() => window.location.href = '/'}
-                      variant="outline"
-                      className="border-gray-200"
-                    >
-                      Try Again
-                    </Button>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-semibold text-sm ${
+                        isActive ? 'text-emerald-900' :
+                        isDone ? 'text-gray-700' :
+                        'text-gray-400'
+                      }`}>
+                        {step.label}
+                      </div>
+                      <div className={`text-xs ${
+                        isActive ? 'text-emerald-700' :
+                        isDone ? 'text-gray-500' :
+                        'text-gray-400'
+                      }`}>
+                        {step.description}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                )
+              })}
+            </div>
 
-        {/* Footer */}
-        <div className="text-center mt-8 text-gray-500 text-sm">
-          <p>Powered by Google Lighthouse</p>
+            {/* Time Estimate */}
+            <div className="text-center text-sm text-gray-500">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full">
+                <Activity className="h-4 w-4" />
+                <span>Elapsed: {elapsedTime}s • Estimated: ~60s</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Info Note */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-500">
+              We're analyzing your site with Google Lighthouse and our WordPress-specific checks.
+              <br />
+              This usually takes 30-60 seconds.
+            </p>
+          </div>
+
         </div>
-      </div>
+      </main>
+
+      <AppFooter />
     </div>
   )
 }
