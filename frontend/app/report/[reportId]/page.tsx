@@ -438,7 +438,7 @@ export default function ReportPage() {
                     {report.performance.screenshots?.mobile && (
                       <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm flex-1">
                         <img 
-                          src={`http://localhost:3001${report.performance.screenshots.mobile}`}
+                          src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${report.performance.screenshots.mobile}`}
                           alt="Mobile Preview"
                           className="w-full h-full object-cover object-top"
                         />
@@ -474,7 +474,7 @@ export default function ReportPage() {
                     {report.performance.screenshots?.desktop && (
                       <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm flex-1">
                         <img 
-                          src={`http://localhost:3001${report.performance.screenshots.desktop}`}
+                          src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${report.performance.screenshots.desktop}`}
                           alt="Desktop Preview"
                           className="w-full h-full object-cover object-top"
                         />
