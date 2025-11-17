@@ -37,7 +37,8 @@ async function runLighthouse(task: LighthouseTask) {
       ]
     })
 
-    // Use the EXACT same config as PageSpeed Insights
+    // Match PageSpeed Insights configuration exactly
+    // Based on PSI metadata: "Emulated Desktop with Lighthouse 13.0.1", "Custom throttling", "Single page session"
     const options = {
       logLevel: 'error' as const,
       output: 'json' as const,
@@ -54,12 +55,12 @@ async function runLighthouse(task: LighthouseTask) {
           }
         : {
             mobile: false,
-            width: 1920,
-            height: 1080,
+            width: 1350,  // PSI uses 1350x940 for desktop (not 1920x1080)
+            height: 940,
             deviceScaleFactor: 1,
             disabled: false
           },
-      // PageSpeed Insights throttling settings
+      // PageSpeed Insights "Custom throttling" configuration
       throttling: task.formFactor === 'mobile' 
         ? {
             rttMs: 150,
@@ -77,7 +78,10 @@ async function runLighthouse(task: LighthouseTask) {
             uploadThroughputKbps: 0,
             cpuSlowdownMultiplier: 1
           },
-      throttlingMethod: 'simulate' as any
+      // PSI uses "Custom throttling" - use 'provided' to match custom values
+      throttlingMethod: 'provided' as any,
+      // Single page session (no navigation)
+      skipAboutBlank: true
     } as any
 
     // Run Lighthouse
