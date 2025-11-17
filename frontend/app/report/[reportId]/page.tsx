@@ -1701,9 +1701,6 @@ export default function ReportPage() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 leading-relaxed">{priority.why}</p>
-                  {priority.savings && (
-                    <p className="text-xs text-green-600 font-medium mt-1">💰 Savings: {priority.savings}</p>
-                  )}
                 </div>
               ))}
             </div>
