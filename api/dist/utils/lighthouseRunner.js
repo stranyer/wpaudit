@@ -105,8 +105,8 @@ async function runLighthouse(task) {
                     uploadThroughputKbps: 0,
                     cpuSlowdownMultiplier: 1
                 },
-            // PSI uses "Custom throttling" - use 'provided' to match custom values
-            throttlingMethod: 'provided',
+            // PSI uses "Custom throttling" - for desktop, use 'simulate' (mobile works with 'provided')
+            throttlingMethod: task.formFactor === 'mobile' ? 'provided' : 'simulate',
             // Single page session (no navigation)
             skipAboutBlank: true
         };
