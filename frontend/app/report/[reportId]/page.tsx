@@ -346,81 +346,66 @@ export default function ReportPage() {
       <AppHeader variant="app" showBackButton />
       
       <main className="container mx-auto px-4 py-8 pt-24">
-        {/* Report Header */}
-        <div className="mb-8">
+        {/* Report Header - Centered */}
+        <div className="mb-8 text-center max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             WordPress Audit Report
           </h1>
-          <p className="text-gray-600 mb-2">{report.meta.url}</p>
+          <p className="text-lg text-gray-700 mb-1">{report.meta.url}</p>
           <p className="text-sm text-gray-500">
             Scanned on {new Date(report.meta.scannedAt).toLocaleDateString()} at {new Date(report.meta.scannedAt).toLocaleTimeString()}
           </p>
         </div>
 
-        {/* Overview Scores Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        {/* Overview Scores Grid - Compacto sin iconos */}
+        <div className="grid grid-cols-5 gap-3 mb-8 max-w-3xl mx-auto">
           {/* Performance Score */}
           <Card className="border-gray-200">
-            <CardContent className="pt-6 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Zap className="h-5 w-5 text-gray-700" />
-              </div>
+            <CardContent className="p-3 text-center">
               <div className={`text-3xl font-bold mb-1 ${getScoreColor(Math.round((report.performance.scores.mobile + report.performance.scores.desktop) / 2))}`}>
                 {Math.round((report.performance.scores.mobile + report.performance.scores.desktop) / 2)}
               </div>
-              <div className="text-xs text-gray-600">Performance</div>
+              <div className="text-xs font-medium text-gray-600">Performance</div>
             </CardContent>
           </Card>
 
           {/* SEO Score */}
           <Card className="border-gray-200">
-            <CardContent className="pt-6 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Eye className="h-5 w-5 text-gray-700" />
-              </div>
+            <CardContent className="p-3 text-center">
               <div className={`text-3xl font-bold mb-1 ${getScoreColor(report.seo.score)}`}>
                 {report.seo.score}
               </div>
-              <div className="text-xs text-gray-600">SEO</div>
+              <div className="text-xs font-medium text-gray-600">SEO</div>
             </CardContent>
           </Card>
 
           {/* Security Score */}
           <Card className="border-gray-200">
-            <CardContent className="pt-6 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Shield className="h-5 w-5 text-gray-700" />
-              </div>
+            <CardContent className="p-3 text-center">
               <div className={`text-3xl font-bold mb-1 ${getScoreColor(report.security.score)}`}>
                 {report.security.score}
               </div>
-              <div className="text-xs text-gray-600">Security</div>
+              <div className="text-xs font-medium text-gray-600">Security</div>
             </CardContent>
           </Card>
 
           {/* Accessibility Score */}
           <Card className="border-gray-200">
-            <CardContent className="pt-6 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Users className="h-5 w-5 text-gray-700" />
-              </div>
+            <CardContent className="p-3 text-center">
               <div className={`text-3xl font-bold mb-1 ${getScoreColor(report.accessibility.score)}`}>
                 {report.accessibility.score}
               </div>
-              <div className="text-xs text-gray-600">Accessibility</div>
+              <div className="text-xs font-medium text-gray-600">Accessibility</div>
             </CardContent>
           </Card>
 
           {/* GDPR Score */}
           <Card className="border-gray-200">
-            <CardContent className="pt-6 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Lock className="h-5 w-5 text-gray-700" />
-              </div>
+            <CardContent className="p-3 text-center">
               <div className={`text-3xl font-bold mb-1 ${getScoreColor(report.gdpr.score)}`}>
                 {report.gdpr.score}
               </div>
-              <div className="text-xs text-gray-600">GDPR</div>
+              <div className="text-xs font-medium text-gray-600">GDPR</div>
             </CardContent>
           </Card>
         </div>
@@ -443,19 +428,19 @@ export default function ReportPage() {
             <div className="grid md:grid-cols-2 gap-6 mb-8">
               {/* Mobile Score */}
               <div className="bg-white rounded-xl border-2 border-gray-200 p-5 hover:border-green-400 transition-all">
-                <div className="flex items-start gap-4">
-                  {/* Preview Column */}
-                  <div className="flex-shrink-0 w-24">
+                <div className="flex items-start gap-4 h-full">
+                  {/* Preview Column - 100% height */}
+                  <div className="flex-shrink-0 w-24 flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-2">
                       <Smartphone className="h-4 w-4 text-gray-600" />
                       <span className="text-sm font-semibold text-gray-900">Mobile</span>
                     </div>
                     {report.performance.screenshots?.mobile && (
-                      <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                      <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm flex-1">
                         <img 
                           src={`http://localhost:3001${report.performance.screenshots.mobile}`}
                           alt="Mobile Preview"
-                          className="w-full h-auto"
+                          className="w-full h-full object-cover object-top"
                         />
                       </div>
                     )}
@@ -479,19 +464,19 @@ export default function ReportPage() {
 
               {/* Desktop Score */}
               <div className="bg-white rounded-xl border-2 border-gray-200 p-5 hover:border-blue-400 transition-all">
-                <div className="flex items-start gap-4">
-                  {/* Preview Column */}
-                  <div className="flex-shrink-0 w-24">
+                <div className="flex items-start gap-4 h-full">
+                  {/* Preview Column - 100% height */}
+                  <div className="flex-shrink-0 w-24 flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-2">
                       <Monitor className="h-4 w-4 text-gray-600" />
                       <span className="text-sm font-semibold text-gray-900">Desktop</span>
                     </div>
                     {report.performance.screenshots?.desktop && (
-                      <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                      <div className="rounded-lg overflow-hidden border border-gray-200 shadow-sm flex-1">
                         <img 
                           src={`http://localhost:3001${report.performance.screenshots.desktop}`}
                           alt="Desktop Preview"
-                          className="w-full h-auto"
+                          className="w-full h-full object-cover object-top"
                         />
                       </div>
                     )}
@@ -514,33 +499,30 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* Key Summary Table */}
+            {/* Key Summary Table - Compacto */}
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Key Summary</h3>
+              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider">Key Summary</h3>
               </div>
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Metric</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">Value</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase">Metric</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-600 uppercase">Value</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-600 uppercase">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {/* FCP */}
                   <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <Zap className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="font-medium text-gray-900">First Contentful Paint (FCP)</span>
-                      </div>
+                    <td className="px-4 py-2">
+                      <span className="text-sm text-gray-900">First Contentful Paint</span>
                     </td>
-                    <td className="px-6 py-4 text-center text-gray-900 font-semibold">
-                      {report.performance.fcp?.toFixed(2) || '0.00'} s
+                    <td className="px-4 py-2 text-center text-gray-900 font-medium text-sm">
+                      {report.performance.fcp?.toFixed(2) || '0.00'}s
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge variant={report.performance.fcp && report.performance.fcp < 1.8 ? 'default' : report.performance.fcp && report.performance.fcp < 3 ? 'secondary' : 'destructive'}>
+                    <td className="px-4 py-2 text-center">
+                      <Badge className="text-xs" variant={report.performance.fcp && report.performance.fcp < 1.8 ? 'default' : report.performance.fcp && report.performance.fcp < 3 ? 'secondary' : 'destructive'}>
                         {report.performance.fcp && report.performance.fcp < 1.8 ? 'Good' : report.performance.fcp && report.performance.fcp < 3 ? 'Needs Improvement' : 'Poor'}
                       </Badge>
                     </td>
@@ -548,17 +530,14 @@ export default function ReportPage() {
 
                   {/* LCP */}
                   <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <Eye className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="font-medium text-gray-900">Largest Contentful Paint (LCP)</span>
-                      </div>
+                    <td className="px-4 py-2">
+                      <span className="text-sm text-gray-900">Largest Contentful Paint</span>
                     </td>
-                    <td className="px-6 py-4 text-center text-gray-900 font-semibold">
-                      {report.performance.coreWebVitals.lcp.toFixed(2)} s
+                    <td className="px-4 py-2 text-center text-gray-900 font-medium text-sm">
+                      {report.performance.coreWebVitals.lcp.toFixed(2)}s
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge variant={report.performance.coreWebVitals.lcp < 2.5 ? 'default' : report.performance.coreWebVitals.lcp < 4 ? 'secondary' : 'destructive'}>
+                    <td className="px-4 py-2 text-center">
+                      <Badge className="text-xs" variant={report.performance.coreWebVitals.lcp < 2.5 ? 'default' : report.performance.coreWebVitals.lcp < 4 ? 'secondary' : 'destructive'}>
                         {report.performance.coreWebVitals.lcp < 2.5 ? 'Good' : report.performance.coreWebVitals.lcp < 4 ? 'Needs Improvement' : 'Poor'}
                       </Badge>
                     </td>
@@ -566,17 +545,14 @@ export default function ReportPage() {
 
                   {/* CLS */}
                   <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <Target className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="font-medium text-gray-900">Cumulative Layout Shift (CLS)</span>
-                      </div>
+                    <td className="px-4 py-2">
+                      <span className="text-sm text-gray-900">Cumulative Layout Shift</span>
                     </td>
-                    <td className="px-6 py-4 text-center text-gray-900 font-semibold">
+                    <td className="px-4 py-2 text-center text-gray-900 font-medium text-sm">
                       {report.performance.coreWebVitals.cls.toFixed(3)}
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge variant={report.performance.coreWebVitals.cls < 0.1 ? 'default' : report.performance.coreWebVitals.cls < 0.25 ? 'secondary' : 'destructive'}>
+                    <td className="px-4 py-2 text-center">
+                      <Badge className="text-xs" variant={report.performance.coreWebVitals.cls < 0.1 ? 'default' : report.performance.coreWebVitals.cls < 0.25 ? 'secondary' : 'destructive'}>
                         {report.performance.coreWebVitals.cls < 0.1 ? 'Good' : report.performance.coreWebVitals.cls < 0.25 ? 'Needs Improvement' : 'Poor'}
                       </Badge>
                     </td>
@@ -584,17 +560,14 @@ export default function ReportPage() {
 
                   {/* TBT */}
                   <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="font-medium text-gray-900">Total Blocking Time (TBT)</span>
-                      </div>
+                    <td className="px-4 py-2">
+                      <span className="text-sm text-gray-900">Total Blocking Time</span>
                     </td>
-                    <td className="px-6 py-4 text-center text-gray-900 font-semibold">
-                      {report.performance.tbt || 0} ms
+                    <td className="px-4 py-2 text-center text-gray-900 font-medium text-sm">
+                      {report.performance.tbt || 0}ms
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge variant={(report.performance.tbt || 0) < 200 ? 'default' : (report.performance.tbt || 0) < 600 ? 'secondary' : 'destructive'}>
+                    <td className="px-4 py-2 text-center">
+                      <Badge className="text-xs" variant={(report.performance.tbt || 0) < 200 ? 'default' : (report.performance.tbt || 0) < 600 ? 'secondary' : 'destructive'}>
                         {(report.performance.tbt || 0) < 200 ? 'Good' : (report.performance.tbt || 0) < 600 ? 'Needs Improvement' : 'Poor'}
                       </Badge>
                     </td>
@@ -602,23 +575,94 @@ export default function ReportPage() {
 
                   {/* Speed Index */}
                   <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <Activity className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="font-medium text-gray-900">Speed Index (SI)</span>
-                      </div>
+                    <td className="px-4 py-2">
+                      <span className="text-sm text-gray-900">Speed Index</span>
                     </td>
-                    <td className="px-6 py-4 text-center text-gray-900 font-semibold">
-                      {report.performance.si?.toFixed(2) || '0.00'} s
+                    <td className="px-4 py-2 text-center text-gray-900 font-medium text-sm">
+                      {report.performance.si?.toFixed(2) || '0.00'}s
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge variant={report.performance.si && report.performance.si < 3.4 ? 'default' : report.performance.si && report.performance.si < 5.8 ? 'secondary' : 'destructive'}>
+                    <td className="px-4 py-2 text-center">
+                      <Badge className="text-xs" variant={report.performance.si && report.performance.si < 3.4 ? 'default' : report.performance.si && report.performance.si < 5.8 ? 'secondary' : 'destructive'}>
                         {report.performance.si && report.performance.si < 3.4 ? 'Good' : report.performance.si && report.performance.si < 5.8 ? 'Needs Improvement' : 'Poor'}
                       </Badge>
                     </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* Core Web Vitals & Metrics - Dentro de Performance */}
+            <div className="mt-6 grid md:grid-cols-3 gap-4">
+              {/* Core Web Vitals */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Core Web Vitals</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">LCP</span>
+                    <span className={`font-bold ${report.performance.coreWebVitals.lcp <= 2.5 ? 'text-green-600' : 'text-red-600'}`}>
+                      {report.performance.coreWebVitals.lcp.toFixed(1)}s
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">CLS</span>
+                    <span className={`font-bold ${report.performance.coreWebVitals.cls <= 0.1 ? 'text-green-600' : 'text-red-600'}`}>
+                      {report.performance.coreWebVitals.cls.toFixed(3)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">INP</span>
+                    <span className={`font-bold ${report.performance.coreWebVitals.inp <= 200 ? 'text-green-600' : 'text-red-600'}`}>
+                      {report.performance.coreWebVitals.inp.toFixed(0)}ms
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Other Metrics */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Other Metrics</h4>
+                <div className="space-y-2">
+                  {report.performance.ttfb && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">TTFB</span>
+                      <span className="font-bold text-gray-900">{report.performance.ttfb.toFixed(0)}ms</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Requests</span>
+                    <span className="font-bold text-gray-900">{report.performance.requests}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Page Size</span>
+                    <span className="font-bold text-gray-900">{report.performance.transferMB.toFixed(2)}MB</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resources */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Resources</h4>
+                <div className="space-y-2">
+                  {report.performance.imageSize && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Images</span>
+                      <span className="font-bold text-gray-900">{report.performance.imageSize.toFixed(2)}MB</span>
+                    </div>
+                  )}
+                  {report.performance.scriptSize && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Scripts</span>
+                      <span className="font-bold text-gray-900">{report.performance.scriptSize.toFixed(2)}MB</span>
+                    </div>
+                  )}
+                  {report.performance.cssSize && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">CSS</span>
+                      <span className="font-bold text-gray-900">{report.performance.cssSize.toFixed(2)}MB</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -876,74 +920,6 @@ export default function ReportPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* WordPress Information */}
-        {report.wordpress.isWordPress && (
-          <Card className="mb-8 border-gray-200">
-            <CardHeader>
-              <CardTitle className="flex items-center text-gray-900">
-                <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                  <Globe className="h-5 w-5 text-gray-900" />
-                </div>
-                WordPress Information
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                WordPress installation details and configuration
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* WordPress Details */}
-                <div className="space-y-4">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">WordPress Version</div>
-                    <div className="text-lg font-semibold text-gray-900">
-                      {report.wordpress.version || 'Not detected'}
-                    </div>
-                  </div>
-                  
-                  {report.wordpress.theme && (
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <div className="text-sm text-gray-600 mb-1">Active Theme</div>
-                      <div className="text-lg font-semibold text-gray-900">
-                        {report.wordpress.theme.name}
-                        {report.wordpress.theme.child && (
-                          <Badge className="ml-2 bg-blue-100 text-blue-700">Child Theme</Badge>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Plugins */}
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Detected Plugins</h4>
-                  {report.wordpress.plugins && report.wordpress.plugins.length > 0 ? (
-                    <div className="space-y-2">
-                      {report.wordpress.plugins.map((plugin, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center">
-                            <div className="font-medium text-gray-900">{plugin.slug}</div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={plugin.impact === 'high' ? 'destructive' : plugin.impact === 'medium' ? 'secondary' : 'default'}>
-                              {plugin.impact} impact
-                            </Badge>
-                            <span className="text-sm text-gray-500">
-                              {Math.round(plugin.confidence * 100)}% confidence
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm">No plugins detected</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Security Analysis */}
         <Card className="mb-8 border-gray-200">
@@ -1377,134 +1353,6 @@ export default function ReportPage() {
           </CardContent>
         </Card>
 
-        {/* Core Web Vitals - Detailed Metrics */}
-        <Card className="mb-8 border-gray-200">
-          <CardHeader>
-            <CardTitle className="flex items-center text-gray-900">
-              <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                <Activity className="h-5 w-5 text-gray-900" />
-              </div>
-              Core Web Vitals & Performance Metrics
-            </CardTitle>
-            <CardDescription className="text-gray-600">
-              Google's key metrics for user experience and performance
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Core Web Vitals */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-lg text-gray-900">Core Web Vitals</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">LCP</div>
-                      <div className="text-sm text-gray-500">Largest Contentful Paint</div>
-                    </div>
-                    <div className={`text-lg font-bold ${report.performance.coreWebVitals.lcp <= 2.5 ? 'text-green-600' : 'text-red-600'}`}>
-                      {report.performance.coreWebVitals.lcp.toFixed(1)}s
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">CLS</div>
-                      <div className="text-sm text-gray-500">Cumulative Layout Shift</div>
-                    </div>
-                    <div className={`text-lg font-bold ${report.performance.coreWebVitals.cls <= 0.1 ? 'text-green-600' : 'text-red-600'}`}>
-                      {report.performance.coreWebVitals.cls.toFixed(3)}
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">INP</div>
-                      <div className="text-sm text-gray-500">Interaction to Next Paint</div>
-                    </div>
-                    <div className={`text-lg font-bold ${report.performance.coreWebVitals.inp <= 200 ? 'text-green-600' : 'text-red-600'}`}>
-                      {report.performance.coreWebVitals.inp.toFixed(0)}ms
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Additional Performance Metrics */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-lg text-gray-900">Performance Metrics</h4>
-                <div className="space-y-3">
-                  {report.performance.fcp && (
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium">FCP</div>
-                        <div className="text-sm text-gray-500">First Contentful Paint</div>
-                      </div>
-                      <div className={`text-lg font-bold ${report.performance.fcp <= 1.8 ? 'text-green-600' : 'text-red-600'}`}>
-                        {report.performance.fcp.toFixed(1)}s
-                      </div>
-                    </div>
-                  )}
-                  {report.performance.ttfb && (
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium">TTFB</div>
-                        <div className="text-sm text-gray-500">Time to First Byte</div>
-                      </div>
-                      <div className={`text-lg font-bold ${report.performance.ttfb <= 600 ? 'text-green-600' : 'text-red-600'}`}>
-                        {report.performance.ttfb.toFixed(0)}ms
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Requests</div>
-                      <div className="text-sm text-gray-500">Total HTTP Requests</div>
-                    </div>
-                    <div className="text-lg font-bold text-gray-700">
-                      {report.performance.requests}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Resource Analysis */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-lg text-gray-900">Resource Analysis</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Page Size</div>
-                      <div className="text-sm text-gray-500">Total Transfer Size</div>
-                    </div>
-                    <div className="text-lg font-bold text-gray-700">
-                      {report.performance.transferMB.toFixed(2)} MB
-                    </div>
-                  </div>
-                  {report.performance.imageSize && (
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium">Images</div>
-                        <div className="text-sm text-gray-500">Image Resources</div>
-                      </div>
-                      <div className="text-lg font-bold text-gray-700">
-                        {report.performance.imageSize.toFixed(2)} MB
-                      </div>
-                    </div>
-                  )}
-                  {report.performance.scriptSize && (
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium">Scripts</div>
-                        <div className="text-sm text-gray-500">JavaScript Files</div>
-                      </div>
-                      <div className="text-lg font-bold text-gray-700">
-                        {report.performance.scriptSize.toFixed(2)} MB
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* SEO Analysis */}
         <Card className="mb-8 border-gray-200">
           <CardHeader>
@@ -1766,95 +1614,96 @@ export default function ReportPage() {
           </Card>
         )}
 
-        {/* WordPress Information */}
+        {/* WordPress Information - Compacto y mejorado */}
         <Card className="mb-8 border-gray-200">
-          <CardHeader>
-            <CardTitle className="flex items-center text-gray-900">
-              <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                <Target className="h-5 w-5 text-gray-900" />
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-gray-900 text-lg">
+              <div className="h-8 w-8 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
+                <Target className="h-4 w-4 text-gray-900" />
               </div>
               WordPress Information
             </CardTitle>
-            <CardDescription className="text-gray-600">
-              Detected WordPress installation details
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-semibold mb-3">Site Information</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>WordPress Version</span>
-                    <Badge variant={report.wordpress.version ? "default" : "secondary"}>
-                      {report.wordpress.version || 'Not detected'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Active Theme</span>
-                    <Badge variant={report.wordpress.theme ? "default" : "secondary"}>
-                      {report.wordpress.theme?.name || 'Not detected'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Child Theme</span>
-                    <Badge variant={report.wordpress.theme?.child ? "default" : "secondary"}>
-                      {report.wordpress.theme?.child ? "Yes" : "No"}
-                    </Badge>
-                  </div>
+            <div className="grid md:grid-cols-3 gap-4 mb-4">
+              {/* Quick Stats */}
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-xs text-gray-600 mb-1">WordPress Version</div>
+                <div className="text-sm font-semibold text-gray-900">
+                  {report.wordpress.version || 'Not detected'}
                 </div>
               </div>
-              <div>
-                <h4 className="font-semibold mb-3">Detected Plugins</h4>
-                <div className="space-y-2">
-                  {report.wordpress.plugins?.map((plugin, index) => (
-                    <div key={index} className="flex justify-between">
-                      <span className="capitalize">{plugin.slug}</span>
-                      <div className="flex space-x-2">
-                        <Badge className={getImpactBadge(plugin.impact)}>
-                          {plugin.impact}
-                        </Badge>
-                        <Badge variant="outline">
-                          {Math.round(plugin.confidence * 100)}%
-                        </Badge>
-                      </div>
-                    </div>
-                  )) || <span className="text-gray-500">No plugins detected</span>}
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-xs text-gray-600 mb-1">Active Theme</div>
+                <div className="text-sm font-semibold text-gray-900">
+                  {report.wordpress.theme?.name || 'Not detected'}
+                  {report.wordpress.theme?.child && (
+                    <Badge className="ml-1 text-xs py-0 px-1 h-4">Child</Badge>
+                  )}
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-xs text-gray-600 mb-1">Plugins Detected</div>
+                <div className="text-sm font-semibold text-gray-900">
+                  {report.wordpress.plugins?.length || 0} plugins
                 </div>
               </div>
             </div>
+
+            {/* Plugins List - Compacto */}
+            {report.wordpress.plugins && report.wordpress.plugins.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">Detected Plugins</h4>
+                <div className="grid md:grid-cols-2 gap-2">
+                  {report.wordpress.plugins.map((plugin, index) => (
+                    <div key={index} className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded">
+                      <span className="capitalize font-medium text-gray-900">{plugin.slug}</span>
+                      <div className="flex items-center gap-1">
+                        <Badge className={`text-xs py-0 px-1.5 h-5 ${getImpactBadge(plugin.impact)}`}>
+                          {plugin.impact}
+                        </Badge>
+                        <span className="text-gray-500">{Math.round(plugin.confidence * 100)}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Recommendations */}
+        {/* Recommended Actions - Compacto y mejorado */}
         <Card className="mb-8 border-gray-200">
-          <CardHeader>
-            <CardTitle className="flex items-center text-gray-900">
-              <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
-                <TrendingUp className="h-5 w-5 text-gray-900" />
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-gray-900 text-lg">
+              <div className="h-8 w-8 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
+                <TrendingUp className="h-4 w-4 text-gray-900" />
               </div>
               Recommended Actions
             </CardTitle>
-            <CardDescription className="text-gray-600">
+            <CardDescription className="text-xs text-gray-600">
               Priority-based recommendations for improvement
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {report.priorities.map((priority, index) => (
-                <div key={index} className="p-4 border rounded-lg">
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-semibold text-lg">{priority.title}</h4>
-                    <div className="flex space-x-2">
-                      <Badge className={getImpactBadge(priority.impact)}>
-                        {priority.impact} impact
+                <div key={index} className="p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
+                  <div className="flex items-start justify-between gap-3 mb-1.5">
+                    <h4 className="font-semibold text-sm text-gray-900 flex-1">{priority.title}</h4>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Badge className={`text-xs py-0 px-1.5 h-5 ${getImpactBadge(priority.impact)}`}>
+                        {priority.impact}
                       </Badge>
-                      <Badge variant="outline">
-                        {priority.effort} effort
+                      <Badge variant="outline" className="text-xs py-0 px-1.5 h-5">
+                        {priority.effort}
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-gray-600">{priority.why}</p>
+                  <p className="text-xs text-gray-600 leading-relaxed">{priority.why}</p>
+                  {priority.savings && (
+                    <p className="text-xs text-green-600 font-medium mt-1">💰 Savings: {priority.savings}</p>
+                  )}
                 </div>
               ))}
             </div>

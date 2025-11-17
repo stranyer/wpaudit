@@ -67,6 +67,7 @@ export default function ScanningPage() {
         const response = await fetch(`/api/scan/${params.jobId}`)
         const data = await response.json()
         
+        console.log('Scan status:', data)
         setScanStatus(data)
 
         // Update current step based on progress
@@ -77,10 +78,21 @@ export default function ScanningPage() {
         setCurrentStepIndex(stepIndex)
 
         // Redirect when completed
-        if (data.status === 'completed' && data.result?.publicId) {
-          setTimeout(() => {
-            router.push(`/report/${data.result.publicId}`)
-          }, 1000)
+        if (data.status === 'completed') {
+          console.log('Scan completed! Result:', data.result)
+          console.log('PublicId:', data.result?.publicId)
+          
+          // Try different possible response structures
+          const reportId = data.result?.publicId || data.result?.id || data.reportId
+          
+          if (reportId) {
+            console.log('Redirecting to report:', reportId)
+            setTimeout(() => {
+              router.push(`/report/${reportId}`)
+            }, 1000)
+          } else {
+            console.error('No report ID found in response:', data)
+          }
         }
       } catch (error) {
         console.error('Error polling scan status:', error)

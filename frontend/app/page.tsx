@@ -26,19 +26,35 @@ export default function Home() {
   const router = useRouter()
 
   const handleScan = async () => {
-    if (!url) return
+    console.log('handleScan called with URL:', url)
+    
+    if (!url) {
+      console.log('No URL provided')
+      return
+    }
+
+    // Normalizar la URL: agregar https:// si no tiene protocolo
+    let normalizedUrl = url.trim()
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      normalizedUrl = `https://${normalizedUrl}`
+    }
 
     setIsScanning(true)
+    console.log('Starting scan for:', normalizedUrl)
+    
     try {
       const response = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: normalizedUrl }),
       })
 
+      console.log('Response status:', response.status)
       const data = await response.json()
+      console.log('Response data:', data)
 
       if (data.jobId) {
+        console.log('Redirecting to scanning page:', data.jobId)
         router.push(`/scanning/${data.jobId}`)
       } else {
         throw new Error('No jobId received')
@@ -90,7 +106,7 @@ export default function Home() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Input
                     type="text"
-                    placeholder="Enter your WordPress URL (e.g., example.com)"
+                    placeholder="Enter your website URL (e.g., stranyer.com or https://example.com)"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleScan()}
