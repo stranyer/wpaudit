@@ -89,7 +89,7 @@ Future<List> _query(ml.MapLibreMapController map, String layer, List<Object>? fi
   try {
     return await map.querySourceFeatures(SuturaMapStyle.source, layer, filter);
   } catch (e) {
-    if (filter == null) {
+    if (filter == null || '$e'.contains('STYLE_NOT_READY')) {
       debugPrint('[Zona Cero] querySourceFeatures($layer) falló: $e');
       return const [];
     }

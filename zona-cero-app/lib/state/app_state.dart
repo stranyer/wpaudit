@@ -8,6 +8,7 @@ import '../content/lore.dart';
 import '../core/core.dart';
 import '../data/game_repository.dart';
 import '../data/local_repository.dart';
+import '../data/supabase_repository.dart';
 import '../data/storage.dart';
 import '../services/location/location_types.dart';
 import 'location_controller.dart';
@@ -137,8 +138,26 @@ class AppState extends ChangeNotifier {
     _saveTimer?.cancel();
     _saveTimer = null;
     final p = player;
-    if (p != null) await repo.savePlayer(p);
+    if (p != null) {
+      try {
+        await repo.savePlayer(p);
+      } catch (e) {
+        // Sin red: el progreso queda en memoria y se reintenta en el próximo guardado.
+        debugPrint('[Zona Cero] No se pudo guardar en la red: $e');
+        _scheduleSave();
+      }
+    }
     await _saveSession();
+  }
+
+  /// Ejecuta una llamada a la red y muestra el error en el feed si falla.
+  Future<T?> _net<T>(Future<T> Function() call) async {
+    try {
+      return await call();
+    } catch (e) {
+      ui.toast(e is SupabaseRepositoryException ? '$e' : 'Red inestable. Probá de nuevo.', ToastTone.bad);
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -344,7 +363,7 @@ class AppState extends ChangeNotifier {
       ui.toast('Resistencia insuficiente. Comé algo o descansá.', ToastTone.warn);
       return;
     }
-    final result = await repo.validateInteraction(InteractionRequest(
+    final result = await _net(() => repo.validateInteraction(InteractionRequest(
       playerId: p.id,
       action: InteractionAction.scavenge,
       targetId: spawn.id,
@@ -353,7 +372,8 @@ class AppState extends ChangeNotifier {
       playerPosition: f.position,
       accuracyM: f.accuracyM,
       timestamp: now,
-    ));
+    )));
+    if (result == null) return;
     if (!result.ok) {
       ui.toast((result.reason ?? InteractionRejection.outOfRange).message, ToastTone.warn);
       if (result.reason == InteractionRejection.depleted || result.reason == InteractionRejection.expired) {
@@ -386,7 +406,7 @@ class AppState extends ChangeNotifier {
       ui.toast('Signos vitales críticos. Curate antes de enfrentar.', ToastTone.warn);
       return false;
     }
-    final result = await repo.validateInteraction(InteractionRequest(
+    final result = await _net(() => repo.validateInteraction(InteractionRequest(
       playerId: p.id,
       action: InteractionAction.encounter,
       targetId: spawn.id,
@@ -395,7 +415,8 @@ class AppState extends ChangeNotifier {
       playerPosition: f.position,
       accuracyM: f.accuracyM,
       timestamp: now,
-    ));
+    )));
+    if (result == null) return false;
     if (!result.ok) {
       ui.toast((result.reason ?? InteractionRejection.outOfRange).message, ToastTone.warn);
       return false;
@@ -570,14 +591,15 @@ class AppState extends ChangeNotifier {
       ui.toast('No tenés esos recursos.', ToastTone.warn);
       return;
     }
-    final r = await repo.donateToShelter(DonationInput(
+    final r = await _net(() => repo.donateToShelter(DonationInput(
       shelterId: shelter.id,
       playerId: p.id,
       playerName: p.name,
       resources: offered,
       playerPosition: f.position,
       accuracyM: f.accuracyM,
-    ));
+    )));
+    if (r == null) return;
     if (!r.ok || r.shelter == null) {
       ui.toast(
         switch (r.reason) {
@@ -630,13 +652,19 @@ class AppState extends ChangeNotifier {
     final p = player;
     if (p == null) return;
     HapticFeedback.selectionClick();
-    final total = await repo.sendPulse(shelter.id, p.id, 1);
+    final total = await _net(() => repo.sendPulse(shelter.id, p.id, 1));
+    if (total == null) return;
+    notifyListeners();
     ui.toast('+1 PULSO · ${shelter.name} ($total)', ToastTone.network);
   }
 
   int pulsesOf(Shelter shelter) {
     final r = repo;
-    return r is LocalRepository ? r.pulsesOf(shelter.id) : 0;
+    return switch (r) {
+      LocalRepository() => r.pulsesOf(shelter.id),
+      SupabaseRepository() => r.pulsesOf(shelter.id),
+      _ => 0,
+    };
   }
 
   // ---------------------------------------------------------------------------

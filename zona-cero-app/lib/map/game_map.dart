@@ -196,6 +196,8 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final start = app.location.position ?? app.demoPosition ?? gameConfig.demo.start;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final pad = MediaQuery.paddingOf(context);
     return Listener(
       onPointerDown: _onPointerDown,
       onPointerMove: _onPointerMove,
@@ -219,8 +221,9 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
         minMaxZoomPreference: const ml.MinMaxZoomPreference(13, 19.5),
         annotationOrder: const [],
         logoEnabled: false,
-        attributionButtonPosition: ml.AttributionButtonPosition.topLeft,
-        attributionButtonMargins: const math.Point(6, 150),
+        // Atribución OSM debajo del estado de red (márgenes en píxeles físicos).
+        attributionButtonPosition: ml.AttributionButtonPosition.topRight,
+        attributionButtonMargins: math.Point((14 * dpr).round(), ((pad.top + 66) * dpr).round()),
         gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
       ),
     );
@@ -882,6 +885,7 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
         return;
       }
       _emptyQueries = 0;
+      debugPrint('[Zona Cero] TEMP-LOG placement: ${data.walkable.length} segmentos, ${data.excluded.length} excluidos');
       _placement = data;
       _placementCenter = around;
       app.world.applyPlacement(data, inView: inView);

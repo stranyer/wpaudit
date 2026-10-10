@@ -98,19 +98,20 @@ Json gridCollection(LatLng player, {double stepM = 100, double extentM = 1300}) 
 // Contagio: curvas de nivel sobre las zonas infestadas
 // ---------------------------------------------------------------------------
 
-/// Niveles (metros de distancia con signo al borde del área infestada):
-/// 0 = borde exterior, luego dos curvas internas cada vez más intensas.
-const contagionLevels = [0.0, -30.0, -62.0];
+/// Niveles del campo de contagio (0 = limpio, 1 = infestado): halo exterior,
+/// borde del área infestada y núcleo.
+const contagionLevels = [0.18, 0.5, 0.82];
 
 /// Clave estable del conjunto de celdas infestadas (para no recalcular).
 String contagionKey(List<Zone> zones) =>
     ([for (final z in zones) if (z.threat == ZoneThreat.infested) z.cellId]..sort()).join(',');
 
-/// Campo escalar = distancia con signo a la unión suave de las celdas
-/// infestadas (+ un ruido de baja frecuencia para que parezca terreno), y
-/// tres isolíneas con marching squares. Devuelve una sola colección: líneas
-/// (`k: 'line'`, `lvl: 0..2`) y el relleno del nivel exterior (`k: 'fill'`).
-Json contagionCollection(List<Zone> zones, {double stepM = 10}) {
+/// Campo escalar = celdas infestadas (1) / limpias (0) suavizado con un desenfoque
+/// casi gaussiano (3 pasadas de caja), más un ruido de baja frecuencia para que
+/// parezca terreno. Se extraen tres isolíneas con marching squares. Devuelve
+/// una sola colección: líneas (`k: 'line'`, `lvl: 0..2`, de afuera hacia
+/// adentro) y el relleno del borde (`k: 'fill'`).
+Json contagionCollection(List<Zone> zones, {double stepM = 10, int blurRadius = 4}) {
   final infested = [for (final z in zones) if (z.threat == ZoneThreat.infested) z];
   if (infested.isEmpty) return emptyCollection();
 
@@ -122,49 +123,56 @@ Json contagionCollection(List<Zone> zones, {double stepM = 10}) {
     maxLat = math.max(maxLat, z.bounds.ne.lat);
     maxLng = math.max(maxLng, z.bounds.ne.lng);
   }
-  const margin = 90.0;
+  // Margen suficiente para el desenfoque (3 pasadas de radio `blurRadius`).
+  final margin = stepM * (blurRadius * 3 + 3);
   final origin = offsetM(LatLng(minLat, minLng), -margin, -margin);
   final ne = toLocalXY(origin, LatLng(maxLat, maxLng));
   final w = ((ne.x + margin) / stepM).ceil() + 1;
   final h = ((ne.y + margin) / stepM).ceil() + 1;
 
-  // Rectángulos en metros (centro y semiejes).
   final rects = [
-    for (final z in infested)
-      () {
-        final a = toLocalXY(origin, z.bounds.sw);
-        final b = toLocalXY(origin, z.bounds.ne);
-        return (cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, bx: (b.x - a.x) / 2, by: (b.y - a.y) / 2);
-      }(),
+    for (final z in infested) (toLocalXY(origin, z.bounds.sw), toLocalXY(origin, z.bounds.ne)),
   ];
-
-  // Origen absoluto para que el ruido sea estable entre regeneraciones.
-  final ax = origin.lng * 111320 * math.cos(origin.lat * math.pi / 180);
-  final ay = origin.lat * 110574;
-
-  final values = List<double>.filled(w * h, 1e3);
-  for (var j = 1; j < h - 1; j++) {
+  var field = List<double>.filled(w * h, 0);
+  for (var j = 0; j < h; j++) {
     final y = j * stepM;
-    for (var i = 1; i < w - 1; i++) {
+    for (var i = 0; i < w; i++) {
       final x = i * stepM;
-      var d = double.infinity;
-      for (final r in rects) {
-        final sd = _rectSdf(x - r.cx, y - r.cy, r.bx, r.by);
-        d = d == double.infinity ? sd : _smin(d, sd, 36);
+      for (final (a, b) in rects) {
+        if (x >= a.x && x <= b.x && y >= a.y && y <= b.y) {
+          field[j * w + i] = 1;
+          break;
+        }
       }
-      values[j * w + i] = d + _noise(ax + x, ay + y) * 7;
     }
   }
-  final grid = ScalarGrid(w, h, values);
+  for (var pass = 0; pass < 3; pass++) {
+    field = _boxBlur(field, w, h, blurRadius, horizontal: true);
+    field = _boxBlur(field, w, h, blurRadius, horizontal: false);
+  }
+  // Ruido estable (coordenadas absolutas) y borde forzado a 0 para cerrar curvas.
+  final ax = origin.lng * 111320 * math.cos(origin.lat * math.pi / 180);
+  final ay = origin.lat * 110574;
+  for (var j = 0; j < h; j++) {
+    for (var i = 0; i < w; i++) {
+      final k = j * w + i;
+      if (i == 0 || j == 0 || i == w - 1 || j == h - 1) {
+        field[k] = 0;
+        continue;
+      }
+      final v = field[k];
+      if (v > 0.02 && v < 0.98) field[k] = v + _noise(ax + i * stepM, ay + j * stepM) * 0.07;
+    }
+  }
+  final grid = ScalarGrid(w, h, field);
 
   LatLng toLatLng(GridPoint p) => fromLocalXY(origin, XY(p.x * stepM, p.y * stepM));
 
   final lineFeats = <Json>[];
-  var outerRings = <List<GridPoint>>[];
+  var edgeRings = <List<GridPoint>>[];
   for (final (lvl, level) in contagionLevels.indexed) {
-    final lines = isoLines(grid, level);
     final rings = <List<GridPoint>>[];
-    for (final l in lines) {
+    for (final l in isoLines(grid, level)) {
       if (l.points.length < 3) continue;
       final pts = l.closed ? chaikinClosed(l.points) : l.points;
       if (l.closed) rings.add(pts);
@@ -172,10 +180,10 @@ Json contagionCollection(List<Zone> zones, {double stepM = 10}) {
       if (l.closed) ll.add(ll.first);
       lineFeats.add(lineFeature(ll, {'k': 'line', 'lvl': lvl}));
     }
-    if (lvl == 0) outerRings = rings;
+    if (lvl == 1) edgeRings = rings;
   }
 
-  final polys = ringsToPolygons(outerRings);
+  final polys = ringsToPolygons(edgeRings);
   return featureCollection([
     if (polys.isNotEmpty)
       multiPolygonFeature([
@@ -185,21 +193,27 @@ Json contagionCollection(List<Zone> zones, {double stepM = 10}) {
   ]);
 }
 
-/// Distancia con signo a un rectángulo centrado en el origen con semiejes (bx, by).
-double _rectSdf(double px, double py, double bx, double by) {
-  final qx = px.abs() - bx;
-  final qy = py.abs() - by;
-  final ox = math.max(qx, 0.0);
-  final oy = math.max(qy, 0.0);
-  final outside = math.sqrt(ox * ox + oy * oy);
-  final inside = math.min(math.max(qx, qy), 0.0);
-  return outside + inside;
-}
-
-/// Mínimo suave polinómico (une celdas vecinas sin inflar mucho el borde).
-double _smin(double a, double b, double k) {
-  final h = math.max(k - (a - b).abs(), 0.0) / k;
-  return math.min(a, b) - h * h * k * 0.25;
+/// Desenfoque de caja separable (suma corrida), con 0 fuera de la grilla.
+List<double> _boxBlur(List<double> src, int w, int h, int r, {required bool horizontal}) {
+  final out = List<double>.filled(w * h, 0);
+  final n = 2 * r + 1;
+  final lines = horizontal ? h : w;
+  final len = horizontal ? w : h;
+  for (var line = 0; line < lines; line++) {
+    int idx(int t) => horizontal ? line * w + t : t * w + line;
+    var sum = 0.0;
+    for (var t = -r; t <= r; t++) {
+      if (t >= 0 && t < len) sum += src[idx(t)];
+    }
+    for (var t = 0; t < len; t++) {
+      out[idx(t)] = sum / n;
+      final add = t + r + 1;
+      final sub = t - r;
+      if (add < len) sum += src[idx(add)];
+      if (sub >= 0) sum -= src[idx(sub)];
+    }
+  }
+  return out;
 }
 
 /// Ruido determinístico de baja frecuencia en [-1, 1] (coordenadas en metros).
