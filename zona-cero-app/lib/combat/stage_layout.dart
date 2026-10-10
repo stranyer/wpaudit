@@ -10,7 +10,7 @@ import 'cutout_rig.dart';
 
 /// Encuadre de cada criatura (fracciones de la altura de la vista).
 class PlacementProfile {
-  const PlacementProfile({this.heightFrac = 0.64, this.feetFrac = 0.87, this.maxWidthFrac = 1.0});
+  const PlacementProfile({this.heightFrac = 0.5, this.feetFrac = 0.755, this.maxWidthFrac = 1.0});
 
   /// Alto del cuerpo en pantalla.
   final double heightFrac;
@@ -22,12 +22,14 @@ class PlacementProfile {
   final double maxWidthFrac;
 }
 
+// Como en la referencia: cuerpo entero visible, con los pies apoyados en la
+// calle justo encima de los paneles inferiores (~75 % de la altura).
 const Map<ZombieTypeId, PlacementProfile> placementProfiles = {
-  ZombieTypeId.walker: PlacementProfile(heightFrac: 0.64),
-  ZombieTypeId.runner: PlacementProfile(heightFrac: 0.6, maxWidthFrac: 1.02),
-  ZombieTypeId.bloater: PlacementProfile(heightFrac: 0.66, maxWidthFrac: 0.98),
-  ZombieTypeId.screamer: PlacementProfile(heightFrac: 0.66),
-  ZombieTypeId.brute: PlacementProfile(heightFrac: 0.75, maxWidthFrac: 1.12),
+  ZombieTypeId.walker: PlacementProfile(heightFrac: 0.5),
+  ZombieTypeId.runner: PlacementProfile(heightFrac: 0.44, maxWidthFrac: 0.98),
+  ZombieTypeId.bloater: PlacementProfile(heightFrac: 0.5, maxWidthFrac: 0.96),
+  ZombieTypeId.screamer: PlacementProfile(heightFrac: 0.53),
+  ZombieTypeId.brute: PlacementProfile(heightFrac: 0.52, feetFrac: 0.765, maxWidthFrac: 1.0),
 };
 
 class StageLayout {

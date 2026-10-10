@@ -1,6 +1,6 @@
-// Piezas del HUD del combate (widgets Flutter sobre el escenario Flame).
-// Reutilizan el sistema SUTURA: BracketPanel, ChamferButton, EcgMonitor,
-// SegBar, HexBadge, HoloIn, CapsTitle, MicroText.
+// Piezas del HUD del combate (widgets Flutter sobre el escenario Flame), con el
+// lenguaje visual v2: paneles de metal gastado (GritPanel), títulos con
+// desgaste (GrungeTitle), barras de bloques y fotos de objetos (ItemArt).
 
 import 'dart:math' as math;
 
@@ -9,20 +9,23 @@ import 'package:flutter/material.dart';
 import '../core/core.dart';
 import '../state/app_state.dart' show AppState;
 import '../ui/theme/tokens.dart';
-import '../ui/widgets/brackets.dart';
-import '../ui/widgets/caps_title.dart';
 import '../ui/widgets/chamfer_button.dart';
 import '../ui/widgets/ecg_monitor.dart';
-import '../ui/widgets/hexagon.dart';
+import '../ui/widgets/grit.dart';
 import '../ui/widgets/holo_in.dart';
-import '../ui/widgets/seg_bar.dart';
 
 /// Modo del arma activa.
 enum WeaponMode { melee, firearm }
 
+/// Rojo de alerta legible sobre la escena oscura.
+const hudRed = Color(0xFFE5483F);
+
 const _shadow = [Shadow(color: Color(0xE6000000), blurRadius: 6), Shadow(color: Color(0x99000000), blurRadius: 14)];
 
 String two(num v) => v.round().clamp(0, 999).toString().padLeft(2, '0');
+
+TextStyle _label([double size = 10.5, Color color = Sutura.textMid]) =>
+    SuturaText.label.copyWith(fontSize: size, color: color, letterSpacing: size * 0.26);
 
 // -----------------------------------------------------------------------------
 // Signos vitales (arriba a la izquierda)
@@ -48,59 +51,77 @@ class VitalsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final ratio = maxHealth <= 0 ? 0.0 : (health / maxHealth).clamp(0.0, 1.0);
     final vc = vitalColor(vitalFor(ratio));
-    return BracketPanel(
+    final sRatio = maxStamina <= 0 ? 0.0 : (stamina / maxStamina).clamp(0.0, 1.0);
+    return GritPanel(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
-      color: ratio < 0.3 ? Sutura.danger : Sutura.lineStrong,
+      background: const Color(0xD8101214),
+      border: ratio < 0.3 ? Sutura.danger : Sutura.lineStrong,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text('SIGNOS VITALES', style: SuturaText.micro.copyWith(color: Sutura.textMid)),
-              ),
-              if (defending) Text('CUBIERTO', style: SuturaText.micro.copyWith(color: Sutura.signal)),
+              Expanded(child: Text('SIGNOS VITALES', maxLines: 1, overflow: TextOverflow.clip, style: _label(10.5, Sutura.textHi))),
+              if (defending) Text('CUBIERTO', style: _label(9, Sutura.signal)),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              Container(
+                width: 70,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0x99060809),
+                  border: Border.all(color: Sutura.lineHair),
+                ),
+                alignment: Alignment.center,
+                child: EcgMonitor(ratio: ratio, width: 66, height: 28, showLabel: false),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: EcgMonitor(ratio: ratio, width: 64, height: 26, showLabel: false),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: health.round().toString().padLeft(2, '0'),
+                          style: SuturaText.number.copyWith(fontSize: 31, color: vc, fontWeight: FontWeight.w700, shadows: [Shadow(color: vc.withValues(alpha: 0.35), blurRadius: 10)]),
+                        ),
+                        TextSpan(text: ' / $maxHealth', style: SuturaText.number.copyWith(fontSize: 15, color: Sutura.textMid)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                health.round().toString().padLeft(3, '0'),
-                style: SuturaText.mono.copyWith(fontSize: 22, color: vc, height: 1, letterSpacing: 0.5),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2, left: 1),
-                child: Text('/$maxHealth', style: SuturaText.mono.copyWith(fontSize: 10, color: Sutura.textLow)),
               ),
             ],
           ),
           const SizedBox(height: 7),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('RES', style: SuturaText.micro.copyWith(color: Sutura.textMid, fontSize: 9)),
-              const SizedBox(width: 6),
               Expanded(
-                child: SegBar(value: stamina, max: maxStamina.toDouble(), segments: 10, height: 4, color: Sutura.signal),
-              ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 22,
-                child: Text(
-                  two(stamina),
-                  textAlign: TextAlign.right,
-                  style: SuturaText.mono.copyWith(fontSize: 11, color: Sutura.signal),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('RESISTENCIA', maxLines: 1, style: _label(9.5)),
+                    const SizedBox(height: 4),
+                    BlockBar(ratio: sRatio, segments: 10, color: Sutura.signal, height: 6, gap: 2),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: stamina.round().toString().padLeft(2, '0'), style: const TextStyle(color: Sutura.signal)),
+                    TextSpan(text: '/$maxStamina', style: const TextStyle(color: Sutura.textMid)),
+                  ],
+                ),
+                style: SuturaText.number.copyWith(fontSize: 15, height: 1),
               ),
             ],
           ),
@@ -118,7 +139,7 @@ class VitalsPanel extends StatelessWidget {
   0 => ('BAJA', Sutura.fine),
   1 => ('PAREJA', Sutura.textMid),
   2 => ('ALTA', Sutura.caution2),
-  _ => ('MORTAL', Sutura.danger),
+  _ => ('MORTAL', hudRed),
 };
 
 class TargetPanel extends StatelessWidget {
@@ -133,30 +154,29 @@ class TargetPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (tl, tc) = threatInfo(threat);
-    return BracketPanel(
+    return GritPanel(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
-      color: threat >= 2 ? tc : Sutura.lineStrong,
+      background: const Color(0xD8101214),
+      border: threat >= 2 ? tc.withValues(alpha: 0.8) : Sutura.lineStrong,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text('OBJETIVO', style: SuturaText.micro.copyWith(color: Sutura.textMid)),
-              ),
-              Text('NV ${two(level)}', style: SuturaText.micro.copyWith(color: Sutura.textHi, fontSize: 9.5)),
+              Expanded(child: Text('OBJETIVO', style: _label(10.5))),
+              Text('NV ${two(level)}', style: SuturaText.number.copyWith(fontSize: 15, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: CapsTitle(name, size: 15, color: Sutura.textHi),
+            child: GrungeTitle(name, size: 27, letterSpacing: 3, maxLines: 1),
           ),
           const SizedBox(height: 6),
-          SegBar(value: health.toDouble(), max: maxHealth.toDouble(), segments: 16, height: 4, color: Sutura.danger),
-          const SizedBox(height: 5),
+          BlockBar(ratio: maxHealth <= 0 ? 0 : health / maxHealth, segments: 15, color: Sutura.accent, height: 8, gap: 2),
+          const SizedBox(height: 7),
           Row(
             children: [
               Expanded(
@@ -172,11 +192,11 @@ class TargetPanel extends StatelessWidget {
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: SuturaText.micro.copyWith(fontSize: 9),
+                  style: _label(9.5),
                 ),
               ),
               const SizedBox(width: 6),
-              Text('${two(health)}/${two(maxHealth)}', style: SuturaText.mono.copyWith(fontSize: 10.5, color: Sutura.textMid)),
+              Text('${two(health)}/${two(maxHealth)}', style: SuturaText.number.copyWith(fontSize: 15, color: Sutura.textMid, height: 1)),
             ],
           ),
         ],
@@ -185,7 +205,34 @@ class TargetPanel extends StatelessWidget {
   }
 }
 
-/// Chip de estado del zombie (puede titilar).
+/// Etiqueta "⚠ HOSTIL DETECTADO" (al empezar el encuentro).
+class HostileTag extends StatelessWidget {
+  const HostileTag({super.key, this.text = 'HOSTIL DETECTADO'});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(9, 5, 12, 5),
+      decoration: BoxDecoration(
+        color: const Color(0xB31E0907),
+        border: Border.all(color: Sutura.accent, width: 1.2),
+        boxShadow: const [BoxShadow(color: Color(0x55C8322B), blurRadius: 12)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.warning_rounded, size: 16, color: hudRed),
+          const SizedBox(width: 8),
+          Text(text, style: _label(11.5, hudRed).copyWith(fontWeight: FontWeight.w700, letterSpacing: 3)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Chip de estado de la criatura (puede titilar).
 class StatusChip extends StatefulWidget {
   const StatusChip(this.text, {super.key, required this.color, this.blink = false, this.icon});
 
@@ -223,137 +270,31 @@ class _StatusChipState extends State<StatusChip> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final chip = Container(
-      padding: const EdgeInsets.fromLTRB(7, 3, 8, 3),
+      padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
       decoration: BoxDecoration(
-        color: widget.color.withValues(alpha: 0.16),
-        border: Border(left: BorderSide(color: widget.color, width: 2)),
+        color: Color.alphaBlend(widget.color.withValues(alpha: 0.14), const Color(0xCC0C0E10)),
+        border: Border(
+          left: BorderSide(color: widget.color, width: 3),
+          top: BorderSide(color: widget.color.withValues(alpha: 0.35)),
+          right: BorderSide(color: widget.color.withValues(alpha: 0.35)),
+          bottom: BorderSide(color: widget.color.withValues(alpha: 0.35)),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (widget.icon != null) ...[Icon(widget.icon, size: 11, color: widget.color), const SizedBox(width: 4)],
-          Text(widget.text, style: SuturaText.mono.copyWith(fontSize: 10, color: widget.color, letterSpacing: 1.2)),
+          if (widget.icon != null) ...[Icon(widget.icon, size: 13, color: widget.color), const SizedBox(width: 6)],
+          Text(widget.text, style: _label(10.5, widget.color).copyWith(fontWeight: FontWeight.w700)),
         ],
       ),
     );
     if (!widget.blink) return chip;
-    return FadeTransition(opacity: Tween(begin: 1.0, end: 0.45).animate(_c), child: chip);
+    return FadeTransition(opacity: Tween(begin: 1.0, end: 0.5).animate(_c), child: chip);
   }
 }
 
 // -----------------------------------------------------------------------------
-// Panel del arma (abajo a la derecha)
-// -----------------------------------------------------------------------------
-
-class WeaponPanel extends StatelessWidget {
-  const WeaponPanel({
-    super.key,
-    required this.mode,
-    required this.meleeName,
-    required this.meleeDamage,
-    required this.firearmName,
-    required this.ammo,
-    required this.ammoPerShot,
-    required this.onToggle,
-  });
-
-  final WeaponMode mode;
-  final String meleeName;
-  final IntRange meleeDamage;
-  final String? firearmName;
-  final int ammo;
-  final int ammoPerShot;
-  final VoidCallback? onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final firearm = mode == WeaponMode.firearm;
-    final hasFirearm = firearmName != null;
-    final accent = firearm ? Sutura.amber : Sutura.signal;
-    final low = hasFirearm && ammo < ammoPerShot;
-    return BracketPanel(
-      padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
-      color: accent.withValues(alpha: 0.8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(firearm ? 'ARMA DE FUEGO' : 'CUERPO A CUERPO', style: SuturaText.micro.copyWith(color: accent, fontSize: 8.5)),
-                const SizedBox(height: 2),
-                Text(
-                  (firearm ? firearmName! : meleeName).toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: SuturaText.button.copyWith(fontSize: 13, letterSpacing: 1, height: 1.1),
-                ),
-                const SizedBox(height: 5),
-                if (hasFirearm)
-                  _ModeToggle(mode: mode, onTap: onToggle)
-                else
-                  Text('SIN ARMA DE FUEGO', style: SuturaText.micro.copyWith(fontSize: 8.5)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (hasFirearm) ...[
-                Text(
-                  two(ammo),
-                  style: SuturaText.mono.copyWith(fontSize: 34, height: 1, color: low ? Sutura.danger : (firearm ? Sutura.textHi : Sutura.textMid)),
-                ),
-                Text('MUNICIÓN', style: SuturaText.micro.copyWith(fontSize: 8, color: low ? Sutura.danger : Sutura.textLow)),
-              ] else ...[
-                Text('${meleeDamage.min}–${meleeDamage.max}', style: SuturaText.mono.copyWith(fontSize: 24, height: 1.1, color: Sutura.textHi)),
-                Text('DAÑO', style: SuturaText.micro.copyWith(fontSize: 8)),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeToggle extends StatelessWidget {
-  const _ModeToggle({required this.mode, required this.onTap});
-
-  final WeaponMode mode;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget seg(String t, bool on, Color c) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      color: on ? c.withValues(alpha: 0.22) : const Color(0x00000000),
-      child: Text(t, style: SuturaText.mono.copyWith(fontSize: 9.5, color: on ? c : Sutura.textLow, letterSpacing: 1)),
-    );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(border: Border.all(color: Sutura.lineStrong, width: 1)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            seg('C/C', mode == WeaponMode.melee, Sutura.signal),
-            const Icon(Icons.swap_horiz, size: 12, color: Sutura.textMid),
-            seg('FUEGO', mode == WeaponMode.firearm, Sutura.amber),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Registro de combate (teletipo)
+// Registro de combate
 // -----------------------------------------------------------------------------
 
 class LogLine {
@@ -363,51 +304,47 @@ class LogLine {
   final Color color;
 }
 
-class CombatLogTicker extends StatelessWidget {
-  const CombatLogTicker({super.key, required this.lines});
+class CombatLog extends StatelessWidget {
+  const CombatLog({super.key, required this.lines, this.visible = 3});
 
   final List<LogLine> lines;
+  final int visible;
 
   @override
   Widget build(BuildContext context) {
-    final shown = lines.length > 3 ? lines.sublist(lines.length - 3) : lines;
-    // Anclado abajo: si no entra, se recorta lo más viejo (arriba).
+    final shown = lines.length > visible ? lines.sublist(lines.length - visible) : lines;
     return IgnorePointer(
-      child: ClipRect(
-        child: SingleChildScrollView(
-          reverse: true,
-          physics: const NeverScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final (i, l) in shown.indexed)
-                Padding(
-                  key: ValueKey(l.id),
-                  padding: const EdgeInsets.only(top: 3),
-                  child: HoloIn(
-                    child: Opacity(
-                      opacity: switch (shown.length - 1 - i) {
-                        0 => 1.0,
-                        1 => 0.62,
-                        _ => 0.34,
-                      },
+      child: GritPanel(
+        padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+        background: const Color(0xD80D0F11),
+        corners: Sutura.lineStrong,
+        child: ClipRect(
+          child: SingleChildScrollView(
+            reverse: true,
+            physics: const NeverScrollableScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (i, l) in shown.indexed)
+                  Padding(
+                    key: ValueKey(l.id),
+                    padding: const EdgeInsets.only(top: 2),
+                    child: HoloIn(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '› ',
-                            style: SuturaText.mono.copyWith(fontSize: 11, color: l.color, shadows: _shadow),
-                          ),
+                          Text('>', style: SuturaText.mono.copyWith(fontSize: 10.5, height: 1.35, color: i == shown.length - 1 ? l.color : Sutura.textLow)),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               l.text,
-                              maxLines: 2,
+                              maxLines: i == shown.length - 1 ? 2 : 1,
                               overflow: TextOverflow.ellipsis,
                               style: SuturaText.mono.copyWith(
-                                fontSize: 11,
-                                height: 1.25,
-                                color: i == shown.length - 1 ? l.color : Sutura.textMid,
-                                shadows: _shadow,
+                                fontSize: 10.5,
+                                height: 1.35,
+                                letterSpacing: 0.2,
+                                color: i == shown.length - 1 ? l.color : (i == shown.length - 2 ? Sutura.textMid : Sutura.textLow),
                               ),
                             ),
                           ),
@@ -415,8 +352,8 @@ class CombatLogTicker extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -425,7 +362,76 @@ class CombatLogTicker extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// Números flotantes y avisos centrales
+// Botones de acción
+// -----------------------------------------------------------------------------
+
+class ActionButton extends StatelessWidget {
+  const ActionButton({super.key, required this.icon, required this.label, required this.sub, this.onTap, this.highlight = false, this.active = false, this.height = 58});
+
+  final IconData icon;
+  final String label;
+  final String sub;
+  final VoidCallback? onTap;
+
+  /// Rojo con resplandor (CUBRIRSE ante una embestida).
+  final bool highlight;
+
+  /// Menú abierto (OBJETOS).
+  final bool active;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final hi = highlight && enabled;
+    final fg = hi ? const Color(0xFFF2D5D0) : (active ? Sutura.amber : Sutura.textHi);
+    final panel = GritPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      background: hi ? const Color(0xE63A120E) : (active ? const Color(0xE62A2008) : const Color(0xE0121416)),
+      border: hi ? Sutura.accent : (active ? Sutura.amber : Sutura.lineStrong),
+      corners: hi ? hudRed : (active ? Sutura.amber : Sutura.lineBright),
+      glow: hi ? Sutura.accent : null,
+      child: SizedBox(
+        height: height,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 25, color: hi ? const Color(0xFFE79A92) : fg.withValues(alpha: 0.85)),
+            const SizedBox(width: 9),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label.toUpperCase(), style: SuturaText.button.copyWith(fontSize: 17, letterSpacing: 2.2, color: fg, height: 1.05)),
+                    const SizedBox(height: 2),
+                    Text(sub.toUpperCase(), style: _label(11.5, fg.withValues(alpha: 0.72)).copyWith(letterSpacing: 1.8)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: '$label $sub',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedOpacity(duration: Sutura.fast, opacity: enabled ? 1 : 0.5, child: panel),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Números flotantes, avisos centrales y sacudida del HUD
 // -----------------------------------------------------------------------------
 
 enum FloatKind { damage, crit, miss, hurt, heal, info, blocked }
@@ -448,19 +454,19 @@ class FloatingNumber extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, size) = switch (spec.kind) {
-      FloatKind.crit => (Sutura.amber, 40.0),
-      FloatKind.damage => (Sutura.textHi, 30.0),
-      FloatKind.miss => (Sutura.textMid, 20.0),
-      FloatKind.hurt => (const Color(0xFFFF5A62), 28.0),
-      FloatKind.heal => (Sutura.fine, 26.0),
-      FloatKind.info => (Sutura.signal, 16.0),
-      FloatKind.blocked => (Sutura.signal, 16.0),
+      FloatKind.crit => (Sutura.amber, 46.0),
+      FloatKind.damage => (Sutura.textHi, 36.0),
+      FloatKind.miss => (Sutura.textMid, 22.0),
+      FloatKind.hurt => (hudRed, 34.0),
+      FloatKind.heal => (Sutura.fine, 30.0),
+      FloatKind.info => (Sutura.signal, 18.0),
+      FloatKind.blocked => (Sutura.signal, 18.0),
     };
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: spec.kind == FloatKind.crit ? 1250 : 1050),
       builder: (context, t, child) {
-        final pop = t < 0.12 ? 1.35 - 0.35 * (t / 0.12) : 1.0;
+        final pop = t < 0.12 ? 1.4 - 0.4 * (t / 0.12) : 1.0;
         final rise = Curves.easeOut.transform(t) * (spec.kind == FloatKind.crit ? 64 : 48);
         final fade = t < 0.6 ? 1.0 : 1 - (t - 0.6) / 0.4;
         return Opacity(
@@ -474,36 +480,26 @@ class FloatingNumber extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (spec.sub != null)
-            Text(
-              spec.sub!,
-              style: SuturaText.mono.copyWith(fontSize: 10, color: color, letterSpacing: 2, shadows: _shadow),
-            ),
+          if (spec.sub != null) Text(spec.sub!, style: _label(11, color).copyWith(fontWeight: FontWeight.w700, letterSpacing: 3, shadows: _shadow)),
           Row(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
                 spec.text,
                 style: TextStyle(
-                  fontFamily: Sutura.fMono,
+                  fontFamily: Sutura.fUi,
+                  fontWeight: FontWeight.w700,
                   fontSize: size,
                   height: 1,
                   color: color,
-                  letterSpacing: spec.kind == FloatKind.miss ? 3 : 0.5,
-                  shadows: [
-                    Shadow(color: color.withValues(alpha: 0.55), blurRadius: 14),
-                    ..._shadow,
-                  ],
+                  letterSpacing: spec.kind == FloatKind.miss || spec.kind == FloatKind.info || spec.kind == FloatKind.blocked ? 3 : 0.5,
+                  shadows: [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 16), ..._shadow],
                 ),
               ),
               if (spec.blocked > 0) ...[
                 const SizedBox(width: 6),
-                const Icon(Icons.shield_outlined, size: 14, color: Sutura.signal, shadows: _shadow),
-                Text(
-                  '${spec.blocked}',
-                  style: SuturaText.mono.copyWith(fontSize: 14, color: Sutura.signal, shadows: _shadow),
-                ),
+                const Icon(Icons.shield_outlined, size: 15, color: Sutura.signal, shadows: _shadow),
+                Text('${spec.blocked}', style: SuturaText.number.copyWith(fontSize: 16, color: Sutura.signal, shadows: _shadow)),
               ],
             ],
           ),
@@ -513,58 +509,79 @@ class FloatingNumber extends StatelessWidget {
   }
 }
 
-/// Aviso grande en el centro ("DISPARO A LA CABEZA", "¡CUBRITE!").
+/// Aviso grande entre filetes ("¡CUBRITE!", "DISPARO A LA CABEZA").
 class CallOut extends StatelessWidget {
-  const CallOut({super.key, required this.text, required this.color, this.sub});
+  const CallOut({super.key, required this.text, required this.color, this.sub, this.sticky = false});
 
   final String text;
   final Color color;
   final String? sub;
 
+  /// Se queda en pantalla (embestida preparada) en vez de desvanecerse.
+  final bool sticky;
+
   @override
   Widget build(BuildContext context) {
+    final body = _body();
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 1150),
+      duration: Duration(milliseconds: sticky ? 260 : 1350),
       builder: (context, t, child) {
-        final inT = (t / 0.18).clamp(0.0, 1.0);
-        final out = t < 0.75 ? 1.0 : 1 - (t - 0.75) / 0.25;
-        final wide = 1.0 + 0.25 * (1 - Curves.easeOut.transform(inT));
-        final flicker = inT < 1 && (t * 60).floor().isOdd ? 0.55 : 1.0;
+        final inT = sticky ? t : (t / 0.16).clamp(0.0, 1.0);
+        final out = sticky || t < 0.78 ? 1.0 : 1 - (t - 0.78) / 0.22;
+        final wide = 1.0 + 0.22 * (1 - Curves.easeOut.transform(inT));
+        final flicker = inT < 1 && (t * 60).floor().isOdd ? 0.5 : 1.0;
         return Opacity(
           opacity: (out * flicker * inT).clamp(0.0, 1.0),
           child: Transform.scale(scaleX: wide, child: child),
         );
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(height: 1, width: 180, color: color.withValues(alpha: 0.7)),
-          const SizedBox(height: 6),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: SuturaText.display.copyWith(
-              fontSize: 24,
-              letterSpacing: 4,
-              color: color,
-              fontWeight: FontWeight.w600,
-              shadows: [
-                Shadow(color: color.withValues(alpha: 0.6), blurRadius: 18),
-                ..._shadow,
-              ],
+      child: body,
+    );
+  }
+
+  Widget _body() {
+    final rule = Container(
+      height: 1.6,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [color.withValues(alpha: 0.1), color, color, color.withValues(alpha: 0.1)], stops: const [0, 0.15, 0.85, 1]),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 6)],
+      ),
+    );
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(radius: 1.1, colors: [Color(0x99050607), Color(0x00050607)]),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      child: IntrinsicWidth(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            rule,
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: GrungeTitle(text, size: 44, color: color, letterSpacing: 3, maxLines: 1, textAlign: TextAlign.center),
+              ),
             ),
-          ),
-          if (sub != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              sub!,
-              style: SuturaText.mono.copyWith(fontSize: 10.5, color: color.withValues(alpha: 0.85), letterSpacing: 2, shadows: _shadow),
-            ),
+            if (sub != null) ...[
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  sub!.toUpperCase(),
+                  textAlign: TextAlign.center,
+                  style: _label(11.5, color).copyWith(fontWeight: FontWeight.w700, letterSpacing: 6, shadows: _shadow),
+                ),
+              ),
+            ],
+            const SizedBox(height: 9),
+            rule,
           ],
-          const SizedBox(height: 6),
-          Container(height: 1, width: 180, color: color.withValues(alpha: 0.7)),
-        ],
+        ),
       ),
     );
   }
@@ -595,13 +612,13 @@ class _PulsingHintState extends State<PulsingHint> with SingleTickerProviderStat
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.touch_app_outlined, size: 15, color: Sutura.signal, shadows: _shadow),
+          const Icon(Icons.touch_app_outlined, size: 16, color: Sutura.textHi, shadows: _shadow),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               widget.text,
               textAlign: TextAlign.center,
-              style: SuturaText.mono.copyWith(fontSize: 11, color: Sutura.signal, letterSpacing: 1.6, shadows: _shadow),
+              style: _label(11.5, Sutura.textHi).copyWith(fontWeight: FontWeight.w700, letterSpacing: 2.4, shadows: _shadow),
             ),
           ),
         ],
@@ -610,8 +627,49 @@ class _PulsingHintState extends State<PulsingHint> with SingleTickerProviderStat
   }
 }
 
+/// [FooterStrip] que se achica en pantallas angostas (sus textos no se cortan).
+class NarrowFooter extends StatelessWidget {
+  const NarrowFooter({super.key});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, c) {
+      final w = c.maxWidth.isFinite ? c.maxWidth : 362.0;
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: SizedBox(width: math.max(w, 362), height: 14, child: const FooterStrip()),
+      );
+    },
+  );
+}
+
+/// Sacudida corta del HUD (grito, embestida). Cambiar [trigger] la dispara.
+class HudShake extends StatelessWidget {
+  const HudShake({super.key, required this.trigger, required this.child, this.amplitude = 7});
+
+  final int trigger;
+  final double amplitude;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (trigger == 0) return child;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(trigger),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 560),
+      builder: (context, t, child) {
+        final k = (1 - t) * (1 - t) * amplitude;
+        return Transform.translate(offset: Offset(math.sin(t * 63) * k, math.cos(t * 51) * k * 0.6), child: child);
+      },
+      child: child,
+    );
+  }
+}
+
 // -----------------------------------------------------------------------------
-// Menú rápido de objetos (cruz de 4 posiciones)
+// Menú rápido de objetos
 // -----------------------------------------------------------------------------
 
 IconData itemIcon(ItemId id) => switch (id) {
@@ -625,7 +683,7 @@ IconData itemIcon(ItemId id) => switch (id) {
 };
 
 /// Orden del menú: primero lo que más cura.
-List<ItemId> sortForWheel(List<ItemId> items) {
+List<ItemId> sortForMenu(List<ItemId> items) {
   final list = [...items];
   list.sort((a, b) {
     final ea = itemDefs[a]!.effects;
@@ -637,8 +695,13 @@ List<ItemId> sortForWheel(List<ItemId> items) {
   return list;
 }
 
-class ItemCross extends StatefulWidget {
-  const ItemCross({super.key, required this.items, required this.countOf, required this.onPick, required this.onClose});
+String effectsText(ItemId id) {
+  final e = itemDefs[id]!.effects;
+  return [if ((e?.health ?? 0) > 0) '+${e!.health} SALUD', if ((e?.stamina ?? 0) > 0) '+${e!.stamina} RES'].join(' · ');
+}
+
+class ItemMenu extends StatelessWidget {
+  const ItemMenu({super.key, required this.items, required this.countOf, required this.onPick, required this.onClose});
 
   final List<ItemId> items;
   final int Function(ItemId id) countOf;
@@ -646,65 +709,47 @@ class ItemCross extends StatefulWidget {
   final VoidCallback onClose;
 
   @override
-  State<ItemCross> createState() => _ItemCrossState();
-}
-
-class _ItemCrossState extends State<ItemCross> {
-  int _page = 0;
-
-  @override
   Widget build(BuildContext context) {
-    final items = sortForWheel(widget.items);
-    final pages = math.max(1, (items.length / 4).ceil());
-    final page = _page % pages;
-    final slots = items.skip(page * 4).take(4).toList();
-    const slotW = 140.0;
-    const slotH = 64.0;
-    const hub = 60.0;
-    const gap = 6.0;
-    // Arriba, derecha, abajo, izquierda.
-    const offsets = [
-      Offset(0, -(hub / 2 + gap + slotH / 2)),
-      Offset(hub / 2 + gap + slotW / 2, 0),
-      Offset(0, hub / 2 + gap + slotH / 2),
-      Offset(-(hub / 2 + gap + slotW / 2), 0),
-    ];
-    return SizedBox(
-      width: slotW * 2 + hub + gap * 2,
-      height: slotH * 2 + hub + gap * 2,
-      child: Stack(
-        clipBehavior: Clip.none,
+    final sorted = sortForMenu(items);
+    return GritPanel(
+      padding: EdgeInsets.zero,
+      background: const Color(0xF20F1113),
+      border: Sutura.lineBright,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < 4; i++)
-            Positioned(
-              left: (slotW * 2 + hub + gap * 2) / 2 + offsets[i].dx - slotW / 2,
-              top: (slotH * 2 + hub + gap * 2) / 2 + offsets[i].dy - slotH / 2,
-              width: slotW,
-              height: slotH,
-              child: HoloIn(
-                key: ValueKey('slot-$page-$i'),
-                delay: Duration(milliseconds: 30 * i),
-                child: i < slots.length
-                    ? _ItemSlot(id: slots[i], count: widget.countOf(slots[i]), onTap: () => widget.onPick(slots[i]))
-                    : const _EmptySlot(),
-              ),
+          Container(
+            height: 40,
+            decoration: const BoxDecoration(
+              color: Color(0xFF15171A),
+              border: Border(bottom: BorderSide(color: Sutura.lineStrong)),
             ),
-          Center(
-            child: GestureDetector(
-              onTap: pages > 1 ? () => setState(() => _page++) : widget.onClose,
-              child: HexBadge(
-                size: hub,
-                glow: true,
-                fill: Sutura.surface1Solid,
-                line: Sutura.signal,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(pages > 1 ? Icons.sync_alt : Icons.close, size: 16, color: Sutura.signal),
-                    const SizedBox(height: 1),
-                    Text(pages > 1 ? '${page + 1}/$pages' : 'CERRAR', style: SuturaText.micro.copyWith(color: Sutura.signal, fontSize: 7.5)),
-                  ],
+            child: Row(
+              children: [
+                Container(width: 5, color: Sutura.amber),
+                const SizedBox(width: 12),
+                Expanded(child: Text('MALETÍN · USO RÁPIDO', style: _label(14, Sutura.textHi).copyWith(letterSpacing: 3))),
+                Text('${items.length} DISP.', style: _label(12, Sutura.amber)),
+                IconButton(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close, size: 18, color: Sutura.textMid),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Cerrar',
                 ),
+              ],
+            ),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 268),
+            child: GridView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(10),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, mainAxisExtent: 120),
+              itemCount: sorted.length,
+              itemBuilder: (context, i) => HoloIn(
+                delay: Duration(milliseconds: 30 * i),
+                child: _ItemTile(id: sorted[i], count: countOf(sorted[i]), onTap: () => onPick(sorted[i])),
               ),
             ),
           ),
@@ -714,8 +759,8 @@ class _ItemCrossState extends State<ItemCross> {
   }
 }
 
-class _ItemSlot extends StatelessWidget {
-  const _ItemSlot({required this.id, required this.count, required this.onTap});
+class _ItemTile extends StatelessWidget {
+  const _ItemTile({required this.id, required this.count, required this.onTap});
 
   final ItemId id;
   final int count;
@@ -725,65 +770,42 @@ class _ItemSlot extends StatelessWidget {
   Widget build(BuildContext context) {
     final def = itemDefs[id]!;
     final rc = rarityColor(def.rarity.key);
-    final e = def.effects;
-    final fx = [if ((e?.health ?? 0) > 0) '+${e!.health} SALUD', if ((e?.stamina ?? 0) > 0) '+${e!.stamina} RES'].join(' · ');
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: CustomPaint(
-        painter: ChamferPainter(fill: const Color(0xF0101619), line: rc.withValues(alpha: 0.85)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(9, 6, 8, 6),
-          child: Row(
-            children: [
-              Icon(itemIcon(id), size: 20, color: rc),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            def.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: SuturaText.caption.copyWith(color: Sutura.textHi, fontSize: 11.5, height: 1.05, letterSpacing: 0.2),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text('×$count', style: SuturaText.mono.copyWith(fontSize: 12, color: rc, height: 1.1)),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      fx,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: SuturaText.micro.copyWith(color: Sutura.fine, fontSize: 7.5),
-                    ),
-                  ],
+      child: GritPanel(
+        padding: const EdgeInsets.fromLTRB(7, 6, 7, 6),
+        background: const Color(0xFF15181A),
+        border: Sutura.lineStrong,
+        corners: rc.withValues(alpha: 0.9),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Center(child: ItemArt(id, size: 58, fallbackIcon: itemIcon(id))),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Text(
+                    def.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: SuturaText.caption.copyWith(color: Sutura.textHi, fontSize: 12.5, height: 1.05, letterSpacing: 0.4),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 4),
+                Text('$count', style: SuturaText.number.copyWith(fontSize: 17, color: Sutura.textHi)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(effectsText(id), maxLines: 1, overflow: TextOverflow.ellipsis, style: _label(9, Sutura.fine).copyWith(letterSpacing: 1)),
+          ],
         ),
       ),
     );
   }
-}
-
-class _EmptySlot extends StatelessWidget {
-  const _EmptySlot();
-
-  @override
-  Widget build(BuildContext context) => CustomPaint(
-    painter: ChamferPainter(fill: const Color(0x80101619), line: Sutura.lineHair),
-    child: Center(child: Text('VACÍO', style: SuturaText.micro.copyWith(fontSize: 8))),
-  );
 }
 
 // -----------------------------------------------------------------------------
@@ -820,47 +842,48 @@ class ResultOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (title, color, line) = switch (status) {
-      CombatStatus.won => ('NEUTRALIZADO', Sutura.signal, '$zombieName · NV $zombieLevel · $turns ${turns == 1 ? 'turno' : 'turnos'}'),
-      CombatStatus.lost => ('CAÍSTE', Sutura.danger, 'Te arrastraste hasta un lugar seguro.'),
-      _ => ('ESCAPASTE', Sutura.amber, 'Vivís para pelear otro día.'),
+    final (title, color, line, code) = switch (status) {
+      CombatStatus.won => ('NEUTRALIZADO', Sutura.signal, '$zombieName · NV ${two(zombieLevel)} · $turns ${turns == 1 ? 'turno' : 'turnos'}', 'AMENAZA ELIMINADA'),
+      CombatStatus.lost => ('CAÍSTE', hudRed, 'Te arrastraste hasta un lugar seguro.', 'SIGNOS VITALES CRÍTICOS'),
+      _ => ('ESCAPASTE', Sutura.amber, 'Vivís para pelear otro día.', 'CONTACTO EVADIDO'),
     };
     final pad = MediaQuery.paddingOf(context);
     var d = 0;
-    Duration next() => Duration(milliseconds: 260 + 90 * d++);
+    Duration next() => Duration(milliseconds: 280 + 90 * d++);
     final addedEntries = entries(added);
-    return ColoredBox(
-      color: const Color(0xD9030507),
+    final lostEntries = entries(lost);
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xE6050607), Color(0xCC050607), Color(0xF5050607)],
+          stops: [0, 0.4, 1],
+        ),
+      ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(22, pad.top + 24, 22, pad.bottom + 20),
+        padding: EdgeInsets.fromLTRB(16, pad.top + 16, 16, pad.bottom + 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             HoloIn(
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('VITA-7 // INFORME DE ENCUENTRO', style: SuturaText.micro.copyWith(color: Sutura.textMid)),
-                  Text('T-${two(turns)}', style: SuturaText.micro.copyWith(color: Sutura.textMid)),
+                  Expanded(child: Text('VITA-7  //  INFORME DE ENCUENTRO', style: _label(10.5))),
+                  Text('T-${two(turns)}', style: _label(10.5)),
                 ],
               ),
             ),
-            const Spacer(flex: 2),
-            Center(
-              child: _Stamp(text: title, color: color),
-            ),
-            const SizedBox(height: 14),
+            const Spacer(flex: 3),
+            Center(child: _Stamp(text: title, color: color, code: code)),
+            const SizedBox(height: 16),
             HoloIn(
               delay: next(),
-              child: Text(
-                line,
-                textAlign: TextAlign.center,
-                style: SuturaText.bodyMid.copyWith(color: Sutura.textMid),
-              ),
+              child: Text(line, textAlign: TextAlign.center, style: SuturaText.bodyMid.copyWith(color: Sutura.textMid, fontSize: 16)),
             ),
-            const SizedBox(height: 22),
-            Flexible(
-              flex: 6,
+            const SizedBox(height: 20),
+            Expanded(
+              flex: 7,
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -875,22 +898,19 @@ class ResultOverlay extends StatelessWidget {
                         delay: next(),
                         child: Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: BracketPanel(
-                            color: Sutura.signal,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: GritPanel(
+                            accent: Sutura.signal,
+                            border: Sutura.signal.withValues(alpha: 0.6),
+                            padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
                             child: Row(
                               children: [
-                                HexBadge(
-                                  size: 34,
-                                  glow: true,
-                                  child: Text('${newLevel ?? ''}', style: SuturaText.mono.copyWith(color: Sutura.signal, fontSize: 13)),
-                                ),
-                                const SizedBox(width: 12),
+                                Text('${newLevel ?? ''}'.padLeft(2, '0'), style: SuturaText.number.copyWith(fontSize: 30, color: Sutura.signal)),
+                                const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('SUBISTE DE NIVEL', style: SuturaText.button.copyWith(color: Sutura.signal)),
+                                      Text('SUBISTE DE NIVEL', style: SuturaText.button.copyWith(color: Sutura.signal, fontSize: 16)),
                                       Text('Signos vitales restaurados.', style: SuturaText.caption),
                                     ],
                                   ),
@@ -904,96 +924,111 @@ class ResultOverlay extends StatelessWidget {
                       const SizedBox(height: 14),
                       HoloIn(
                         delay: next(),
-                        child: Text('RECUPERADO', style: SuturaText.micro.copyWith(color: Sutura.textMid)),
+                        child: SectionHeader('Recuperado', trailing: addedEntries.isEmpty ? null : '${addedEntries.length} ${addedEntries.length == 1 ? 'objeto' : 'objetos'}', accent: Sutura.amber),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       if (addedEntries.isEmpty)
                         HoloIn(
                           delay: next(),
                           child: Text('No llevaba nada útil.', style: SuturaText.bodyMid.copyWith(color: Sutura.textLow)),
-                        ),
-                      for (final e in addedEntries)
+                        )
+                      else
                         HoloIn(
                           delay: next(),
-                          child: _ItemLine(id: e.key, count: e.value),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [for (final e in addedEntries) _LootTile(id: e.key, count: e.value)],
+                          ),
                         ),
                     ],
                     if (overflow.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       HoloIn(
                         delay: next(),
-                        child: _Notice(text: 'No entró en el maletín: ${_describe(overflow)}', color: Sutura.caution),
+                        child: _Notice(text: 'No entró en el maletín: ${AppState.describeItems(overflow)}', color: Sutura.caution),
                       ),
                     ],
-                    if (status == CombatStatus.lost && lost.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                    if (status == CombatStatus.lost && lostEntries.isNotEmpty) ...[
+                      const SizedBox(height: 12),
                       HoloIn(
                         delay: next(),
-                        child: _Notice(text: 'Perdiste: ${_describe(lost)}', color: Sutura.danger),
+                        child: SectionHeader('Perdido', accent: Sutura.accent, trailingColor: hudRed, trailing: '${lostEntries.length}'),
+                      ),
+                      const SizedBox(height: 8),
+                      HoloIn(
+                        delay: next(),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [for (final e in lostEntries) _LootTile(id: e.key, count: e.value, lost: true)],
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 12),
             HoloIn(
               delay: next(),
               child: ChamferButton(
                 label: 'Volver al mapa',
                 tone: status == CombatStatus.lost ? ChamferTone.danger : ChamferTone.primary,
                 icon: Icons.map_outlined,
+                height: 56,
                 expand: true,
                 onPressed: onExit,
               ),
             ),
+            const SizedBox(height: 10),
+            const SizedBox(height: 14, child: NarrowFooter()),
           ],
         ),
       ),
     );
   }
-
-  static String _describe(Inventory items) => AppState.describeItems(items);
 }
 
 class _Stamp extends StatelessWidget {
-  const _Stamp({required this.text, required this.color});
+  const _Stamp({required this.text, required this.color, required this.code});
 
   final String text;
   final Color color;
+  final String code;
 
   @override
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 420),
+      duration: const Duration(milliseconds: 460),
       curve: Curves.easeOutBack,
       builder: (context, t, child) => Opacity(
         opacity: t.clamp(0.0, 1.0),
         child: Transform.rotate(
-          angle: -0.06,
-          child: Transform.scale(scale: 1.6 - 0.6 * t, child: child),
+          angle: -0.05,
+          child: Transform.scale(scale: 1.7 - 0.7 * t, child: child),
         ),
       ),
       child: Container(
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(border: Border.all(color: color, width: 2.5)),
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          border: Border.all(color: color, width: 3),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 24)],
+        ),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 14, 6),
-          decoration: BoxDecoration(border: Border.all(color: color.withValues(alpha: 0.7), width: 1)),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              text,
-              style: TextStyle(
-                fontFamily: Sutura.fStamp,
-                fontSize: 40,
-                color: color,
-                letterSpacing: 5,
-                height: 1.1,
-                shadows: [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 16)],
+          padding: const EdgeInsets.fromLTRB(18, 10, 16, 8),
+          decoration: BoxDecoration(border: Border.all(color: color.withValues(alpha: 0.65), width: 1)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: GrungeTitle(text, size: 50, color: color, letterSpacing: 5, maxLines: 1),
               ),
-            ),
+              const SizedBox(height: 4),
+              Text(code, style: _label(11, color).copyWith(fontWeight: FontWeight.w700, letterSpacing: 4.5)),
+            ],
           ),
         ),
       ),
@@ -1010,48 +1045,56 @@ class _ResultRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Sutura.lineHair)),
-      ),
+    return GritPanel(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      accent: color,
       child: Row(
         children: [
-          Text(label, style: SuturaText.micro.copyWith(color: Sutura.textMid)),
+          Text(label, style: _label(12, Sutura.textHi)),
           const Spacer(),
-          Text(value, style: SuturaText.mono.copyWith(fontSize: 22, color: color, height: 1)),
+          Text(value, style: SuturaText.number.copyWith(fontSize: 28, color: color, height: 1)),
         ],
       ),
     );
   }
 }
 
-class _ItemLine extends StatelessWidget {
-  const _ItemLine({required this.id, required this.count});
+class _LootTile extends StatelessWidget {
+  const _LootTile({required this.id, required this.count, this.lost = false});
 
   final ItemId id;
   final int count;
+  final bool lost;
 
   @override
   Widget build(BuildContext context) {
     final def = itemDefs[id]!;
     final rc = rarityColor(def.rarity.key);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
-        decoration: BoxDecoration(
-          color: Sutura.surface1,
-          border: Border(left: BorderSide(color: rc, width: 2)),
-        ),
-        child: Row(
+    return SizedBox(
+      width: 108,
+      height: 112,
+      child: GritPanel(
+        padding: const EdgeInsets.fromLTRB(7, 6, 7, 6),
+        background: const Color(0xFF15181A),
+        corners: lost ? hudRed : rc,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(itemIcon(id), size: 16, color: rc),
-            const SizedBox(width: 10),
-            Expanded(child: Text(def.name, style: SuturaText.body.copyWith(fontSize: 14))),
-            Text(def.rarity.label.toUpperCase(), style: SuturaText.micro.copyWith(color: rc)),
-            const SizedBox(width: 10),
-            Text('×$count', style: SuturaText.mono.copyWith(color: rc)),
+            Expanded(child: Center(child: ItemArt(id, size: 56, fallbackIcon: itemIcon(id), dim: lost))),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Text(
+                    def.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: SuturaText.caption.copyWith(color: lost ? Sutura.textMid : Sutura.textHi, fontSize: 12, height: 1.05, letterSpacing: 0.3),
+                  ),
+                ),
+                Text('${lost ? '−' : '×'}$count', style: SuturaText.number.copyWith(fontSize: 16, color: lost ? hudRed : rc)),
+              ],
+            ),
           ],
         ),
       ),
@@ -1070,8 +1113,8 @@ class _Notice extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.10),
-      border: Border(left: BorderSide(color: color, width: 2)),
+      border: Border(left: BorderSide(color: color, width: 3)),
     ),
-    child: Text(text, style: SuturaText.caption.copyWith(color: color, fontSize: 12.5)),
+    child: Text(text, style: SuturaText.caption.copyWith(color: color, fontSize: 13)),
   );
 }

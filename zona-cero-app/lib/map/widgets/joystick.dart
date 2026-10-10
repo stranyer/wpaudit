@@ -10,7 +10,7 @@ import '../../ui/widgets/hexagon.dart';
 /// Joystick virtual del modo simulación. La dirección de pantalla se convierte
 /// a este/norte según el rumbo del mapa; al tope del recorrido, corre.
 class DemoJoystick extends StatefulWidget {
-  const DemoJoystick({super.key, required this.bearingOf, this.size = 104});
+  const DemoJoystick({super.key, required this.bearingOf, this.size = 84});
 
   /// Rumbo actual de la cámara en grados (0 = norte arriba).
   final double Function() bearingOf;
@@ -21,7 +21,7 @@ class DemoJoystick extends StatefulWidget {
 }
 
 class _DemoJoystickState extends State<DemoJoystick> with SingleTickerProviderStateMixin {
-  static const _knob = 40.0;
+  static const _knob = 32.0;
   static const _dead = 0.12;
   static const _runAt = 0.92;
 
@@ -77,16 +77,24 @@ class _DemoJoystickState extends State<DemoJoystick> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final running = _offset.distance / _radius >= _runAt;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanStart: (d) => _update(d.localPosition),
-      onPanUpdate: (d) => _update(d.localPosition),
-      onPanEnd: (_) => _release(),
-      onPanCancel: _release,
-      child: SizedBox.square(
-        dimension: widget.size,
-        child: CustomPaint(
-          painter: _JoystickPainter(offset: _offset, active: _active, running: running, knob: _knob),
+    return Semantics(
+      label: 'Joystick de simulación. Mantené presionado el mapa para saltar a otro punto.',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (d) => _update(d.localPosition),
+        onPanUpdate: (d) => _update(d.localPosition),
+        onPanEnd: (_) => _release(),
+        onPanCancel: _release,
+        child: AnimatedOpacity(
+          // Semitransparente en reposo para no tapar el mapa.
+          opacity: _active ? 1 : 0.55,
+          duration: Sutura.fast,
+          child: SizedBox.square(
+            dimension: widget.size,
+            child: CustomPaint(
+              painter: _JoystickPainter(offset: _offset, active: _active, running: running, knob: _knob),
+            ),
+          ),
         ),
       ),
     );
@@ -105,11 +113,11 @@ class _JoystickPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.shortestSide / 2 - 1;
-    canvas.drawCircle(c, r, Paint()..color = Sutura.surface1.withValues(alpha: active ? 0.85 : 0.6));
+    canvas.drawCircle(c, r, Paint()..color = const Color(0xE8101213).withValues(alpha: active ? 0.9 : 0.7));
     canvas.drawCircle(c, r, Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = active ? Sutura.signal.withValues(alpha: 0.6) : Sutura.lineStrong);
+      ..color = active ? Sutura.signal.withValues(alpha: 0.7) : const Color(0xFF575B5E));
     // Anillo de carrera.
     canvas.drawCircle(c, r - 7, Paint()
       ..style = PaintingStyle.stroke
@@ -135,7 +143,7 @@ class _JoystickPainter extends CustomPainter {
     canvas.drawPath(hex, Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
-      ..color = running ? Sutura.amber : (active ? Sutura.signal : Sutura.textMid));
+      ..color = running ? Sutura.amber : (active ? Sutura.signal : Sutura.textHi));
     canvas.drawCircle(k, 2.5, Paint()..color = running ? Sutura.amber : Sutura.signal);
   }
 

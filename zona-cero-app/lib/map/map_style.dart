@@ -22,12 +22,14 @@ abstract final class SuturaMapStyle {
 
   // Capas base de referencia para insertar overlays.
   static const waterLayer = 'water';
+  static const buildingEdgeLayer = 'building-edge';
   static const roadCasingLayer = 'road-casing';
   static const roadLayer = 'road';
   static const labelLayer = 'road-label';
 
   // Imágenes registradas en tiempo de ejecución.
   static const texRoofs = 'zc-tex-roofs';
+  static const texGround = 'zc-tex-ground';
   static const texCanopy = 'zc-tex-canopy';
   static const metroIcon = 'zc-metro';
 
@@ -110,14 +112,8 @@ abstract final class SuturaMapStyle {
     ],
   ];
 
-  static const Object isSubway = ['==', ['get', 'subclass'], 'subway'];
-
-  /// Filtro de la capa de rótulos de `poi`: plazas con nombre y estaciones de subte.
-  static const Object poiFilter = [
-    'any',
-    ['all', ['==', ['get', 'class'], 'park'], ['has', 'name']],
-    ['all', ['==', ['get', 'class'], 'railway'], ['==', ['get', 'subclass'], 'subway']],
-  ];
+  /// Filtro de las estaciones de subte en `poi`.
+  static const Object subwayFilter = ['all', ['==', ['get', 'class'], 'railway'], ['==', ['get', 'subclass'], 'subway']];
 
   static Map<String, dynamic> style() => {
         'version': 8,
@@ -132,6 +128,22 @@ abstract final class SuturaMapStyle {
         },
         'layers': [
           {'id': 'bg', 'type': 'background', 'paint': {'background-color': bg}},
+          // Anclas de plazas (copas de árboles encima, en tiempo de ejecución).
+          {
+            'id': 'green-base',
+            'type': 'fill',
+            'source': source,
+            'source-layer': 'landcover',
+            'filter': ['match', ['get', 'class'], greenClasses, true, false],
+            'paint': {'fill-color': canopyFallback},
+          },
+          {
+            'id': 'park-base',
+            'type': 'fill',
+            'source': source,
+            'source-layer': 'park',
+            'paint': {'fill-color': canopyFallback},
+          },
           {
             'id': waterLayer,
             'type': 'fill',
@@ -147,6 +159,15 @@ abstract final class SuturaMapStyle {
             'source-layer': 'water',
             'filter': _notTunnel,
             'paint': {'line-color': coast, 'line-width': 1.2, 'line-opacity': 0.8},
+          },
+          // Bordes de edificios (los techos texturados van debajo).
+          {
+            'id': buildingEdgeLayer,
+            'type': 'line',
+            'source': source,
+            'source-layer': 'building',
+            'minzoom': 15,
+            'paint': {'line-color': '#34383B', 'line-width': 0.8, 'line-opacity': 0.75},
           },
           // Cordón: banda apenas más ancha y clara debajo de la calzada.
           {
@@ -239,6 +260,26 @@ abstract final class SuturaMapStyle {
               'text-halo-width': 1.6,
               'text-halo-blur': 0.5,
             },
+          },
+          // Nombres de plazas, centrados (las estaciones de subte van aparte: usan un ícono).
+          {
+            'id': 'park-label',
+            'type': 'symbol',
+            'source': source,
+            'source-layer': 'poi',
+            'minzoom': 15,
+            'filter': ['all', ['==', ['get', 'class'], 'park'], ['has', 'name']],
+            'layout': {
+              'text-field': ['coalesce', ['get', 'name:es'], ['get', 'name'], ''],
+              'text-transform': 'uppercase',
+              'text-font': ['Noto Sans Regular'],
+              'text-size': 10,
+              'text-letter-spacing': 0.32,
+              'text-max-width': 6.5,
+              'text-line-height': 1.35,
+              'text-padding': 6,
+            },
+            'paint': {'text-color': '#A7ACAF', 'text-halo-color': halo, 'text-halo-width': 1.5},
           },
           // Barrios: solo con el mapa alejado.
           {

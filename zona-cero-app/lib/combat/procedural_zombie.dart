@@ -4,12 +4,12 @@
 // el mismo títere de malla que el arte real (análisis de alfa, cabeza,
 // animación), así que la escena funciona igual sin arte.
 
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 
 import '../core/types.dart';
+import 'cutout_rig.dart';
 
 class _Shape {
   const _Shape({
@@ -145,6 +145,18 @@ class ProceduralZombie {
     bodyBox = Rect.fromLTRB(box.left, box.top, box.right, footY);
     headBox = Rect.fromCenter(center: _headC.translate(0, -2), width: s.headR * 1.8, height: s.headR * 2.0);
 
+  }
+
+  /// Geometría de la silueta rasterizada a `scale ×` (sin leer píxeles).
+  CutoutRig rig({double scale = 2}) {
+    Rect s(Rect r) => Rect.fromLTRB(r.left * scale, r.top * scale, r.right * scale, r.bottom * scale);
+    return CutoutRig(
+      size: Size(fw * scale, fh * scale),
+      body: s(bodyBox),
+      head: s(headBox),
+      feet: Offset(cx * scale, footY * scale),
+      centroidX: cx * scale,
+    );
   }
 
   /// Rasteriza la silueta en reposo a `scale ×` (fondo transparente).

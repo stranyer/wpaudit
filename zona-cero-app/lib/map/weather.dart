@@ -65,7 +65,7 @@ WeatherReading? parseWeather(String body) {
 
 /// Clima de la zona actual. Escucha cambios de zona (0,1°) y refresca cada 30 min.
 class WeatherController extends ChangeNotifier {
-  WeatherController({http.Client? client}) : _client = client;
+  WeatherController([this._client]);
 
   static const refreshEvery = Duration(minutes: 30);
   static const _retryAfterError = Duration(minutes: 5);

@@ -488,9 +488,22 @@ class FooterStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(left, style: SuturaText.micro.copyWith(fontSize: 9, color: Sutura.textLow)),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(left, maxLines: 1, style: SuturaText.micro.copyWith(fontSize: 9, color: Sutura.textLow)),
+          ),
+        ),
+        const SizedBox(width: 12),
         const Spacer(),
-        Text(right, style: SuturaText.micro.copyWith(fontSize: 9, color: Sutura.textLow)),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(right, maxLines: 1, style: SuturaText.micro.copyWith(fontSize: 9, color: Sutura.textLow)),
+          ),
+        ),
         const SizedBox(width: 8),
         const SizedBox(width: 34, height: 11, child: CustomPaint(painter: _BarcodePainter())),
       ],

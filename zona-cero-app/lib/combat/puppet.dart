@@ -589,12 +589,14 @@ class PuppetAnimator {
         final bounce = bump(tt, 0.97, 1.07, 1.25);
         p.buckle = buckle;
         p.kneeDir = fallDir;
-        p.rot = fallDir * (1.3 * fall - 0.07 * bounce);
+        p.rot = fallDir * (1.25 * fall - 0.07 * bounce);
         p.headAngle += fallDir * 0.35 * fall;
         p.armL += 0.04 * fall * fallDir;
         p.armR += 0.04 * fall * fallDir;
-        p.scale = 1 - 0.08 * fall;
+        // Cae hacia atrás y de costado: se achica, se corre hacia el centro y se hunde.
+        p.scale = 1 - 0.16 * fall;
         p.pivotH = 0;
+        p.tx = -fallDir * 0.12 * fall;
         p.ty = 0.03 * fall + 0.07 * _easeIn(_clamp01((tt - 1.0) / 1.0));
         p.dark = 0.75 * smooth(0.5, 1.5, tt);
         p.dissolve = smooth(1.0, 2.05, tt);

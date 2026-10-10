@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,10 +9,32 @@ import 'package:zona_cero/core/core.dart';
 import 'package:zona_cero/state/app_state.dart';
 import 'package:zona_cero/ui/screens/encounter_screen.dart';
 
-/// Sin arte: la pantalla usa el fondo y la silueta procedurales.
+/// Sin arte del combate (placa y criaturas): la escena usa sus reservas
+/// procedurales. Las texturas del HUD y las fotos de objetos sí se sirven.
 class _NoArt extends CachingAssetBundle {
   @override
-  Future<ByteData> load(String key) async => throw FlutterError('Unable to load asset: $key');
+  Future<ByteData> load(String key) async {
+    if (key.startsWith('assets/art/zombies/') || key.startsWith('assets/art/bg/')) {
+      throw FlutterError('Unable to load asset: $key');
+    }
+    return rootBundle.load(key);
+  }
+}
+
+/// Tipografías reales: con la fuente de prueba (Ahem) los textos miden distinto.
+Future<void> _loadFonts() async {
+  final families = <String, List<String>>{};
+  for (final f in Directory('assets/fonts').listSync().whereType<File>()) {
+    final name = f.uri.pathSegments.last.split('-').first;
+    (families[name] ??= []).add(f.path);
+  }
+  for (final e in families.entries) {
+    final loader = FontLoader(e.key);
+    for (final path in e.value) {
+      loader.addFont(Future.value(ByteData.sublistView(File(path).readAsBytesSync())));
+    }
+    await loader.load();
+  }
 }
 
 Future<void> _pumpFor(WidgetTester tester, int ms, {int step = 16}) async {
@@ -23,6 +47,7 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
+    await _loadFonts();
     await app.bootstrap();
   });
 
@@ -41,8 +66,8 @@ void main() {
     app.outcome = null;
   });
 
-  Future<void> open(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+  Future<void> open(WidgetTester tester, {Size size = const Size(390, 844)}) async {
+    tester.view.physicalSize = size * 3;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(DefaultAssetBundle(
@@ -70,7 +95,12 @@ void main() {
     expect(find.text('SIGNOS VITALES'), findsOneWidget);
     expect(find.text('CAMINANTE', findRichText: true), findsOneWidget);
     expect(find.text('MANTENÉ PARA APUNTAR · SOLTÁ PARA ATACAR'), findsOneWidget);
-    expect(find.textContaining('te bloquea el paso'), findsOneWidget);
+    expect(find.text('El Caminante te detectó.'), findsOneWidget);
+    expect(find.text('HOSTIL DETECTADO'), findsOneWidget);
+    expect(find.text('ARMA EQUIPADA').evaluate().isNotEmpty || find.text('CUERPO A CUERPO').evaluate().isNotEmpty, isTrue);
+    expect(find.text('CUBRIRSE'), findsOneWidget);
+    expect(find.text('−60% DAÑO'), findsOneWidget);
+    expect(find.text('85 %'), findsOneWidget);
 
     // Atrás durante la pelea: no sale, sugiere HUIR.
     await tester.binding.handlePopRoute();
@@ -99,6 +129,7 @@ void main() {
     await _pumpFor(tester, 400);
     expect(find.text('MALETÍN · USO RÁPIDO'), findsOneWidget);
     expect(find.text('Medicamentos'), findsOneWidget);
+    expect(find.text('+30 SALUD'), findsOneWidget);
     await tester.tap(find.text('Medicamentos'));
     await _pumpFor(tester, 50);
     expect(app.combat!.lastEvents.first, isA<Heal>());
@@ -146,5 +177,18 @@ void main() {
     expect(find.byType(EncounterScreen), findsNothing);
     expect(find.text('ABRIR'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('teléfono chico (360×640): el HUD entra sin desbordes, también con el menú', (tester) async {
+    await open(tester, size: const Size(360, 640));
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('OBJETOS'));
+    await _pumpFor(tester, 400);
+    expect(tester.takeException(), isNull);
+    expect(find.text('MALETÍN · USO RÁPIDO'), findsOneWidget);
+    await tester.tap(find.byTooltip('Cerrar'));
+    await _pumpFor(tester, 200);
+    expect(find.text('MALETÍN · USO RÁPIDO'), findsNothing);
+    app.leaveCombat();
   });
 }

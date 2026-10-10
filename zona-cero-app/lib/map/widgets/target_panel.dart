@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../../core/core.dart';
 import '../../state/app_state.dart';
 import '../../state/location_controller.dart';
+import '../../state/signals.dart';
 import '../../ui/theme/tokens.dart';
-import '../../ui/widgets/brackets.dart';
-import '../../ui/widgets/caps_title.dart';
 import '../../ui/widgets/chamfer_button.dart';
+import '../../ui/widgets/grit.dart';
 import '../../ui/widgets/holo_in.dart';
-import '../../ui/widgets/seg_bar.dart';
+import '../map_math.dart';
 
 const threatLabels = ['Fácil', 'Parejo', 'Peligroso', 'Mortal'];
 const threatColors = [Sutura.fine, Sutura.caution, Sutura.caution2, Sutura.danger];
@@ -21,13 +21,23 @@ const rarityLabels = {
   Rarity.legendary: 'Legendario',
 };
 
-/// Ficha del objetivo seleccionado en el mapa (contacto, suministro o nodo).
-/// Devuelve un widget vacío si no hay selección.
+/// ¿Hay algo seleccionado que tenga ficha (contacto, suministro, nodo o señal)?
+bool hasTargetSelection() {
+  final w = app.world;
+  final id = w.selectedId;
+  return id != null && (w.spawnById(id) != null || w.shelterById(id) != null || w.signalById(id) != null);
+}
+
+/// Ficha del objetivo seleccionado en el mapa (contacto, suministro, nodo o
+/// señal de auxilio). Devuelve un widget vacío si no hay selección.
 class TargetPanel extends StatefulWidget {
-  const TargetPanel({super.key, required this.onOpenEncounter, required this.onOpenNode});
+  const TargetPanel({super.key, required this.onOpenEncounter, required this.onOpenNode, required this.onTransmission});
 
   final void Function() onOpenEncounter;
   final void Function(String shelterId) onOpenNode;
+
+  /// Se respondió una señal: mostrar el texto de la transmisión.
+  final void Function(String text) onTransmission;
 
   @override
   State<TargetPanel> createState() => _TargetPanelState();
@@ -51,16 +61,19 @@ class _TargetPanelState extends State<TargetPanel> {
     return ListenableBuilder(
       listenable: Listenable.merge([app.world, app.location, app]),
       builder: (context, _) {
-        final id = app.world.selectedId;
-        final spawn = app.world.spawnById(id);
-        final shelter = spawn == null ? app.world.shelterById(id) : null;
-        final Widget body = switch ((spawn, shelter)) {
-          (ZombieSpawn z, _) => _zombie(z),
-          (SupplySpawn s, _) => _supply(s),
-          (_, Shelter n) => _node(n),
-          _ => const SizedBox.shrink(),
+        final w = app.world;
+        final id = w.selectedId;
+        final spawn = w.spawnById(id);
+        final shelter = spawn == null ? w.shelterById(id) : null;
+        final signal = spawn == null && shelter == null ? w.signalById(id) : null;
+        final Widget? body = switch ((spawn, shelter, signal)) {
+          (ZombieSpawn z, _, _) => _zombie(z),
+          (SupplySpawn s, _, _) => _supply(s),
+          (_, Shelter n, _) => _node(n),
+          (_, _, DistressSignal s) => _signal(s),
+          _ => null,
         };
-        if (id == null || (spawn == null && shelter == null)) return const SizedBox.shrink();
+        if (id == null || body == null) return const SizedBox.shrink();
         return HoloIn(key: ValueKey(id), child: body);
       },
     );
@@ -80,7 +93,7 @@ class _TargetPanelState extends State<TargetPanel> {
     final left = (r.distance - r.reachM).ceil().clamp(1, 99999);
     return Row(
       children: [
-        Expanded(child: ChamferButton(label: 'Acercate ${_fmtM(left.toDouble())}', sublabel: 'FUERA DE ALCANCE', expand: true, dense: true)),
+        Expanded(child: ChamferButton(label: 'Acercate ${distanceLabel(left.toDouble())}', sublabel: 'FUERA DE ALCANCE', expand: true, dense: true)),
         if (_demo) ...[
           const SizedBox(width: 8),
           Expanded(
@@ -105,13 +118,13 @@ class _TargetPanelState extends State<TargetPanel> {
     final rating = threatRating(def, level);
     final r = _reach(z.position);
     return _Frame(
-      accent: Sutura.danger,
+      accent: Sutura.accent,
       kicker: 'CONTACTO HOSTIL',
       title: def.name,
       chips: [
-        _Chip(threatLabels[rating].toUpperCase(), threatColors[rating]),
-        _Chip('GRADO REC. ${def.recommendedLevel}', Sutura.textMid),
-        _Chip(_fmtM(r.distance), Sutura.textHi, mono: true),
+        _Chip(threatLabels[rating], threatColors[rating]),
+        _Chip('Grado rec. ${def.recommendedLevel}', Sutura.textMid),
+        _Chip(distanceLabel(r.distance), Sutura.textHi),
       ],
       description: def.description,
       actions: r.locked
@@ -119,7 +132,7 @@ class _TargetPanelState extends State<TargetPanel> {
           : r.near
               ? ChamferButton(
                   label: 'Enfrentar',
-                  tone: ChamferTone.danger,
+                  tone: ChamferTone.primary,
                   icon: Icons.gps_fixed,
                   expand: true,
                   onPressed: _busy
@@ -139,13 +152,13 @@ class _TargetPanelState extends State<TargetPanel> {
     final stamina = app.player?.stamina ?? 0;
     final enough = stamina >= def.staminaCost;
     return _Frame(
-      accent: def.rarity.index >= Rarity.epic.index ? color : Sutura.amber,
-      kicker: 'SUMINISTRO',
+      accent: Sutura.amber,
+      kicker: 'SAQUEO',
       title: def.name,
       chips: [
-        _Chip(rarityLabels[def.rarity]!.toUpperCase(), color),
-        _Chip('−${def.staminaCost} RES', enough ? Sutura.textMid : Sutura.caution2),
-        _Chip(_fmtM(r.distance), Sutura.textHi, mono: true),
+        _Chip(rarityLabels[def.rarity]!, color),
+        _Chip('−${def.staminaCost} resistencia', enough ? Sutura.textMid : Sutura.caution2),
+        _Chip(distanceLabel(r.distance), Sutura.textHi),
       ],
       description: def.description,
       actions: r.locked
@@ -165,30 +178,31 @@ class _TargetPanelState extends State<TargetPanel> {
 
   Widget _node(Shelter n) {
     final own = n.ownerId == app.player?.id;
+    final color = own ? Sutura.amber : Sutura.signal;
     final lv = shelterLevelDef(n.level);
     final r = _reach(n.position);
     final faction = n.factionId == null ? null : factionDefs[n.factionId]!.name;
     return _Frame(
-      accent: own ? Sutura.amber : Sutura.signal,
-      kicker: own ? 'TU NODO · RED DE RELEVO' : 'NODO DE RELEVO',
+      accent: color,
+      kicker: own ? 'TU REFUGIO · RED DE RELEVO' : 'REFUGIO · NODO DE RELEVO',
       title: n.name,
       chips: [
-        _Chip('ANTENA NV ${n.level}', own ? Sutura.amber : Sutura.signal),
-        _Chip(own ? 'OPERADOR: VOS' : 'OPERADOR: ${n.ownerName.toUpperCase()}', Sutura.textMid),
-        _Chip(_fmtM(r.distance), Sutura.textHi, mono: true),
+        _Chip('Antena nv ${n.level}', color),
+        _Chip(own ? 'Operador: vos' : 'Operador: ${n.ownerName}', Sutura.textMid),
+        _Chip(distanceLabel(r.distance), Sutura.textHi),
       ],
       description: '${lv.name}${faction != null ? ' · $faction' : ''}',
       extra: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: SegBar(value: n.level.toDouble(), max: maxShelterLevel.toDouble(), segments: maxShelterLevel, color: own ? Sutura.amber : Sutura.signal, height: 4),
+        padding: const EdgeInsets.only(top: 10),
+        child: BlockBar(ratio: n.level / maxShelterLevel, segments: maxShelterLevel * 3, color: color, height: 5, gap: 2),
       ),
       actions: Row(
         children: [
           Expanded(
             child: ChamferButton(
               label: 'Abrir nodo',
-              tone: ChamferTone.primary,
-              icon: Icons.hexagon_outlined,
+              tone: ChamferTone.neutral,
+              icon: Icons.home_outlined,
               expand: true,
               dense: true,
               onPressed: () => widget.onOpenNode(n.id),
@@ -211,12 +225,37 @@ class _TargetPanelState extends State<TargetPanel> {
       ),
     );
   }
-}
 
-String _fmtM(double m) {
-  if (!m.isFinite) return '— M';
-  if (m < 1000) return '${m.round()} M';
-  return '${(m / 1000).toStringAsFixed(1).replaceFirst('.', ',')} KM';
+  Widget _signal(DistressSignal s) {
+    final r = _reach(s.position);
+    final mins = ((s.expiresAt - DateTime.now().millisecondsSinceEpoch) / 60000).ceil().clamp(0, 999);
+    return _Frame(
+      accent: Sutura.amber,
+      kicker: 'TRANSMISIÓN · CANAL ABIERTO',
+      title: 'Señal de auxilio',
+      chips: [
+        _Chip('Se apaga en $mins min', Sutura.amber),
+        _Chip(distanceLabel(r.distance), Sutura.textHi),
+      ],
+      description: 'Alguien está transmitiendo desde acá. Respondé en el lugar para recuperar lo que dejaron.',
+      actions: r.locked
+          ? const _Locked()
+          : r.near
+              ? ChamferButton(
+                  label: 'Responder',
+                  tone: ChamferTone.amber,
+                  icon: Icons.settings_input_antenna,
+                  expand: true,
+                  onPressed: _busy
+                      ? null
+                      : () => _run(() async {
+                            final text = await app.answerSignal(s);
+                            if (text != null) widget.onTransmission(text);
+                          }),
+                )
+              : _approachButtons(s.position, r),
+    );
+  }
 }
 
 class _Frame extends StatelessWidget {
@@ -240,75 +279,82 @@ class _Frame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BracketPanel(
-      color: accent,
-      background: Sutura.surface1Solid.withValues(alpha: 0.94),
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 14),
+    return GritPanel(
+      accent: accent,
+      background: const Color(0xF2111314),
+      padding: const EdgeInsets.fromLTRB(18, 10, 10, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Container(width: 6, height: 6, color: accent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(kicker, style: SuturaText.micro.copyWith(color: accent, fontSize: 9.5, letterSpacing: 1.6)),
-              ),
-              Semantics(
-                button: true,
-                label: 'Cerrar',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => app.world.select(null),
-                  child: const SizedBox.square(dimension: 32, child: Icon(Icons.close, size: 18, color: Sutura.textMid)),
-                ),
-              ),
-            ],
-          ),
+          _PanelHeader(kicker: kicker, color: accent),
           Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: CapsTitle(title, size: 19),
+            padding: const EdgeInsets.only(right: 8),
+            child: GrungeTitle(title, size: 28, maxLines: 1),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 9),
           Padding(
-            padding: const EdgeInsets.only(right: 6),
+            padding: const EdgeInsets.only(right: 8),
             child: Wrap(spacing: 6, runSpacing: 6, children: chips),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 9),
           Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: Text(description, maxLines: 2, overflow: TextOverflow.ellipsis, style: SuturaText.bodyMid.copyWith(fontSize: 13.5)),
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(description, maxLines: 2, overflow: TextOverflow.ellipsis, style: SuturaText.bodyMid.copyWith(fontSize: 14.5)),
           ),
           ?extra,
           const SizedBox(height: 12),
-          Padding(padding: const EdgeInsets.only(right: 6), child: actions),
+          Padding(padding: const EdgeInsets.only(right: 8), child: actions),
         ],
       ),
     );
   }
 }
 
+class _PanelHeader extends StatelessWidget {
+  const _PanelHeader({required this.kicker, required this.color, this.onClose});
+
+  final String kicker;
+  final Color color;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(width: 7, height: 7, color: color),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(kicker, maxLines: 1, overflow: TextOverflow.ellipsis, style: SuturaText.label.copyWith(color: color, fontSize: 11, letterSpacing: 2.8)),
+        ),
+        Semantics(
+          button: true,
+          label: 'Cerrar',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose ?? () => app.world.select(null),
+            child: const SizedBox.square(dimension: 36, child: Icon(Icons.close, size: 19, color: Sutura.textMid)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _Chip extends StatelessWidget {
-  const _Chip(this.text, this.color, {this.mono = false});
+  const _Chip(this.text, this.color);
   final String text;
   final Color color;
-  final bool mono;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.fromLTRB(8, 3, 7, 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        border: Border.all(color: color.withValues(alpha: 0.45)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
-      child: Text(
-        text,
-        style: mono
-            ? SuturaText.mono.copyWith(fontSize: 11.5, color: color, height: 1.1)
-            : SuturaText.caption.copyWith(fontSize: 11, color: color, letterSpacing: 1.2, height: 1.1),
-      ),
+      child: Text(text.toUpperCase(), style: SuturaText.label.copyWith(fontSize: 11.5, color: color, letterSpacing: 1.6, height: 1.15)),
     );
   }
 }
@@ -324,3 +370,108 @@ class _Locked extends StatelessWidget {
         expand: true,
       );
 }
+
+// -----------------------------------------------------------------------------
+// Transmisión recibida (después de responder una señal)
+// -----------------------------------------------------------------------------
+
+/// El texto de la transmisión, tipeado sobre un papel.
+class TransmissionPanel extends StatefulWidget {
+  const TransmissionPanel({super.key, required this.text, required this.onClose});
+
+  final String text;
+  final VoidCallback onClose;
+
+  @override
+  State<TransmissionPanel> createState() => _TransmissionPanelState();
+}
+
+class _TransmissionPanelState extends State<TransmissionPanel> with SingleTickerProviderStateMixin {
+  late final AnimationController _type = AnimationController(
+    vsync: this,
+    duration: Duration(milliseconds: (widget.text.length * 26).clamp(600, 4000)),
+  )..forward();
+
+  @override
+  void dispose() {
+    _type.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HoloIn(
+      child: GritPanel(
+        accent: Sutura.amber,
+        background: const Color(0xF2111314),
+        padding: const EdgeInsets.fromLTRB(18, 10, 10, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PanelHeader(kicker: 'TRANSMISIÓN RECIBIDA', color: Sutura.amber, onClose: widget.onClose),
+            Padding(
+              padding: const EdgeInsets.only(right: 8, top: 2),
+              child: GestureDetector(
+                onTap: () => _type.value = 1,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFDCD5C2), Color(0xFFCBC2AA)],
+                    ),
+                    boxShadow: [BoxShadow(color: Color(0x99000000), blurRadius: 8, offset: Offset(0, 3))],
+                  ),
+                  child: AnimatedBuilder(
+                    animation: _type,
+                    builder: (context, _) {
+                      final n = (widget.text.length * _type.value).round();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'FREC. 7.3 MHZ  ·  REGISTRO VITA-7',
+                            style: SuturaText.paper.copyWith(fontSize: 10.5, letterSpacing: 1.4, color: const Color(0xFF6B6250), height: 1.2),
+                          ),
+                          const SizedBox(height: 8),
+                          // El texto completo reserva el alto; el visible se tipea encima.
+                          Stack(
+                            children: [
+                              Opacity(opacity: 0, child: Text(widget.text, style: _paperStyle)),
+                              Text(widget.text.substring(0, n), style: _paperStyle),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'SEÑAL RESPONDIDA  ·  +$signalXp XP',
+                      style: SuturaText.label.copyWith(fontSize: 10.5, letterSpacing: 2, color: Sutura.amber),
+                    ),
+                  ),
+                  ChamferButton(label: 'Cerrar', tone: ChamferTone.ghost, dense: true, height: 40, onPressed: widget.onClose),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const _paperStyle = TextStyle(fontFamily: Sutura.fPaper, fontSize: 15, height: 1.5, color: Color(0xFF2A251D));
+}
+

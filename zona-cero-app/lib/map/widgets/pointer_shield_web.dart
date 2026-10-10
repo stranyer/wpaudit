@@ -18,6 +18,17 @@ String? shieldViewType() {
         final style = div['style']! as JSObject;
         style['width'] = '100%'.toJS;
         style['height'] = '100%'.toJS;
+        // Sin gestos del navegador (paneo, selección, menú de mantener
+        // presionado): cancelarían el puntero de "mantener y soltar" del escáner.
+        style['touchAction'] = 'none'.toJS;
+        style['userSelect'] = 'none'.toJS;
+        style['webkitUserSelect'] = 'none'.toJS;
+        style['webkitTouchCallout'] = 'none'.toJS;
+        div.callMethod<JSAny?>(
+          'addEventListener'.toJS,
+          'contextmenu'.toJS,
+          ((JSObject e) => e.callMethod<JSAny?>('preventDefault'.toJS)).toJS,
+        );
         return div;
       },
       isVisible: false,

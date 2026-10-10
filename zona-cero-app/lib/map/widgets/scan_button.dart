@@ -7,15 +7,17 @@ import 'package:flutter/widgets.dart';
 import '../../state/app_state.dart';
 import '../../state/world_controller.dart';
 import '../../ui/theme/tokens.dart';
-import '../../ui/widgets/hexagon.dart';
+import '../../ui/widgets/grit.dart';
+import 'hud.dart';
 
-/// Botón hexagonal del escáner: mantener 400 ms para cargar (el anillo se
-/// llena) y soltar para disparar el pulso. Anillo exterior = recarga de 45 s.
+/// Botón cuadrado del escáner (columna derecha del mapa): radar con anillo de
+/// recarga y rótulo "ESCANEAR" / segundos. Mantener 400 ms para cargar (el
+/// anillo interior se llena) y soltar para disparar el pulso.
 class ScanButton extends StatefulWidget {
-  const ScanButton({super.key, this.size = 76});
+  const ScanButton({super.key, this.width = 44, this.height = 62});
 
-  /// Diámetro del hexágono (el anillo agrega 16 dp alrededor).
-  final double size;
+  final double width;
+  final double height;
 
   @override
   State<ScanButton> createState() => _ScanButtonState();
@@ -27,7 +29,7 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
   late final AnimationController _charge =
       AnimationController(vsync: this, duration: const Duration(milliseconds: _chargeMs))
         ..addStatusListener(_onChargeStatus);
-  late final AnimationController _idle = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400));
+  late final AnimationController _sweep = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600));
   Timer? _timer;
   int _left = 0;
   bool _hasFix = false;
@@ -50,7 +52,7 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
     app.location.removeListener(_sync);
     _timer?.cancel();
     _charge.dispose();
-    _idle.dispose();
+    _sweep.dispose();
     super.dispose();
   }
 
@@ -68,11 +70,11 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
     }
     if (_left > 0) {
       _timer ??= Timer.periodic(const Duration(milliseconds: 100), (_) => _sync());
-      if (_idle.isAnimating) _idle.stop();
+      if (_sweep.isAnimating) _sweep.stop();
     } else {
       _timer?.cancel();
       _timer = null;
-      if (_hasFix && !_idle.isAnimating) _idle.repeat();
+      if (_hasFix && !_sweep.isAnimating) _sweep.repeat();
     }
   }
 
@@ -116,70 +118,69 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final box = widget.size + 16;
     final secs = (_left / 1000).ceil();
     final charged = _charge.isCompleted && _holding;
     final label = !_hasFix
-        ? 'SIN SEÑAL'
+        ? 'SIN GNSS'
         : _left > 0
-            ? 'RECARGA'
+            ? '$secs S'
             : charged
                 ? 'SOLTÁ'
                 : _holding
-                    ? 'CARGANDO'
+                    ? 'CARGA'
                     : 'ESCANEAR';
+    final labelColor = !_hasFix
+        ? Sutura.danger
+        : _left > 0
+            ? Sutura.textMid
+            : charged
+                ? Sutura.textHi
+                : Sutura.signal;
     return Semantics(
       button: true,
-      label: 'Escanear la zona. Mantener presionado y soltar.',
+      label: _left > 0 ? 'Escáner recargando, $secs segundos' : 'Escanear la zona. Mantené presionado y soltá.',
       child: Listener(
         onPointerDown: _down,
         onPointerUp: _up,
         onPointerCancel: _cancel,
         behavior: HitTestBehavior.opaque,
-        child: SizedBox.square(
-          dimension: box,
-          child: RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: Listenable.merge([_charge, _idle]),
-              builder: (context, _) => CustomPaint(
-                painter: _ScanPainter(
-                  cooldown: _left / WorldController.scanCooldownMs,
-                  charge: _charge.value,
-                  breathe: _ready ? (math.sin(_idle.value * 2 * math.pi) + 1) / 2 : 0,
-                  enabled: _hasFix,
-                  pressed: _holding,
-                ),
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: widget.size * 0.30),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_left > 0 && _hasFix)
-                          Text(
-                            '$secs',
-                            style: SuturaText.mono.copyWith(fontSize: 18, height: 1, color: Sutura.textHi),
-                          ),
-                        Text(
-                          label,
-                          style: SuturaText.mono.copyWith(
-                            fontSize: 8.5,
-                            letterSpacing: 1.4,
-                            height: 1.3,
-                            color: !_hasFix
-                                ? Sutura.offline
-                                : _left > 0
-                                    ? Sutura.textMid
-                                    : charged
-                                        ? Sutura.textHi
-                                        : Sutura.signal,
-                          ),
+        child: SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: GritPanel(
+            padding: const EdgeInsets.fromLTRB(2, 5, 2, 5),
+            background: _holding ? const Color(0xF0132029) : kMapControlFill,
+            border: _ready ? Sutura.signal.withValues(alpha: 0.75) : kMapControlBorder,
+            corners: null,
+            glow: charged ? Sutura.signal : null,
+            child: Column(
+              children: [
+                Expanded(
+                  child: RepaintBoundary(
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_charge, _sweep]),
+                      builder: (context, _) => CustomPaint(
+                        size: Size.infinite,
+                        painter: _RadarPainter(
+                          cooldown: _left / WorldController.scanCooldownMs,
+                          charge: _charge.value,
+                          sweep: _ready ? _sweep.value : -1,
+                          enabled: _hasFix,
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: SuturaText.label.copyWith(fontSize: 7.5, letterSpacing: 1.1, color: labelColor, height: 1),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -188,100 +189,70 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
   }
 }
 
-class _ScanPainter extends CustomPainter {
-  _ScanPainter({
-    required this.cooldown,
-    required this.charge,
-    required this.breathe,
-    required this.enabled,
-    required this.pressed,
-  });
+class _RadarPainter extends CustomPainter {
+  _RadarPainter({required this.cooldown, required this.charge, required this.sweep, required this.enabled});
 
   /// Fracción de recarga restante (1 = recién disparado, 0 = listo).
   final double cooldown;
   final double charge;
-  final double breathe;
+
+  /// Barrido del radar en reposo (0..1), negativo = quieto.
+  final double sweep;
   final bool enabled;
-  final bool pressed;
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
-    final ringR = size.shortestSide / 2 - 2;
-    final hexR = ringR - 9;
+    final r = math.min(size.width, size.height) / 2 - 2;
     final ready = enabled && cooldown <= 0;
-    final accent = ready ? Sutura.signal : Sutura.lineStrong;
+    final accent = !enabled ? Sutura.danger : (ready ? Sutura.signal : Sutura.textLow);
 
-    // Pista del anillo.
-    canvas.drawCircle(c, ringR, Paint()
+    // Pista del anillo de recarga.
+    canvas.drawCircle(c, r, Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
       ..color = Sutura.lineHair);
-    final arcRect = Rect.fromCircle(center: c, radius: ringR);
-    if (enabled) {
-      final progress = (1 - cooldown).clamp(0.0, 1.0);
-      if (ready) {
-        canvas.drawCircle(c, ringR, Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..color = Sutura.signal.withValues(alpha: 0.10 + 0.18 * breathe)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
-      }
-      canvas.drawArc(arcRect, -math.pi / 2, progress * 2 * math.pi, false, Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.butt
-        ..color = ready ? Sutura.signal : Sutura.signal.withValues(alpha: 0.55));
-      // Marcas cada 45° (calibración).
-      final tick = Paint()
-        ..color = Sutura.textLow
-        ..strokeWidth = 1;
-      for (var i = 0; i < 8; i++) {
-        final a = -math.pi / 2 + i * math.pi / 4;
-        final d = Offset(math.cos(a), math.sin(a));
-        canvas.drawLine(c + d * (ringR + 3), c + d * (ringR + 6), tick);
-      }
+    final progress = enabled ? (1 - cooldown).clamp(0.0, 1.0) : 0.0;
+    canvas.drawArc(Rect.fromCircle(center: c, radius: r), -math.pi / 2, progress * 2 * math.pi, false, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = ready ? Sutura.signal : Sutura.signal.withValues(alpha: 0.55));
+
+    // Retícula del radar.
+    final grid = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = accent.withValues(alpha: 0.45);
+    canvas.drawCircle(c, r * 0.55, grid);
+    canvas.drawLine(c.translate(-r + 4, 0), c.translate(r - 4, 0), grid);
+    canvas.drawLine(c.translate(0, -r + 4), c.translate(0, r - 4), grid);
+
+    // Barrido.
+    if (sweep >= 0) {
+      final a = -math.pi / 2 + sweep * 2 * math.pi;
+      final rect = Rect.fromCircle(center: c, radius: r - 3);
+      canvas.drawArc(rect, a - 0.9, 0.9, true, Paint()
+        ..shader = SweepGradient(
+          endAngle: 0.9,
+          colors: [Sutura.signal.withValues(alpha: 0), Sutura.signal.withValues(alpha: 0.45)],
+          transform: GradientRotation(a - 0.9),
+        ).createShader(rect));
+      canvas.drawLine(c, c + Offset(math.cos(a), math.sin(a)) * (r - 3), Paint()
+        ..strokeWidth = 1.2
+        ..color = Sutura.signal);
     }
+
     // Carga (mantener presionado).
     if (charge > 0) {
-      canvas.drawArc(arcRect.deflate(4.5), -math.pi / 2, charge * 2 * math.pi, false, Paint()
+      canvas.drawArc(Rect.fromCircle(center: c, radius: r - 4), -math.pi / 2, charge * 2 * math.pi, false, Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
+        ..strokeWidth = 2.6
         ..color = charge >= 1 ? Sutura.textHi : Sutura.signal);
     }
-
-    // Hexágono.
-    final hex = hexPath(c, hexR);
-    if (ready) {
-      canvas.drawPath(hex, Paint()
-        ..color = Sutura.signal.withValues(alpha: 0.18 + 0.22 * math.max(breathe * 0.6, charge))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
-    }
-    canvas.drawPath(hex, Paint()..color = Sutura.surface1Solid.withValues(alpha: 0.94));
-    canvas.drawPath(hex, Paint()..color = accent.withValues(alpha: pressed ? 0.26 : 0.10));
-    canvas.drawPath(hex, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..color = accent);
-
-    // Glifo de sonar.
-    final g = c.translate(0, -hexR * 0.22);
-    final glyph = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round
-      ..color = enabled ? (ready ? Sutura.signal : Sutura.textLow) : Sutura.offline.withValues(alpha: 0.7);
-    canvas.drawCircle(g, 2.2, Paint()..color = glyph.color);
-    for (final r in [6.0, 10.5]) {
-      canvas.drawArc(Rect.fromCircle(center: g, radius: r), -math.pi * 0.85, math.pi * 0.7, false, glyph);
-    }
+    canvas.drawCircle(c, 2.2, Paint()..color = accent);
   }
 
   @override
-  bool shouldRepaint(_ScanPainter old) =>
-      old.cooldown != cooldown ||
-      old.charge != charge ||
-      old.breathe != breathe ||
-      old.enabled != enabled ||
-      old.pressed != pressed;
+  bool shouldRepaint(_RadarPainter old) =>
+      old.cooldown != cooldown || old.charge != charge || old.sweep != sweep || old.enabled != enabled;
 }

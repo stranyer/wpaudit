@@ -79,7 +79,7 @@ abstract final class MapIcons {
   static const _dotPad = 4.0;
   static const distanceSize = 10.5;
 
-  static const playerSize = 132.0;
+  static const playerSize = 140.0;
 
   static double renderScale(double dpr) => dpr.clamp(2.0, 3.5);
 
@@ -478,8 +478,8 @@ abstract final class MapIcons {
   static void _player(Canvas c, {required bool heading}) {
     const center = Offset(playerSize / 2, playerSize / 2);
     if (heading) {
-      const len = 58.0;
-      const half = 0.36;
+      const len = 64.0;
+      const half = 0.4;
       final cone = Path()
         ..moveTo(center.dx, center.dy)
         ..arcTo(Rect.fromCircle(center: center, radius: len), -math.pi / 2 - half, half * 2, false)
@@ -488,11 +488,11 @@ abstract final class MapIcons {
         cone,
         Paint()
           ..shader = ui.Gradient.radial(center, len, [
-            const Color(0xCCD7E7F0),
-            Sutura.signal.withValues(alpha: 0.55),
-            Sutura.signal.withValues(alpha: 0.18),
+            const Color(0xF2E4EEF4),
+            Sutura.signal.withValues(alpha: 0.72),
+            Sutura.signal.withValues(alpha: 0.26),
             Sutura.signal.withValues(alpha: 0),
-          ], [0.12, 0.3, 0.65, 1]),
+          ], [0.14, 0.34, 0.68, 1]),
       );
     }
     // Sombra para despegarlo del mapa.

@@ -64,11 +64,14 @@ class WeaponPanel extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          (def?.name ?? 'Puños').toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: SuturaText.label.copyWith(color: Sutura.textMid, fontSize: 13, letterSpacing: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            (def?.name ?? 'Puños').toUpperCase(),
+                            maxLines: 1,
+                            style: SuturaText.label.copyWith(color: Sutura.textMid, fontSize: 13, letterSpacing: 2),
+                          ),
                         ),
                         const SizedBox(height: 2),
                         if (split != null)

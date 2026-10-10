@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/core.dart';
 import '../../services/location/location_types.dart';
@@ -9,102 +11,135 @@ import '../../state/app_state.dart';
 import '../../state/location_controller.dart';
 import '../../state/world_controller.dart';
 import '../../ui/theme/tokens.dart';
-import '../../ui/widgets/brackets.dart';
-import '../../ui/widgets/chamfer_button.dart';
 import '../../ui/widgets/ecg_monitor.dart';
-import '../../ui/widgets/hexagon.dart';
-import '../../ui/widgets/holo_in.dart';
-import '../../ui/widgets/seg_bar.dart';
+import '../../ui/widgets/grit.dart';
 import '../game_map.dart';
+import '../map_math.dart';
+import '../weather.dart';
+
+/// Borde de los controles del mapa (un poco más claro que el de los paneles).
+const kMapControlBorder = Color(0xFF575B5E);
+
+/// Fondo de los controles y tarjetas sobre el mapa.
+const kMapControlFill = Color(0xE8101213);
 
 // -----------------------------------------------------------------------------
-// Objetivo contextual
+// Modelo del HUD: clima y región
 // -----------------------------------------------------------------------------
 
-/// "OBJETIVO · Escaneá la zona", según lo que pasa en el mapa.
-class ObjectiveLine extends StatelessWidget {
-  const ObjectiveLine({super.key});
+/// Clima y rótulos de región del HUD. Lo crea la pantalla del mapa.
+class MapHudModel extends ChangeNotifier {
+  MapHudModel(this.camera) {
+    app.location.addListener(_onLocation);
+    weather.addListener(notifyListeners);
+    _onLocation();
+  }
 
-  static (String, Color) objective() {
-    final pos = app.location.position;
-    if (pos == null) return ('Buscando señal GNSS', Sutura.textMid);
-    if (app.location.speedLocked) return ('Bajá la velocidad', Sutura.danger);
-    final p = app.player;
-    if (p != null && p.health / maxHealth(p) < 0.25) return ('Curate: signos vitales críticos', Sutura.caution2);
-    final w = app.world;
+  final GameMapController camera;
+  final weather = WeatherController();
+  String? _place;
+  LatLng? _placeAt;
+  int _placeQueriedAt = 0;
+  ({String city, String region}) _labels = regionLabels(null);
+
+  ({String city, String region}) get labels => _labels;
+  WeatherReading? get reading => weather.reading;
+
+  void _onLocation() {
+    final p = app.location.position;
+    weather.update(p);
+    _relabel();
+    if (p == null || kIsWeb || inBox(p, ambaBox)) return;
+    // Fuera del AMBA: pedirle al mapa el lugar más cercano (cada 2 min o 2 km).
     final now = DateTime.now().millisecondsSinceEpoch;
-    final sel = w.spawnById(w.selectedId);
-    if (sel != null) {
-      final d = app.distanceTo(sel.position) ?? 0;
-      final near = app.isNear(sel.position);
-      return switch (sel) {
-        ZombieSpawn() => near ? ('Enfrentá al infectado', Sutura.danger) : ('Acercate · ${d.round()}\u00A0m', Sutura.textHi),
-        SupplySpawn() => near ? ('Recuperá el suministro', Sutura.amber) : ('Acercate · ${d.round()}\u00A0m', Sutura.textHi),
-      };
+    final last = _placeAt;
+    if (now - _placeQueriedAt < 120000 && last != null && haversineM(last, p) < 2000) return;
+    _placeQueriedAt = now;
+    _placeAt = p;
+    camera.nearestPlaceName().then((name) {
+      if (name == null || name == _place) return;
+      _place = name;
+      _relabel();
+    });
+  }
+
+  void _relabel() {
+    final next = regionLabels(app.location.position, placeName: _place);
+    if (next != _labels) {
+      _labels = next;
+      notifyListeners();
     }
-    final node = w.shelterById(w.selectedId);
-    if (node != null) {
-      return app.isNear(node.position)
-          ? ('Abrí el nodo de relevo', Sutura.signal)
-          : ('Llegá al nodo · ${formatDistance(app.distanceTo(node.position) ?? 0)}', Sutura.textHi);
-    }
-    var visible = 0;
-    var inReach = 0;
-    for (final s in w.drawable) {
-      if (w.visibilityOf(s, pos, now) == SpawnVisibility.hidden) continue;
-      visible++;
-      if (app.isNear(s.position)) inReach++;
-    }
-    if (inReach > 0) return ('Contacto al alcance · tocá el marcador', Sutura.signal);
-    if (w.scanCooldownLeft(now) == 0) return ('Escaneá la zona', Sutura.signal);
-    if (visible > 0) return ('Acercate a un contacto', Sutura.textHi);
-    return ('Explorá: caminá para encontrar contactos', Sutura.textHi);
   }
 
   @override
+  void dispose() {
+    app.location.removeListener(_onLocation);
+    weather.removeListener(notifyListeners);
+    weather.dispose();
+    super.dispose();
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Encabezado: logo + tarjeta de estado
+// -----------------------------------------------------------------------------
+
+class MapHeader extends StatelessWidget {
+  const MapHeader({super.key, required this.model});
+
+  final MapHudModel model;
+
+  @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([app.world, app.location, app]),
-      builder: (context, _) {
-        final (text, color) = objective();
-        return Container(
-          padding: const EdgeInsets.fromLTRB(8, 5, 10, 5),
-          decoration: const BoxDecoration(
-            color: Sutura.surface1,
-            border: Border(left: BorderSide(color: Sutura.signal, width: 2)),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: IgnorePointer(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const GrungeTitle('ZONA CERO', size: 33, letterSpacing: 4.4, maxLines: 1),
+                  const SizedBox(height: 5),
+                  Text(
+                    'VITA-7  //  PROTOCOLO SUTURA',
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: SuturaText.label.copyWith(fontSize: 9.5, letterSpacing: 3.0, color: Sutura.signal),
+                  ),
+                ],
+              ),
+            ),
           ),
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(text: 'OBJETIVO · ', style: SuturaText.mono.copyWith(fontSize: 10, letterSpacing: 1.4, color: Sutura.signal)),
-              TextSpan(text: text, style: SuturaText.caption.copyWith(fontSize: 13, color: color, letterSpacing: 0.4)),
-            ]),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        );
-      },
+        ),
+        StatusCard(model: model),
+      ],
     );
   }
 }
 
-// -----------------------------------------------------------------------------
-// Estado de red, hora y precisión
-// -----------------------------------------------------------------------------
+/// "SIMULACIÓN · 15:58 | ☁ 16° BUENOS AIRES".
+class StatusCard extends StatefulWidget {
+  const StatusCard({super.key, required this.model});
 
-class StatusCluster extends StatefulWidget {
-  const StatusCluster({super.key});
+  final MapHudModel model;
 
   @override
-  State<StatusCluster> createState() => _StatusClusterState();
+  State<StatusCard> createState() => _StatusCardState();
 }
 
-class _StatusClusterState extends State<StatusCluster> {
+class _StatusCardState extends State<StatusCard> {
   Timer? _clock;
 
   @override
   void initState() {
     super.initState();
-    _clock = Timer.periodic(const Duration(seconds: 10), (_) => setState(() {}));
+    _clock = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -118,38 +153,67 @@ class _StatusClusterState extends State<StatusCluster> {
     final t = DateTime.now();
     final hhmm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
     return ListenableBuilder(
-      listenable: app.location,
+      listenable: Listenable.merge([app.location, widget.model]),
       builder: (context, _) {
         final loc = app.location;
-        final (label, color, spacing) = switch (loc.mode) {
-          LocationMode.demo => ('SIMULACIÓN', Sutura.amber, 1.6),
-          _ when loc.position != null && loc.status != LocationStatus.error => ('EN LÍNEA', Sutura.signal, 1.6),
-          _ => ('S I N  S E Ñ A L', Sutura.offline, 1.0),
+        final (label, color) = switch (loc.mode) {
+          LocationMode.demo => ('SIMULACIÓN', Sutura.textMid),
+          _ when loc.position != null && loc.status != LocationStatus.error => ('EN LÍNEA', Sutura.textMid),
+          _ => ('SIN SEÑAL', Sutura.danger),
         };
-        final acc = loc.position == null ? '±— m' : '±${loc.accuracyM.round()} m';
-        return Container(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-          color: Sutura.surface1,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _Blink(color: color, active: label != 'SIMULACIÓN'),
-                  const SizedBox(width: 6),
-                  Text(label, style: SuturaText.mono.copyWith(fontSize: 10.5, color: color, letterSpacing: spacing)),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text.rich(
-                TextSpan(children: [
-                  TextSpan(text: hhmm, style: SuturaText.mono.copyWith(fontSize: 15, color: Sutura.textHi)),
-                  TextSpan(text: '  $acc', style: SuturaText.mono.copyWith(fontSize: 10.5, color: Sutura.textMid)),
-                ]),
-              ),
-            ],
+        final w = widget.model.reading;
+        final city = widget.model.labels.city;
+        return Semantics(
+          label: '$label, $hhmm${w != null ? ', ${w.tempLabel}' : ''}, $city',
+          child: GritPanel(
+            padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+            background: kMapControlFill,
+            border: Sutura.lineHair,
+            corners: null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label, style: SuturaText.label.copyWith(fontSize: 8, letterSpacing: 1.8, color: color)),
+                    const SizedBox(height: 4),
+                    Text(hhmm, style: SuturaText.number.copyWith(fontSize: 22, letterSpacing: 2.2, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+                Container(width: 1, height: 30, margin: const EdgeInsets.symmetric(horizontal: 8), color: Sutura.lineStrong),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 74),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (w != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 19,
+                              height: 14,
+                              child: CustomPaint(painter: WeatherGlyphPainter(w.kind, day: w.isDay)),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(w.tempLabel, style: SuturaText.number.copyWith(fontSize: 16.5, letterSpacing: 0.6)),
+                          ],
+                        ),
+                      if (w != null) const SizedBox(height: 4),
+                      Text(
+                        city,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: SuturaText.label.copyWith(fontSize: 7, letterSpacing: 1.3, color: Sutura.textMid),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -157,151 +221,276 @@ class _StatusClusterState extends State<StatusCluster> {
   }
 }
 
-class _Blink extends StatefulWidget {
-  const _Blink({required this.color, required this.active});
+/// Glifo de clima dibujado (nube gris, sol, luna, lluvia, tormenta, niebla, nieve).
+class WeatherGlyphPainter extends CustomPainter {
+  WeatherGlyphPainter(this.kind, {this.day = true});
+
+  final WeatherKind kind;
+  final bool day;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.height / 14;
+    canvas.save();
+    canvas.scale(s);
+    const grey = Color(0xFFB9BBBC);
+    const dim = Color(0xFF8D9092);
+    final fill = Paint()..color = grey;
+    final line = Paint()
+      ..color = grey
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3
+      ..strokeCap = StrokeCap.round;
+
+    void cloud(Offset o, Color c) {
+      final p = Paint()..color = c;
+      canvas.drawCircle(o + const Offset(-4, 1.5), 3.2, p);
+      canvas.drawCircle(o + const Offset(0.5, -0.8), 4.4, p);
+      canvas.drawCircle(o + const Offset(4.6, 1.6), 3, p);
+      canvas.drawRRect(RRect.fromLTRBR(o.dx - 7, o.dy + 0.5, o.dx + 7.6, o.dy + 4.6, const Radius.circular(2)), p);
+    }
+
+    void sun(Offset o, double r) {
+      canvas.drawCircle(o, r, fill);
+      for (var i = 0; i < 8; i++) {
+        final a = i * math.pi / 4;
+        final d = Offset(math.cos(a), math.sin(a));
+        canvas.drawLine(o + d * (r + 1.6), o + d * (r + 3.2), line);
+      }
+    }
+
+    void moon(Offset o, double r) {
+      final p = Path.combine(
+        PathOperation.difference,
+        Path()..addOval(Rect.fromCircle(center: o, radius: r)),
+        Path()..addOval(Rect.fromCircle(center: o + Offset(r * 0.55, -r * 0.35), radius: r * 0.85)),
+      );
+      canvas.drawPath(p, fill);
+    }
+
+    const c = Offset(9.5, 6);
+    switch (kind) {
+      case WeatherKind.clear:
+        day ? sun(const Offset(9.5, 7), 3.6) : moon(const Offset(9.5, 7), 5.2);
+      case WeatherKind.partly:
+        day ? sun(const Offset(13, 4.5), 2.6) : moon(const Offset(13.5, 4.5), 3.6);
+        cloud(const Offset(8, 7.5), grey);
+      case WeatherKind.cloud:
+        cloud(c, grey);
+      case WeatherKind.fog:
+        for (final (i, y) in [3.5, 7.0, 10.5].indexed) {
+          canvas.drawLine(Offset(2.5 + i * 1.5, y), Offset(16.5 - (2 - i) * 1.2, y), line);
+        }
+      case WeatherKind.drizzle || WeatherKind.rain:
+        cloud(const Offset(9.5, 4), grey);
+        final drop = Paint()
+          ..color = dim
+          ..strokeWidth = 1.2
+          ..strokeCap = StrokeCap.round;
+        final n = kind == WeatherKind.rain ? 3 : 2;
+        for (var i = 0; i < n; i++) {
+          final x = 6.5 + i * (n == 3 ? 3.2 : 5.0);
+          canvas.drawLine(Offset(x, 10.2), Offset(x - 1.2, 13), drop);
+        }
+      case WeatherKind.snow:
+        cloud(const Offset(9.5, 4), grey);
+        for (var i = 0; i < 3; i++) {
+          canvas.drawCircle(Offset(6.5 + i * 3.2, 11.8), 0.95, Paint()..color = dim);
+        }
+      case WeatherKind.storm:
+        cloud(const Offset(9.5, 4), dim);
+        canvas.drawPath(
+          Path()
+            ..moveTo(10.5, 8.2)
+            ..lineTo(7.8, 11.4)
+            ..lineTo(9.8, 11.4)
+            ..lineTo(8.6, 14)
+            ..lineTo(12.2, 10.2)
+            ..lineTo(10.2, 10.2)
+            ..lineTo(11.6, 8.2)
+            ..close(),
+          Paint()..color = Sutura.amber,
+        );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(WeatherGlyphPainter old) => old.kind != kind || old.day != day;
+}
+
+// -----------------------------------------------------------------------------
+// Objetivo actual
+// -----------------------------------------------------------------------------
+
+/// Objetivo contextual y a dónde apunta (para centrar la cámara al tocarlo).
+class MapObjective {
+  const MapObjective(this.text, this.color, {this.target, this.targetId});
+
+  final String text;
   final Color color;
-  final bool active;
+  final LatLng? target;
+  final String? targetId;
 
-  @override
-  State<_Blink> createState() => _BlinkState();
-}
+  static MapObjective compute() {
+    final pos = app.location.position;
+    if (pos == null) return const MapObjective('Buscando señal GNSS', Sutura.textMid);
+    if (app.location.speedLocked) return const MapObjective('Bajá la velocidad', Sutura.danger);
+    final p = app.player;
+    if (p != null && p.health / maxHealth(p) < 0.25) return const MapObjective('Curate: signos vitales críticos', Sutura.caution2);
+    final w = app.world;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    String near(double d) => distanceLabel(d);
 
-class _BlinkState extends State<_Blink> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
+    // Lo seleccionado manda.
+    final selId = w.selectedId;
+    final sel = w.spawnById(selId);
+    if (sel != null) {
+      final d = app.distanceTo(sel.position) ?? 0;
+      final inReach = app.isNear(sel.position);
+      final text = switch (sel) {
+        ZombieSpawn() => inReach ? 'Enfrentá al infectado' : 'Acercate al infectado · ${near(d)}',
+        SupplySpawn() => inReach ? 'Recuperá el suministro' : 'Acercate al saqueo · ${near(d)}',
+      };
+      final color = inReach ? (sel is ZombieSpawn ? Sutura.danger : Sutura.amber) : Sutura.textHi;
+      return MapObjective(text, color, target: sel.position, targetId: sel.id);
+    }
+    final sig = w.signalById(selId);
+    if (sig != null) {
+      return app.isNear(sig.position)
+          ? MapObjective('Respondé la señal de auxilio', Sutura.amber, target: sig.position, targetId: sig.id)
+          : MapObjective(
+              'Acercate a la señal · ${near(app.distanceTo(sig.position) ?? 0)}',
+              Sutura.textHi,
+              target: sig.position,
+              targetId: sig.id,
+            );
+    }
+    final node = w.shelterById(selId);
+    if (node != null) {
+      return app.isNear(node.position)
+          ? MapObjective('Abrí el nodo de relevo', Sutura.signal, target: node.position, targetId: node.id)
+          : MapObjective(
+              'Llegá al refugio · ${near(app.distanceTo(node.position) ?? 0)}',
+              Sutura.textHi,
+              target: node.position,
+              targetId: node.id,
+            );
+    }
 
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
+    // Algo al alcance.
+    Spawn? closest;
+    var closestD = double.infinity;
+    for (final s in w.drawable) {
+      if (w.visibilityOf(s, pos, now) == SpawnVisibility.hidden) continue;
+      final d = haversineM(pos, s.position);
+      if (d < closestD) {
+        closest = s;
+        closestD = d;
+      }
+    }
+    final nearestSignal = _nearest([for (final s in w.signals) (s.id, s.position)], pos);
+    if (nearestSignal != null && app.isNear(nearestSignal.$2)) {
+      return MapObjective('Respondé la señal de auxilio', Sutura.amber, target: nearestSignal.$2, targetId: nearestSignal.$1);
+    }
+    if (closest != null && app.isNear(closest.position)) {
+      return switch (closest) {
+        ZombieSpawn() => MapObjective('Enfrentá al infectado', Sutura.danger, target: closest.position, targetId: closest.id),
+        SupplySpawn() => MapObjective('Recuperá el suministro', Sutura.amber, target: closest.position, targetId: closest.id),
+      };
+    }
+    if (closest != null) {
+      return MapObjective('Acercate a un contacto', Sutura.textHi, target: closest.position, targetId: closest.id);
+    }
+    if (w.scanCooldownLeft(now) == 0) return const MapObjective('Escaneá la zona', Sutura.textHi);
+    if (nearestSignal != null && haversineM(pos, nearestSignal.$2) < 1200) {
+      return MapObjective('Rastreá la señal de auxilio', Sutura.textHi, target: nearestSignal.$2, targetId: nearestSignal.$1);
+    }
+    return const MapObjective('Explorá: caminá para encontrar contactos', Sutura.textHi);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, _) {
-        final on = !widget.active || _c.value < 0.6;
-        return Container(width: 6, height: 6, color: widget.color.withValues(alpha: on ? 1 : 0.25));
-      },
-    );
+  static (String, LatLng)? _nearest(List<(String, LatLng)> items, LatLng from) {
+    (String, LatLng)? best;
+    var bestD = double.infinity;
+    for (final it in items) {
+      final d = haversineM(from, it.$2);
+      if (d < bestD) {
+        bestD = d;
+        best = it;
+      }
+    }
+    return best;
   }
 }
 
-// -----------------------------------------------------------------------------
-// Signos vitales (abajo a la izquierda)
-// -----------------------------------------------------------------------------
+/// Tarjeta "OBJETIVO ACTUAL": al tocarla, la cámara va hasta el objetivo.
+class ObjectiveCard extends StatelessWidget {
+  const ObjectiveCard({super.key, required this.camera});
 
-class VitalsPanel extends StatelessWidget {
-  const VitalsPanel({super.key});
+  final GameMapController camera;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: app,
+      listenable: Listenable.merge([app.world, app.location, app]),
       builder: (context, _) {
-        final p = app.player;
-        if (p == null) return const SizedBox.shrink();
-        final maxH = maxHealth(p);
-        final ratio = (p.health / maxH).clamp(0.0, 1.0);
-        final vital = vitalFor(ratio);
-        final carried = carriedWeight(p.inventory) * 0.5;
-        final cap = capacityOf(p) * 0.5;
-        final heavy = carried >= cap * 0.9;
-        return BracketPanel(
-          padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              EcgMonitor(ratio: ratio, width: 104, height: 24, showLabel: false),
-              const SizedBox(height: 3),
-              Row(
+        final o = MapObjective.compute();
+        return Semantics(
+          button: true,
+          label: 'Objetivo actual: ${o.text}. Tocá para verlo en el mapa.',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              final t = o.target;
+              if (t == null) {
+                camera.recenter();
+              } else {
+                camera.focus(t, select: o.targetId);
+              }
+            },
+            child: GritPanel(
+              padding: const EdgeInsets.fromLTRB(14, 8, 8, 9),
+              background: kMapControlFill,
+              border: const Color(0xFF6A6E71),
+              corners: null,
+              child: Row(
                 children: [
-                  Text(vitalLabel(vital), style: SuturaText.mono.copyWith(fontSize: 10, color: vitalColor(vital), letterSpacing: 1.2)),
-                  const Spacer(),
-                  Text('${p.health.round()}', style: SuturaText.mono.copyWith(fontSize: 12, color: Sutura.textHi)),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  Text('RES', style: SuturaText.micro.copyWith(fontSize: 8.5, color: Sutura.textMid)),
-                  const SizedBox(width: 6),
                   Expanded(
-                    child: SegBar(value: p.stamina, max: maxStamina(p).toDouble(), segments: 10, color: Sutura.signal, height: 4),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Text(
-                '${carried.toStringAsFixed(1).replaceFirst('.', ',')} / ${cap.toStringAsFixed(1).replaceFirst('.', ',')} KG',
-                style: SuturaText.mono.copyWith(fontSize: 10.5, color: heavy ? Sutura.caution2 : Sutura.textMid),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Arma y munición (abajo a la derecha)
-// -----------------------------------------------------------------------------
-
-class WeaponPanel extends StatelessWidget {
-  const WeaponPanel({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: app,
-      builder: (context, _) {
-        final p = app.player;
-        if (p == null) return const SizedBox.shrink();
-        final melee = p.equipment.melee;
-        final firearm = p.equipment.firearm;
-        final ammo = countOf(p.inventory, ItemId.ammo);
-        return BracketPanel(
-          padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                (melee != null ? itemDefs[melee]!.name : 'Puños').toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: SuturaText.caption.copyWith(fontSize: 11.5, color: Sutura.textHi, letterSpacing: 0.8),
-              ),
-              Text(
-                (firearm != null ? itemDefs[firearm]!.name : 'Sin arma de fuego').toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: SuturaText.caption.copyWith(fontSize: 10.5, color: firearm != null ? Sutura.textMid : Sutura.textLow, letterSpacing: 0.8),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 5),
-                    child: Text('MUNICIÓN', style: SuturaText.micro.copyWith(fontSize: 8.5, color: Sutura.textMid)),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    ammo.toString().padLeft(2, '0'),
-                    style: SuturaText.mono.copyWith(
-                      fontSize: 30,
-                      height: 1,
-                      color: ammo == 0 ? Sutura.danger : Sutura.textHi,
-                      letterSpacing: 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('OBJETIVO ACTUAL', style: SuturaText.label.copyWith(fontSize: 9.5, letterSpacing: 3.2)),
+                        const SizedBox(height: 3),
+                        AnimatedSwitcher(
+                          duration: Sutura.fast,
+                          layoutBuilder: (current, previous) => Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                          child: FittedBox(
+                            key: ValueKey(o.text),
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              o.text,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontFamily: Sutura.fUi,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 20,
+                                letterSpacing: 1.1,
+                                height: 1.15,
+                                color: o.color,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const Icon(Icons.chevron_right, size: 24, color: Sutura.textMid),
                 ],
               ),
-            ],
+            ),
           ),
         );
       },
@@ -310,35 +499,53 @@ class WeaponPanel extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// Botones de cámara
+// Controles de cámara
 // -----------------------------------------------------------------------------
 
-class MapSquareButton extends StatelessWidget {
-  const MapSquareButton({super.key, required this.icon, required this.onTap, required this.label, this.active = false});
+/// Botón cuadrado de los controles del mapa.
+class MapControlButton extends StatelessWidget {
+  const MapControlButton({
+    super.key,
+    required this.child,
+    required this.label,
+    this.onTap,
+    this.onLongPress,
+    this.width = 44,
+    this.height = 44,
+    this.active = false,
+  });
 
-  final IconData icon;
-  final VoidCallback onTap;
+  final Widget child;
   final String label;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final double width;
+  final double height;
   final bool active;
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? Sutura.signal : Sutura.textMid;
     return Semantics(
       button: true,
       label: label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: SizedBox.square(
-          dimension: 44,
-          child: CustomPaint(
-            painter: ChamferPainter(
-              fill: active ? Sutura.signal.withValues(alpha: 0.12) : Sutura.surface1,
-              line: active ? Sutura.signal : Sutura.lineStrong,
-              cut: 5,
-            ),
-            child: Icon(icon, size: 20, color: color),
+        onTap: onTap == null
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                onTap!();
+              },
+        onLongPress: onLongPress,
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: GritPanel(
+            padding: EdgeInsets.zero,
+            background: kMapControlFill,
+            border: active ? Sutura.signal.withValues(alpha: 0.8) : kMapControlBorder,
+            corners: null,
+            child: Center(child: child),
           ),
         ),
       ),
@@ -346,8 +553,116 @@ class MapSquareButton extends StatelessWidget {
   }
 }
 
-class MapCameraButtons extends StatelessWidget {
-  const MapCameraButtons({super.key, required this.camera});
+/// Brújula: "N" sobre una flecha; gira con el mapa. Tocar = norte arriba;
+/// mantener = vista inclinada.
+class CompassButton extends StatelessWidget {
+  const CompassButton({super.key, required this.camera});
+
+  final GameMapController camera;
+
+  @override
+  Widget build(BuildContext context) {
+    return MapControlButton(
+      label: 'Brújula: tocá para poner el norte arriba',
+      width: 42,
+      height: 42,
+      onTap: camera.resetNorth,
+      onLongPress: camera.togglePitch,
+      child: ListenableBuilder(
+        listenable: camera,
+        builder: (context, _) => Transform.rotate(
+          angle: -camera.bearing * math.pi / 180,
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'N',
+                style: TextStyle(fontFamily: Sutura.fUi, fontWeight: FontWeight.w600, fontSize: 11, height: 1, color: Sutura.textHi),
+              ),
+              SizedBox(height: 3),
+              SizedBox(width: 14, height: 16, child: CustomPaint(painter: _ArrowPainter())),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Flecha de navegación con relieve (mitad clara, mitad oscura).
+class _ArrowPainter extends CustomPainter {
+  const _ArrowPainter();
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    final tip = Offset(s.width / 2, 0);
+    final notch = Offset(s.width / 2, s.height * 0.72);
+    final left = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo(0, s.height)
+      ..lineTo(notch.dx, notch.dy)
+      ..close();
+    final right = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo(s.width, s.height)
+      ..lineTo(notch.dx, notch.dy)
+      ..close();
+    canvas.drawPath(left, Paint()..color = const Color(0xFFC9CCCD));
+    canvas.drawPath(right, Paint()..color = const Color(0xFF7D8183));
+  }
+
+  @override
+  bool shouldRepaint(_ArrowPainter old) => false;
+}
+
+/// "+" / "−" en un mismo panel.
+class ZoomButtons extends StatelessWidget {
+  const ZoomButtons({super.key, required this.camera, this.width = 44});
+
+  final GameMapController camera;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget btn(IconData icon, String label, VoidCallback onTap) => Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: SizedBox(
+          width: width,
+          height: 44,
+          child: Icon(icon, size: 22, color: Sutura.textHi),
+        ),
+      ),
+    );
+    return SizedBox(
+      width: width,
+      child: GritPanel(
+        padding: EdgeInsets.zero,
+        background: kMapControlFill,
+        border: kMapControlBorder,
+        corners: null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            btn(Icons.add, 'Acercar', camera.zoomIn),
+            Container(height: 1, margin: const EdgeInsets.symmetric(horizontal: 6), color: kMapControlBorder),
+            btn(Icons.remove, 'Alejar', camera.zoomOut),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Volver a seguir al jugador.
+class LocateButton extends StatelessWidget {
+  const LocateButton({super.key, required this.camera});
 
   final GameMapController camera;
 
@@ -355,24 +670,172 @@ class MapCameraButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: camera,
+      builder: (context, _) => MapControlButton(
+        label: camera.follow ? 'Siguiendo tu posición' : 'Volver a mi posición',
+        active: !camera.follow,
+        onTap: camera.recenter,
+        child: Transform.rotate(
+          angle: math.pi / 4,
+          child: Icon(Icons.navigation, size: 21, color: camera.follow ? Sutura.textHi : Sutura.signal),
+        ),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Pie del mapa: región y escala
+// -----------------------------------------------------------------------------
+
+class MapCaption extends StatelessWidget {
+  const MapCaption({super.key, required this.model});
+
+  final MapHudModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final low = SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 2.6, color: const Color(0xFF8C8F91), height: 1.35);
+    return ListenableBuilder(
+      listenable: model,
       builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          MapSquareButton(
-            icon: Icons.my_location,
-            label: 'Centrar en mi posición',
-            active: camera.follow,
-            onTap: camera.recenter,
-          ),
-          const SizedBox(height: 8),
-          MapSquareButton(
-            icon: Icons.threed_rotation,
-            label: 'Alternar vista inclinada',
-            active: camera.pitched,
-            onTap: camera.togglePitch,
-          ),
+          Text(model.labels.region, style: low.copyWith(fontSize: 11, letterSpacing: 3, color: const Color(0xFFC4C6C7))),
+          Text('MAPA DE EXPLORACIÓN', style: low),
+          Text('V.1.3', style: low),
         ],
       ),
+    );
+  }
+}
+
+class ScaleBar extends StatelessWidget {
+  const ScaleBar({super.key, required this.camera, this.maxWidth = 110});
+
+  final GameMapController camera;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: camera,
+      builder: (context, _) {
+        final lat = camera.latitude ?? app.location.position?.lat ?? gameConfig.demo.start.lat;
+        final spec = scaleBarFor(lat: lat, zoom: camera.zoom, maxPx: maxWidth);
+        final style = SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 1.2, color: const Color(0xFFB3B6B7), height: 1);
+        return Semantics(
+          label: 'Escala: ${spec.labels.last}',
+          child: SizedBox(
+            width: spec.px + 26,
+            height: 26,
+            child: CustomPaint(painter: _ScalePainter(spec, style)),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ScalePainter extends CustomPainter {
+  _ScalePainter(this.spec, this.style);
+  final ScaleBarSpec spec;
+  final TextStyle style;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final x0 = 4.0;
+    final y = size.height - 4;
+    final line = Paint()
+      ..color = const Color(0xFFB3B6B7)
+      ..strokeWidth = 1;
+    canvas.drawLine(Offset(x0, y), Offset(x0 + spec.px, y), line);
+    for (final (i, f) in [0.0, 0.5, 1.0].indexed) {
+      final x = x0 + spec.px * f;
+      canvas.drawLine(Offset(x, y - 4), Offset(x, y + 3), line);
+      final tp = TextPainter(
+        text: TextSpan(text: spec.labels[i], style: style),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final dx = i == 2 ? x - 4 : x - tp.width / 2;
+      tp.paint(canvas, Offset(dx.clamp(0, size.width - tp.width), y - 9 - tp.height));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ScalePainter old) => old.spec.px != spec.px || old.spec.meters != spec.meters;
+}
+
+// -----------------------------------------------------------------------------
+// Panel ESTADO
+// -----------------------------------------------------------------------------
+
+class StatusPanel extends StatelessWidget {
+  const StatusPanel({super.key, this.height = 96});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: app,
+      builder: (context, _) {
+        final p = app.player;
+        final ratio = p == null ? 1.0 : (p.health / maxHealth(p)).clamp(0.0, 1.0);
+        final stamina = p == null ? 1.0 : (p.stamina / maxStamina(p)).clamp(0.0, 1.0);
+        final vital = vitalFor(ratio);
+        final rowStyle = SuturaText.label.copyWith(fontSize: 10, letterSpacing: 1.8, color: Sutura.textMid);
+        Widget row(String label, double v, Color c) => Row(
+          children: [
+            SizedBox(width: 74, child: Text(label, style: rowStyle)),
+            Expanded(
+              child: StatBar(ratio: v, color: c, height: 6),
+            ),
+          ],
+        );
+        return Semantics(
+          label: 'Estado ${vitalLabel(vital)}. Salud ${(ratio * 100).round()} %. Resistencia ${(stamina * 100).round()} %.',
+          child: GritPanel(
+            padding: const EdgeInsets.fromLTRB(14, 8, 12, 10),
+            accent: const Color(0xFF8E9295),
+            child: SizedBox(
+              height: height - 18,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('ESTADO', style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 2.6)),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, c) => Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned(
+                            left: 0,
+                            top: 2,
+                            child: EcgMonitor(ratio: ratio, width: c.maxWidth * 0.82, height: c.maxHeight - 4, showLabel: false),
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 1,
+                            child: Text(
+                              vitalLabel(vital),
+                              style: SuturaText.label.copyWith(fontSize: 12.5, letterSpacing: 2.2, color: vitalColor(vital)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  row('SALUD', ratio, Sutura.fine),
+                  const SizedBox(height: 6),
+                  row('RESISTENCIA', stamina, Sutura.signal),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -390,25 +853,23 @@ class SpeedLockBanner extends StatelessWidget {
       listenable: app.location,
       builder: (context, _) {
         if (!app.location.speedLocked) return const SizedBox.shrink();
-        return HoloIn(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: Sutura.danger.withValues(alpha: 0.16),
-              border: Border.all(color: Sutura.danger.withValues(alpha: 0.8)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.speed, size: 16, color: Sutura.danger),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'VELOCIDAD EXCESIVA · INTERACCIONES EN PAUSA',
-                    style: SuturaText.mono.copyWith(fontSize: 10.5, color: Sutura.danger, letterSpacing: 1.2),
-                  ),
+        return GritPanel(
+          padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+          background: const Color(0xEE2A0D0B),
+          border: Sutura.accent,
+          accent: Sutura.accent,
+          corners: null,
+          child: Row(
+            children: [
+              const Icon(Icons.speed, size: 17, color: Sutura.danger),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'VELOCIDAD EXCESIVA · INTERACCIONES EN PAUSA',
+                  style: SuturaText.label.copyWith(fontSize: 10.5, letterSpacing: 1.8, color: const Color(0xFFF2C9C5)),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -463,7 +924,7 @@ class _GnssSearchOverlayState extends State<GnssSearchOverlay> with SingleTicker
             opacity: searching ? 1 : 0,
             duration: Sutura.heavy,
             child: ColoredBox(
-              color: Sutura.void_.withValues(alpha: 0.78),
+              color: Sutura.void_.withValues(alpha: 0.82),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -475,8 +936,8 @@ class _GnssSearchOverlayState extends State<GnssSearchOverlay> with SingleTicker
                         builder: (context, _) => CustomPaint(painter: _SearchPainter(_c.value)),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    Text('BUSCANDO SEÑAL GNSS…', style: SuturaText.mono.copyWith(fontSize: 13, color: Sutura.signal, letterSpacing: 3)),
+                    const SizedBox(height: 20),
+                    const GrungeTitle('BUSCANDO SEÑAL GNSS…', size: 22, letterSpacing: 3, maxLines: 1),
                     const SizedBox(height: 8),
                     if (loc.error != null)
                       Padding(
@@ -484,11 +945,14 @@ class _GnssSearchOverlayState extends State<GnssSearchOverlay> with SingleTicker
                         child: Text(
                           locationErrorMessages[loc.error]!,
                           textAlign: TextAlign.center,
-                          style: SuturaText.bodyMid.copyWith(fontSize: 13),
+                          style: SuturaText.bodyMid.copyWith(fontSize: 14),
                         ),
                       )
                     else
-                      const MicroText('VITA-7 // TRIANGULANDO SATÉLITES'),
+                      Text(
+                        'VITA-7  //  TRIANGULANDO SATÉLITES',
+                        style: SuturaText.label.copyWith(fontSize: 10.5, letterSpacing: 3, color: Sutura.signal),
+                      ),
                   ],
                 ),
               ),
@@ -510,21 +974,33 @@ class _SearchPainter extends CustomPainter {
     final r = size.shortestSide / 2;
     for (var i = 0; i < 3; i++) {
       final k = (t + i / 3) % 1.0;
-      canvas.drawCircle(c, r * (0.25 + 0.75 * Sutura.scanCurve.transform(k)), Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = Sutura.signal.withValues(alpha: (1 - k) * 0.7));
+      canvas.drawCircle(
+        c,
+        r * (0.25 + 0.75 * Sutura.scanCurve.transform(k)),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = Sutura.signal.withValues(alpha: (1 - k) * 0.7),
+      );
     }
-    final hex = hexPath(c, 16);
-    canvas.drawPath(hex, Paint()..color = Sutura.surface2);
-    canvas.drawPath(hex, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..color = Sutura.signal);
+    canvas.drawCircle(c, 14, Paint()..color = Sutura.surface2);
+    canvas.drawCircle(
+      c,
+      14,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = const Color(0xFFF2F4F5),
+    );
+    canvas.drawCircle(c, 5, Paint()..color = const Color(0xFFF2F4F5));
     final a = t * 2 * math.pi;
-    canvas.drawLine(c, c + Offset(math.cos(a), math.sin(a)) * (r - 4), Paint()
-      ..color = Sutura.signal.withValues(alpha: 0.5)
-      ..strokeWidth = 1);
+    canvas.drawLine(
+      c,
+      c + Offset(math.cos(a), math.sin(a)) * (r - 4),
+      Paint()
+        ..color = Sutura.signal.withValues(alpha: 0.5)
+        ..strokeWidth = 1,
+    );
   }
 
   @override

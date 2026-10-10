@@ -74,30 +74,29 @@ class CombatArt {
     final plateF = _image(b, plateAsset);
     final cutF = _image(b, cutoutAsset(type));
     final plate = await plateF;
-    var cut = await cutF;
+    final loaded = await cutF;
     final hints = rigHints[type] ?? const RigHints();
-    CutoutRig? rig = cut == null ? null : await _analyze(cut, hints);
-    var fallback = false;
-    if (rig == null) {
-      cut?.dispose();
-      cut = ProceduralZombie(type).toImage();
-      fallback = true;
-      rig = await _analyze(cut, const RigHints());
+    final analyzed = loaded == null ? null : await _analyze(loaded, hints);
+    final ui.Image cut;
+    final CutoutRig rig;
+    if (loaded != null && analyzed != null) {
+      cut = loaded;
+      rig = analyzed;
+    } else {
+      // Silueta procedural: su geometría se conoce, no hace falta leer el alfa
+      // (todo sincrónico: funciona igual en tests sin E/S real).
+      loaded?.dispose();
+      final z = ProceduralZombie(type);
+      cut = z.toImage();
+      rig = z.rig();
     }
-    rig ??= CutoutRig(
-      size: Size(cut.width.toDouble(), cut.height.toDouble()),
-      body: Rect.fromLTWH(0, 0, cut.width.toDouble(), cut.height.toDouble()),
-      head: Rect.fromLTWH(cut.width * 0.35, 0, cut.width * 0.3, cut.height * 0.16),
-      feet: Offset(cut.width / 2, cut.height.toDouble()),
-      centroidX: cut.width / 2,
-    );
     return CombatArt._(
       type: type,
       plate: plate ?? buildProceduralBackdrop(const Size(720, 1280)),
       proceduralPlate: plate == null,
       plateHorizon: plate == null ? 0.42 : 0.39,
       cutout: cut,
-      fallbackCutout: fallback,
+      fallbackCutout: !identical(cut, loaded),
       rig: rig,
       fxAtlas: buildFxAtlas(),
       grain: buildGrain(),

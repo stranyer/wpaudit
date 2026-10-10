@@ -74,19 +74,23 @@ bool inBox(LatLng p, GeoBox b) => p.lat >= b.s && p.lat <= b.n && p.lng >= b.w &
 
 /// Candidato a llevar etiqueta (título + distancia) en el mapa.
 class LabelCandidate {
-  const LabelCandidate(this.id, this.position, this.distanceM, {this.weight = 1});
+  const LabelCandidate(this.id, this.position, this.distanceM, {this.weight = 1, this.width});
   final String id;
   final LatLng position;
   final double distanceM;
 
   /// Multiplicador de la distancia para ordenar (menor = más prioritario).
   final double weight;
+
+  /// Ancho de la etiqueta en píxeles (null = `boxW`).
+  final double? width;
 }
 
 /// Elige qué marcadores llevan etiqueta: el seleccionado siempre, después los
 /// más cercanos, salteando los que pisarían una etiqueta ya elegida en
 /// pantalla. Las etiquetas crecen hacia arriba y a la derecha del punto, con un
-/// tamaño de `boxW` x `boxH` píxeles. `bearingDeg` es el rumbo de la cámara.
+/// tamaño de `width` (o `boxW`) x `boxH` píxeles. `bearingDeg` es el rumbo de
+/// la cámara.
 /// Los que ya tenían etiqueta (`previous`) tienen una pequeña ventaja para que
 /// no parpadeen al moverse.
 Set<String> pickLabelled(
@@ -97,7 +101,7 @@ Set<String> pickLabelled(
   String? selectedId,
   Set<String> previous = const {},
   double boxW = 112,
-  double boxH = 64,
+  double boxH = 60,
 }) {
   if (candidates.isEmpty || max <= 0) return {};
   double score(LabelCandidate c) => c.distanceM * c.weight * (previous.contains(c.id) ? 0.8 : 1);
@@ -119,20 +123,21 @@ Set<String> pickLabelled(
   }
 
   final out = <String>{};
-  final boxes = <(double, double)>[];
+  final boxes = <(double, double, double)>[];
   for (final c in sorted) {
     if (out.length >= max && c.id != selectedId) break;
     final (x, y) = screen(c.position);
+    final w = c.width ?? boxW;
     var clash = false;
-    for (final (bx, by) in boxes) {
-      if ((x - bx).abs() < boxW && (y - by).abs() < boxH) {
+    for (final (bx, by, bw) in boxes) {
+      if (x < bx + bw && bx < x + w && (y - by).abs() < boxH) {
         clash = true;
         break;
       }
     }
     if (clash && c.id != selectedId) continue;
     out.add(c.id);
-    boxes.add((x, y));
+    boxes.add((x, y, w));
   }
   return out;
 }
