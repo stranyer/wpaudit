@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../audio/sfx.dart';
 import '../state/app_state.dart';
 import '../services/location/location_types.dart';
 import '../state/location_controller.dart';
@@ -46,6 +47,60 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   bool _inEncounter = false;
+  bool _inNode = false;
+  int _tab = 0;
+  Animation<double>? _routeAbove;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = app.ui.tab;
+    app.ui.addListener(_onUi);
+    _applyAmbience();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // La animación secundaria de esta ruta se mueve cuando se abre una pantalla
+    // completa encima (Nodo, Lore del Archivo…): ahí suena la apertura holográfica.
+    final above = ModalRoute.of(context)?.secondaryAnimation;
+    if (above != _routeAbove) {
+      _routeAbove?.removeStatusListener(_onRouteAbove);
+      _routeAbove = above?..addStatusListener(_onRouteAbove);
+    }
+  }
+
+  @override
+  void dispose() {
+    _routeAbove?.removeStatusListener(_onRouteAbove);
+    app.ui.removeListener(_onUi);
+    Sfx.ambience(null);
+    super.dispose();
+  }
+
+  void _onUi() {
+    if (app.ui.tab == _tab) return;
+    _tab = app.ui.tab;
+    if (!_inEncounter && !_inNode) _applyAmbience();
+  }
+
+  void _onRouteAbove(AnimationStatus status) {
+    // El combate tiene su propia entrada sonora.
+    if (status == AnimationStatus.forward && !_inEncounter) Sfx.play(SfxId.open, volume: 0.8);
+  }
+
+  /// Ambiente según la pestaña: la ciudad bajo la lluvia en el mapa; de fondo y
+  /// más baja en Maletín y Perfil; el interior del nodo en Red y Archivo.
+  void _applyAmbience() {
+    final (a, v) = switch (_tab) {
+      0 => (Ambience.map, 0.5),
+      2 => (Ambience.shelter, 0.35),
+      3 => (Ambience.shelter, 0.3),
+      _ => (Ambience.map, 0.22),
+    };
+    Sfx.ambience(a, volume: v);
+  }
 
   Future<void> _openEncounter() async {
     if (_inEncounter) return;
@@ -54,9 +109,16 @@ class _ShellState extends State<Shell> {
     _inEncounter = false;
     // Si la pantalla se cerró sin pasar por "volver al mapa", limpiar el combate.
     if (app.combat != null && app.outcome != null) app.leaveCombat();
+    if (mounted && !_inNode) _applyAmbience();
   }
 
-  void _openNode(String id) => Navigator.of(context).push(holoRoute<void>(NodeScreen(shelterId: id, onShowOnMap: _showOnMap)));
+  Future<void> _openNode(String id) async {
+    _inNode = true;
+    Sfx.ambience(Ambience.shelter, volume: 0.45);
+    await Navigator.of(context).push(holoRoute<void>(NodeScreen(shelterId: id, onShowOnMap: _showOnMap)));
+    _inNode = false;
+    if (mounted && !_inEncounter) _applyAmbience();
+  }
 
   /// Selecciona algo del mundo y vuelve al mapa (el mapa centra la cámara en la selección).
   void _showOnMap(String id) {
@@ -157,7 +219,10 @@ class _NavBar extends StatelessWidget {
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () {
-                          if (i != index) HapticFeedback.selectionClick();
+                          if (i != index) {
+                            HapticFeedback.selectionClick();
+                            Sfx.play(SfxId.tab, volume: 0.7);
+                          }
                           onTap(i);
                         },
                         child: _NavButton(item: it, active: i == index, badge: i == 3 ? unread : 0),

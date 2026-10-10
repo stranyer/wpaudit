@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../audio/sfx.dart';
 import '../../core/core.dart';
 import '../theme/tokens.dart';
 
@@ -324,7 +325,10 @@ class GritTabs extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
-                  if (i != index) HapticFeedback.selectionClick();
+                  if (i != index) {
+                    HapticFeedback.selectionClick();
+                    Sfx.play(SfxId.tab, volume: 0.6);
+                  }
                   onChanged(i);
                 },
                 child: AnimatedContainer(
@@ -673,7 +677,10 @@ class LineTabs extends StatelessWidget {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
-                    if (i != index) HapticFeedback.selectionClick();
+                    if (i != index) {
+                      HapticFeedback.selectionClick();
+                      Sfx.play(SfxId.tab, volume: 0.6);
+                    }
                     onChanged(i);
                   },
                   child: Padding(

@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../audio/sfx.dart';
 import '../theme/tokens.dart';
 
 enum ChamferTone { primary, neutral, danger, amber, ghost }
@@ -93,6 +94,7 @@ class _ChamferButtonState extends State<ChamferButton> {
           ? null
           : () {
               HapticFeedback.selectionClick();
+              Sfx.play(SfxId.tap, volume: 0.55);
               widget.onPressed!();
             },
       child: AnimatedContainer(

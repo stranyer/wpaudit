@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../audio/sfx.dart';
 import '../content/lore.dart';
 import '../core/core.dart';
 import '../data/game_repository.dart';
@@ -306,6 +307,8 @@ class AppState extends ChangeNotifier {
     if (reason != null) ui.toast('$reason · +$amount XP', ToastTone.good);
     if (r.levelsGained > 0) {
       HapticFeedback.heavyImpact();
+      // En combate suena la victoria (la pantalla de resultado muestra el grado).
+      if (combat == null) Sfx.play(SfxId.levelUp);
       ui.celebrate(Celebration('GRADO ${r.player.level}', 'Signos vitales restaurados. Capacidad del maletín ampliada.'));
     }
     return r.levelsGained;
@@ -345,6 +348,7 @@ class AppState extends ChangeNotifier {
     if (f == null) return false;
     final ok = world.scan(f.position, now);
     if (!ok) {
+      // El sonido de error lo pone el botón de escaneo (también cubre la falta de GPS).
       ui.toast('Escáner recargando…', ToastTone.warn);
       return false;
     }
@@ -394,6 +398,7 @@ class AppState extends ChangeNotifier {
     setPlayer(gain.player.copyWith(stats: gain.player.stats.copyWith(suppliesLooted: gain.player.stats.suppliesLooted + 1)));
     _markDepleted(spawn.id, spawn.expiresAt);
     HapticFeedback.lightImpact();
+    if (gain.added.isNotEmpty) Sfx.play(SfxId.loot);
     if (gain.added.isNotEmpty) ui.toast('Recuperado: ${describeItems(gain.added)}', ToastTone.loot);
     if (gain.overflow.isNotEmpty) ui.toast('Maletín lleno: quedó ${describeItems(gain.overflow)}', ToastTone.warn);
     awardXp(def.xp, null);
@@ -433,6 +438,8 @@ class AppState extends ChangeNotifier {
     signalsAnswered++;
     _markDepleted(signal.id, signal.expiresAt);
     HapticFeedback.mediumImpact();
+    Sfx.play(SfxId.signal);
+    if (gain.added.isNotEmpty) Future.delayed(const Duration(milliseconds: 600), () => Sfx.play(SfxId.loot));
     ui.toast('Señal respondida', ToastTone.network);
     if (gain.added.isNotEmpty) ui.toast('Recuperado: ${describeItems(gain.added)}', ToastTone.loot);
     if (gain.overflow.isNotEmpty) ui.toast('Maletín lleno: quedó ${describeItems(gain.overflow)}', ToastTone.warn);
@@ -536,6 +543,7 @@ class AppState extends ChangeNotifier {
     if (p == null) return;
     final next = consumeItem(p, id);
     if (next == null) return;
+    Sfx.play(SfxId.heal);
     setPlayer(next);
     final dh = (next.health - p.health).round();
     final ds = (next.stamina - p.stamina).round();
@@ -671,11 +679,13 @@ class AppState extends ChangeNotifier {
       stats: current.stats.copyWith(resourcesDonated: current.stats.resourcesDonated + total),
     ));
     world.upsertShelter(r.shelter!);
+    Sfx.play(SfxId.deliver);
     ui.toast('Entregado: ${describeItems(r.accepted)}', ToastTone.loot);
     awardXp(total * gameConfig.xp.donatePerUnit, null);
     if (r.leveledUp) {
       final def = shelterLevelDef(r.shelter!.level);
       HapticFeedback.heavyImpact();
+      Sfx.play(SfxId.levelUp);
       ui.celebrate(Celebration('ANTENA NIVEL ${r.shelter!.level}', '${r.shelter!.name} · ${def.name}'));
     }
   }

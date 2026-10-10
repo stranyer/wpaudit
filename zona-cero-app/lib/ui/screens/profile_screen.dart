@@ -3,6 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../audio/audio_prefs.dart';
+import '../../audio/sfx.dart';
 import '../../core/core.dart';
 import '../../state/app_state.dart';
 import '../../state/location_controller.dart';
@@ -386,10 +388,120 @@ class _SettingsState extends State<_Settings> {
           expand: true,
           onPressed: _reset,
         ),
+        const SizedBox(height: 16),
+        const _SoundSettings(),
         const SizedBox(height: 14),
         Text(
           'Privacidad: tu ubicación exacta nunca sale del teléfono. A la red solo llega una posición aproximada (grilla de 250 m) y los nodos se ubican en calles públicas.',
           style: SuturaText.caption.copyWith(color: Sutura.textLow, fontWeight: FontWeight.w500, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+/// SONIDO: encendido/apagado y volumen general. Se guarda en `app.store` (`zc:audio`).
+class _SoundSettings extends StatefulWidget {
+  const _SoundSettings();
+
+  @override
+  State<_SoundSettings> createState() => _SoundSettingsState();
+}
+
+class _SoundSettingsState extends State<_SoundSettings> {
+  static const _steps = 20;
+
+  void _save() => unawaited(AudioPrefs.save(app.store));
+
+  void _toggle() {
+    setState(() => Sfx.enabled = !Sfx.enabled);
+    _save();
+    // Confirmación audible al volver a encender (al apagar, silencio).
+    if (Sfx.enabled) Sfx.play(SfxId.tab, volume: 0.8);
+  }
+
+  void _setVolume(double v) {
+    final snapped = (v.clamp(0.0, 1.0) * _steps).round() / _steps;
+    if (snapped != Sfx.master) setState(() => Sfx.master = snapped);
+  }
+
+  void _commit() {
+    _save();
+    Sfx.play(SfxId.tab, volume: 0.8);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = Sfx.enabled;
+    final pct = (Sfx.master * 100).round();
+    final color = on ? Sutura.signal : Sutura.textLow;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DataRow2('Sonido', on ? 'ACTIVADO' : 'SILENCIADO', valueColor: color),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            SizedBox(
+              width: 150,
+              child: ChamferButton(
+                label: on ? 'Silenciar' : 'Activar',
+                icon: on ? Icons.volume_off_outlined : Icons.volume_up_outlined,
+                tone: on ? ChamferTone.ghost : ChamferTone.neutral,
+                dense: true,
+                expand: true,
+                onPressed: _toggle,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, box) => Semantics(
+                  slider: true,
+                  label: 'Volumen',
+                  value: '$pct%',
+                  increasedValue: '${math.min(100, pct + 5)}%',
+                  decreasedValue: '${math.max(0, pct - 5)}%',
+                  onIncrease: () {
+                    _setVolume(Sfx.master + 1 / _steps);
+                    _commit();
+                  },
+                  onDecrease: () {
+                    _setVolume(Sfx.master - 1 / _steps);
+                    _commit();
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (d) => _setVolume(d.localPosition.dx / box.maxWidth),
+                    onTapUp: (_) => _commit(),
+                    onHorizontalDragUpdate: (d) => _setVolume(d.localPosition.dx / box.maxWidth),
+                    onHorizontalDragEnd: (_) => _commit(),
+                    child: SizedBox(
+                      height: 50,
+                      child: Opacity(
+                        opacity: on ? 1 : 0.45,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                const MicroText('volumen'),
+                                const Spacer(),
+                                Text('$pct%', style: SuturaText.mono.copyWith(fontSize: 12, color: color)),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            SegBar(value: Sfx.master, max: 1, segments: _steps, color: color, height: 12),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
