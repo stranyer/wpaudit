@@ -41,8 +41,13 @@ terminales VITA-7. Todo el texto del juego está en español rioplatense.
    (rombos rojos), suministros (cuadros ámbar) y nodos (hexágonos).
 3. Acercate a menos de **40 m** (más tolerancia por la precisión del GPS) y tocá el objetivo:
    - **Recuperar** un suministro (cuesta resistencia, llena el maletín).
-   - **Enfrentar** un infectado: combate por turnos con puntería. Mantené para apuntar, soltá
-     para atacar; un disparo preciso a la cabeza es crítico garantizado.
+   - **Enfrentar** un infectado: combate por turnos con puntería. Mantené apretado para que la
+     mira se cierre y soltá para atacar. Con la mira cerrada sobre la cabeza el golpe es crítico
+     garantizado; si seguís manteniendo con un arma cuerpo a cuerpo, la mira se pone ámbar
+     (*CARGADO*) y sale un golpe fuerte. *Cubrirse*, *Objetos* (botiquín, raciones) y *Huir*
+     completan el turno. Cada infectado tiene su mecánica: el Corredor puede atacar dos veces,
+     el Chillón grita y se recupera, el Hinchado explota al morir y el Bruto prepara
+     embestidas (cubrite en el momento justo).
 4. **Maletín**: inventario en grilla (cada objeto ocupa su huella), equipo y **taller**.
 5. **Red**: instalá tu **nodo** (madera + metal), sumate a una facción, mirá el ranking y los
    enlaces cercanos (siempre con posición aproximada).
@@ -69,7 +74,8 @@ Requisitos: **Flutter 3.47+** (Dart 3.13+), Android SDK 36 y JDK 21.
 cd zona-cero-app
 flutter pub get
 flutter run                 # celular Android conectado por USB (depuración activada)
-flutter build apk --release # APK instalable en build/app/outputs/flutter-apk/
+flutter build apk --release --split-per-abi
+# → build/app/outputs/flutter-apk/app-arm64-v8a-release.apk (celulares actuales, ~35 MB)
 ```
 
 Para probar la interfaz en el navegador (el GPS real necesita `localhost` o HTTPS):

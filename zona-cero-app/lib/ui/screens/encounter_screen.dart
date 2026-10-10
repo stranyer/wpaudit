@@ -522,6 +522,8 @@ class _EncounterScreenState extends State<EncounterScreen> {
     final items = usableItems(s);
     final controls = _canAct && !_aiming;
     final weaponW = math.min(200.0, size.width * 0.52);
+    // En pantallas angostas los íconos no entran junto a la etiqueta.
+    final narrow = size.width < 380;
 
     return Stack(
       fit: StackFit.expand,
@@ -719,7 +721,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
                   child: ChamferButton(
                     label: 'Cubrirse',
                     sublabel: _charging ? '¡AHORA!' : '−60% DAÑO',
-                    icon: Icons.shield_outlined,
+                    icon: narrow ? null : Icons.shield_outlined,
                     dense: true,
                     height: buttonsH,
                     expand: true,
@@ -732,7 +734,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
                   child: ChamferButton(
                     label: 'Objetos',
                     sublabel: items.isEmpty ? 'SIN OBJETOS' : '${items.length} DISP.',
-                    icon: Icons.medical_services_outlined,
+                    icon: narrow ? null : Icons.medical_services_outlined,
                     dense: true,
                     height: buttonsH,
                     expand: true,
@@ -748,7 +750,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
                     child: ChamferButton(
                       label: 'Huir',
                       sublabel: '${(_fleeChance(s) * 100).round()} %',
-                      icon: Icons.directions_run,
+                      icon: narrow ? null : Icons.directions_run,
                       dense: true,
                       height: buttonsH,
                       expand: true,
