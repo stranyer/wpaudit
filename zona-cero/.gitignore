@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.log
+# El lockfile de este proyecto sí se versiona (el .gitignore raíz lo excluye).
+!package-lock.json
+# Android (Capacitor)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/src/main/assets/public/
+android/capacitor-cordova-android-plugins/

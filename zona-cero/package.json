@@ -1,0 +1,45 @@
+{
+  "name": "zona-cero",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Zona Cero — juego de supervivencia zombie con GPS",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "npm run build && cap sync android && cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/geolocation": "^8.2.3",
+    "@fontsource/black-ops-one": "^5.3.0",
+    "@fontsource/oswald": "^5.3.0",
+    "@supabase/supabase-js": "^2.117.3",
+    "lucide-react": "^1.54.0",
+    "maplibre-gl": "^6.13.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Zona Cero",
+  "short_name": "Zona Cero",
+  "description": "Juego de supervivencia zombie con GPS",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0b0d0b",
+  "theme_color": "#0b0d0b",
+  "lang": "es",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b0d0b"/>
+  <path d="M256 56l173 100v200L256 456 83 356V156z" fill="#1b2112" stroke="#6f8a4a" stroke-width="14"/>
+  <circle cx="256" cy="256" r="38" fill="#c8742c"/>
+  <g fill="none" stroke="#c8742c" stroke-width="26" stroke-linecap="round">
+    <path d="M256 178a78 78 0 0 1 68 39"/>
+    <path d="M188 217a78 78 0 0 1 68-39"/>
+    <path d="M324 295a78 78 0 0 1-68 39"/>
+    <path d="M256 334a78 78 0 0 1-68-39"/>
+  </g>
+  <text x="256" y="430" font-family="Impact, sans-serif" font-size="64" fill="#dfe3d4" text-anchor="middle" letter-spacing="6">Z·0</text>
+</svg>
