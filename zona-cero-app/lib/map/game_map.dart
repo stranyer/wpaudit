@@ -217,7 +217,8 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
         compassEnabled: false,
         tiltGesturesEnabled: false,
         rotateGesturesEnabled: true,
-        doubleClickZoomEnabled: false,
+        // En web el doble clic es el "mantener presionado" (teletransporte demo).
+        doubleClickZoomEnabled: kIsWeb ? false : null,
         minMaxZoomPreference: const ml.MinMaxZoomPreference(13, 19.5),
         annotationOrder: const [],
         logoEnabled: false,
@@ -351,7 +352,7 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
       const ml.LineLayerProperties(
         lineColor: signal,
         lineWidth: 1,
-        lineOpacity: ['case', ['get', 'own'], 0.8, 0.28],
+        lineOpacity: ['case', ['get', 'own'], 0.85, 0.42],
         lineDasharray: [2, 3],
       ),
       enableInteraction: false,
@@ -482,9 +483,20 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
     return _diff(_Src.grid, cell, () => gridCollection(p));
   }
 
+  /// El campo de contagio se calcula en otro isolate (10-30 ms en gama media);
+  /// la fuente se actualiza al terminar si las zonas no cambiaron entretanto.
   Json? _buildContagion() {
     final zones = app.world.zones;
-    return _diff(_Src.contagion, contagionKey(zones), () => contagionCollection(zones));
+    final key = contagionKey(zones);
+    if (_sig[_Src.contagion] == key) return null;
+    _sig[_Src.contagion] = key;
+    final gen = _styleGen;
+    compute(contagionCollection, zones).then((data) {
+      final c = _map;
+      if (!mounted || c == null || gen != _styleGen || _sig[_Src.contagion] != key) return;
+      c.setGeoJsonSource(_Src.contagion, data).catchError((Object e) => debugPrint('[Zona Cero] contagio: $e'));
+    }).catchError((Object e) => debugPrint('[Zona Cero] contagio: $e'));
+    return null;
   }
 
   Json? _buildSpawns(int now) {
@@ -862,7 +874,7 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
     final now = _now;
     final minGap = _emptyQueries >= 3 ? 10000 : 1500;
     if (!force && now - _lastPlaceAt < minGap) return;
-    if (force && now - _lastPlaceAt < 400) return;
+    if (force && now - _lastPlaceAt < (_emptyQueries >= 3 ? 10000 : 400)) return;
     _placing = true;
     try {
       final region = await c.getVisibleRegion();
@@ -885,10 +897,14 @@ class _GameMapState extends State<GameMap> with SingleTickerProviderStateMixin {
         return;
       }
       _emptyQueries = 0;
-      debugPrint('[Zona Cero] TEMP-LOG placement: ${data.walkable.length} segmentos, ${data.excluded.length} excluidos');
       _placement = data;
       _placementCenter = around;
       app.world.applyPlacement(data, inView: inView);
+    } on PlacementNotReady {
+      // Tiles todavía cargando: reintentar en un momento.
+      _lastPlaceAt = 0;
+      _placeDebounce?.cancel();
+      _placeDebounce = Timer(const Duration(milliseconds: 1200), () => unawaited(_maybePlace(force: true)));
     } catch (e) {
       debugPrint('[Zona Cero] Ubicación en calles no disponible: $e');
     } finally {

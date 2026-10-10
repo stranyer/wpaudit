@@ -39,22 +39,28 @@ abstract final class MapIcons {
   static final Map<String, Uint8List> _cache = {};
   static double _cacheScale = 0;
 
-  /// Dibuja (o reutiliza) y registra todos los íconos en el estilo actual.
-  static Future<void> register(ml.MapLibreMapController c, double dpr) async {
+  /// Dibuja (o reutiliza) todos los íconos como PNG, por nombre.
+  static Future<Map<String, Uint8List>> renderAll(double dpr) async {
     final scale = renderScale(dpr);
     if (scale != _cacheScale) {
       _cache.clear();
       _cacheScale = scale;
     }
     final specs = _specs();
-    // Primero se dibuja todo (en paralelo) y después se registra.
     await Future.wait([
       for (final e in specs.entries)
         if (!_cache.containsKey(e.key))
           _render(e.value.$1, e.value.$2, scale, e.value.$3).then((b) => _cache[e.key] = b),
     ]);
-    for (final name in specs.keys) {
-      await c.addImage(name, _cache[name]!);
+    return {for (final name in specs.keys) name: _cache[name]!};
+  }
+
+  /// Registra todos los íconos en el estilo actual (hay que repetirlo si el
+  /// estilo se recarga).
+  static Future<void> register(ml.MapLibreMapController c, double dpr) async {
+    final all = await renderAll(dpr);
+    for (final e in all.entries) {
+      await c.addImage(e.key, e.value);
     }
   }
 

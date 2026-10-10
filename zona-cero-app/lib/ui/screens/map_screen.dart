@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../map/game_map.dart';
 import '../../map/widgets/hud.dart';
 import '../../map/widgets/joystick.dart';
+import '../../map/widgets/pointer_shield.dart';
 import '../../map/widgets/scan_button.dart';
 import '../../map/widgets/target_panel.dart';
 import '../../state/app_state.dart';
@@ -75,14 +76,14 @@ class _MapScreenState extends State<MapScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const ObjectiveLine(),
+                const PointerShield(child: ObjectiveLine()),
                 const SizedBox(height: 6),
                 IgnorePointer(child: ToastFeed(ui: app.ui)),
               ],
             ),
           ),
           // Arriba a la derecha: red, hora y precisión.
-          Positioned(top: pad.top + 10, right: 14, child: const StatusCluster()),
+          Positioned(top: pad.top + 10, right: 14, child: const PointerShield(child: StatusCluster())),
           // Bloqueo por velocidad.
           Positioned(top: pad.top + 62, left: 14, right: 14, child: const IgnorePointer(child: SpeedLockBanner())),
           // Abajo: HUD o ficha del objetivo.
@@ -100,10 +101,9 @@ class _MapScreenState extends State<MapScreen> {
                   switchInCurve: Sutura.easeIn,
                   switchOutCurve: Sutura.easeOut,
                   child: selected
-                      ? TargetPanel(
+                      ? PointerShield(
                           key: const ValueKey('target'),
-                          onOpenEncounter: widget.onOpenEncounter,
-                          onOpenNode: widget.onOpenNode,
+                          child: TargetPanel(onOpenEncounter: widget.onOpenEncounter, onOpenNode: widget.onOpenNode),
                         )
                       : const _BottomHud(key: ValueKey('hud')),
                 );
@@ -111,38 +111,83 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           // Controles de cámara y joystick (se ocultan con la ficha abierta).
-          Positioned.fill(
-            child: ListenableBuilder(
-              listenable: Listenable.merge([app.world, app.location]),
-              builder: (context, _) {
-                final panel = app.world.selectedId != null;
-                final demo = app.location.mode == LocationMode.demo && app.location.demo != null;
-                return Stack(
-                  children: [
-                    if (!panel)
-                      Positioned(right: 14, bottom: pad.bottom + 150, child: MapCameraButtons(camera: _camera)),
-                    if (demo && !panel)
-                      Positioned(
-                        left: 14,
-                        bottom: pad.bottom + 150,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const IgnorePointer(child: MicroText('SIM · MANTENÉ PRESIONADO EL MAPA PARA SALTAR')),
-                            const SizedBox(height: 6),
-                            DemoJoystick(bearingOf: () => _camera.bearing),
-                          ],
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
+          Positioned.fill(child: _SideControls(camera: _camera, bottom: pad.bottom + 150)),
           const Positioned.fill(child: GnssSearchOverlay()),
         ],
       ),
+    );
+  }
+}
+
+/// Botones de cámara y joystick. Solo se reconstruye cuando cambia si hay
+/// ficha abierta o si está el modo simulación (no en cada lectura de GPS).
+class _SideControls extends StatefulWidget {
+  const _SideControls({required this.camera, required this.bottom});
+
+  final GameMapController camera;
+  final double bottom;
+
+  @override
+  State<_SideControls> createState() => _SideControlsState();
+}
+
+class _SideControlsState extends State<_SideControls> {
+  bool _panel = false;
+  bool _demo = false;
+
+  @override
+  void initState() {
+    super.initState();
+    app.world.addListener(_sync);
+    app.location.addListener(_sync);
+    _read();
+  }
+
+  @override
+  void dispose() {
+    app.world.removeListener(_sync);
+    app.location.removeListener(_sync);
+    super.dispose();
+  }
+
+  bool _read() {
+    final panel = app.world.selectedId != null;
+    final demo = app.location.mode == LocationMode.demo && app.location.demo != null;
+    final changed = panel != _panel || demo != _demo;
+    _panel = panel;
+    _demo = demo;
+    return changed;
+  }
+
+  void _sync() {
+    if (mounted && _read()) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_panel) return const SizedBox.shrink();
+    return Stack(
+      children: [
+        Positioned(
+          right: 14,
+          bottom: widget.bottom,
+          child: PointerShield(child: MapCameraButtons(camera: widget.camera)),
+        ),
+        if (_demo)
+          Positioned(
+            left: 14,
+            bottom: widget.bottom,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const IgnorePointer(child: MicroText('SIM · MANTENÉ PRESIONADO EL MAPA PARA SALTAR')),
+                const SizedBox(height: 6),
+                PointerShield(child: DemoJoystick(bearingOf: () => widget.camera.bearing)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -155,11 +200,11 @@ class _BottomHud extends StatelessWidget {
     return const Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Expanded(child: Align(alignment: Alignment.bottomLeft, child: VitalsPanel())),
+        Expanded(child: Align(alignment: Alignment.bottomLeft, child: PointerShield(child: VitalsPanel()))),
         SizedBox(width: 6),
-        ScanButton(),
+        PointerShield(child: ScanButton()),
         SizedBox(width: 6),
-        Expanded(child: Align(alignment: Alignment.bottomRight, child: WeaponPanel())),
+        Expanded(child: Align(alignment: Alignment.bottomRight, child: PointerShield(child: WeaponPanel()))),
       ],
     );
   }

@@ -401,10 +401,16 @@ Rect? alphaBodyBox({
   return Rect.fromLTRB(minX.toDouble(), minY.toDouble(), (maxX + step).toDouble(), bottom);
 }
 
-/// Caja de la cabeza en UN cuadro, a partir del alfa: se recorre la silueta
-/// desde arriba y la cabeza termina donde la fila se ensancha de golpe (los
-/// hombros). Se descarta el último [neckCut] (cuello). Devuelve `null` si el
-/// cuadro está vacío.
+/// Caja de la cabeza en UN cuadro, a partir del alfa.
+///
+/// Se recorre la silueta desde arriba siguiendo el tramo opaco continuo que
+/// contiene el centro de la cabeza (así una mano a la misma altura no cuenta).
+/// La cabeza termina en la primera fila (pasado [minFrac] del cuadro) que es
+/// más de [widen] veces más ancha que el máximo de las filas anteriores con
+/// [lag] filas de retraso: detecta los hombros aunque se ensanchen de a poco,
+/// sin confundir la coronilla redondeada. Se descarta el último [neckCut]
+/// (cuello) y el ancho se mide solo en las filas que quedan. Devuelve `null`
+/// si el cuadro está vacío.
 Rect? alphaHeadBox({
   required List<int> rgba,
   required int imageWidth,
@@ -414,48 +420,99 @@ Rect? alphaHeadBox({
   int threshold = 96,
   double minFrac = 0.05,
   double maxFrac = 0.16,
-  double widen = 1.45,
+  double widen = 1.25,
   double neckCut = 0.12,
+  int lag = 4,
+  int gap = 2,
 }) {
   final fx = frame.left.toInt();
   final fy = frame.top.toInt();
-  (int, int)? extent(int y) {
-    final row = (fy + y) * imageWidth + fx;
+  bool on(int x, int y) {
+    final i = ((fy + y) * imageWidth + fx + x) * 4 + 3;
+    return i >= 0 && i < rgba.length && rgba[i] >= threshold;
+  }
+
+  (int, int)? runAt(int y, int cx) {
+    var c = -1;
+    if (on(cx, y)) {
+      c = cx;
+    } else {
+      for (var d = 1; d < 12 && c < 0; d++) {
+        if (cx - d >= 0 && on(cx - d, y)) {
+          c = cx - d;
+        } else if (cx + d < frameWidth && on(cx + d, y)) {
+          c = cx + d;
+        }
+      }
+    }
+    if (c < 0) return null;
+    var lo = c, miss = 0;
+    for (var x = c - 1; x >= 0; x--) {
+      if (on(x, y)) {
+        lo = x;
+        miss = 0;
+      } else if (++miss > gap) {
+        break;
+      }
+    }
+    var hi = c;
+    miss = 0;
+    for (var x = c + 1; x < frameWidth; x++) {
+      if (on(x, y)) {
+        hi = x;
+        miss = 0;
+      } else if (++miss > gap) {
+        break;
+      }
+    }
+    return (lo, hi);
+  }
+
+  var top = -1, cx = 0;
+  for (var y = 0; y < frameHeight && top < 0; y++) {
     var lo = -1, hi = -1;
     for (var x = 0; x < frameWidth; x++) {
-      final i = (row + x) * 4 + 3;
-      if (i < rgba.length && rgba[i] >= threshold) {
+      if (on(x, y)) {
         if (lo < 0) lo = x;
         hi = x;
       }
     }
-    return lo < 0 ? null : (lo, hi);
-  }
-
-  var top = -1;
-  for (var y = 0; y < frameHeight; y++) {
-    if (extent(y) != null) {
+    if (lo >= 0) {
       top = y;
-      break;
+      cx = (lo + hi) ~/ 2;
     }
   }
   if (top < 0) return null;
   final minH = (minFrac * frameHeight).round();
   final maxH = (maxFrac * frameHeight).round();
-  var minX = frameWidth, maxX = -1, maxW = 0, bottom = top;
+  final rows = <(int, int, int)>[]; // (y, lo, hi)
   for (var y = top; y < math.min(frameHeight, top + maxH); y++) {
-    final e = extent(y);
-    if (e == null) continue;
-    final w = e.$2 - e.$1 + 1;
-    if (y - top >= minH && maxW > 0 && w > widen * maxW) break;
-    if (w > maxW) maxW = w;
-    if (e.$1 < minX) minX = e.$1;
-    if (e.$2 > maxX) maxX = e.$2;
-    bottom = y;
+    final r = runAt(y, cx);
+    if (r == null) {
+      if (y - top >= minH) break;
+      continue;
+    }
+    final w = r.$2 - r.$1 + 1;
+    if (y - top >= minH) {
+      var ref = 0;
+      for (final q in rows) {
+        if (q.$1 >= top + minH ~/ 2 && q.$1 <= y - lag) ref = math.max(ref, q.$3 - q.$2 + 1);
+      }
+      if (ref > 0 && w > widen * ref) break;
+    }
+    rows.add((y, r.$1, r.$2));
+    cx = (r.$1 + r.$2) ~/ 2;
+  }
+  if (rows.isEmpty) return null;
+  final keepTo = top + (rows.last.$1 - top + 1) * (1 - neckCut);
+  var minX = frameWidth, maxX = -1;
+  for (final r in rows) {
+    if (r.$1 > keepTo) break;
+    if (r.$2 < minX) minX = r.$2;
+    if (r.$3 > maxX) maxX = r.$3;
   }
   if (maxX < 0) return null;
-  final h = (bottom - top + 1) * (1 - neckCut);
-  return Rect.fromLTWH(minX.toDouble(), top.toDouble(), (maxX - minX + 1).toDouble(), h);
+  return Rect.fromLTRB(minX.toDouble(), top.toDouble(), (maxX + 1).toDouble(), keepTo);
 }
 
 // ---------------------------------------------------------------------------

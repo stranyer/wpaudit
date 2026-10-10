@@ -36,7 +36,8 @@ class _DemoJoystickState extends State<DemoJoystick> with SingleTickerProviderSt
   @override
   void dispose() {
     _spring.dispose();
-    app.location.demo?.setVelocity(0, 0);
+    // Solo frenar si el joystick estaba manejando (no cortar un "caminar hasta acá").
+    if (_active) app.location.demo?.setVelocity(0, 0);
     super.dispose();
   }
 

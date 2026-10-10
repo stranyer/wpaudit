@@ -124,7 +124,32 @@ class WorldController extends ChangeNotifier {
 
   void _applyPlacementIfPossible() {
     final data = placementSource?.call();
-    if (data != null && data.walkable.isNotEmpty) applyPlacement(data);
+    if (data == null || data.walkable.isEmpty) return;
+    // Solo se ubican los spawns dentro del área que cubren los datos de calles
+    // (con margen); los de afuera esperan a la próxima consulta del mapa en vez
+    // de descartarse por falta de datos.
+    final box = _coverageOf(data);
+    applyPlacement(data, inView: (p) => p.lat >= box.s && p.lat <= box.n && p.lng >= box.w && p.lng <= box.e);
+  }
+
+  PlacementData? _coverageData;
+  ({double s, double w, double n, double e}) _coverage = (s: 0, w: 0, n: 0, e: 0);
+
+  ({double s, double w, double n, double e}) _coverageOf(PlacementData data) {
+    if (identical(data, _coverageData)) return _coverage;
+    var s = 90.0, w = 180.0, n = -90.0, e = -180.0;
+    for (final (a, b) in data.walkable) {
+      for (final p in [a, b]) {
+        if (p.lat < s) s = p.lat;
+        if (p.lat > n) n = p.lat;
+        if (p.lng < w) w = p.lng;
+        if (p.lng > e) e = p.lng;
+      }
+    }
+    // Margen hacia adentro (~60 m): cerca del borde faltan calles vecinas.
+    const m = 0.00055;
+    _coverageData = data;
+    return _coverage = (s: s + m, w: w + m, n: n - m, e: e - m);
   }
 
   /// Spawns que se dibujan: si hay datos de calles, solo los ya ubicados.

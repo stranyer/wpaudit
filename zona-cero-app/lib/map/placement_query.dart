@@ -85,11 +85,18 @@ Future<PlacementData?> queryPlacementData(
   return PlacementData(walkable: walkable, excluded: excluded);
 }
 
+/// El estilo todavía está cargando tiles (en web `querySourceFeatures` lo
+/// rechaza): conviene reintentar en un momento.
+class PlacementNotReady implements Exception {
+  const PlacementNotReady();
+}
+
 Future<List> _query(ml.MapLibreMapController map, String layer, List<Object>? filter) async {
   try {
     return await map.querySourceFeatures(SuturaMapStyle.source, layer, filter);
   } catch (e) {
-    if (filter == null || '$e'.contains('STYLE_NOT_READY')) {
+    if ('$e'.contains('STYLE_NOT_READY')) throw const PlacementNotReady();
+    if (filter == null) {
       debugPrint('[Zona Cero] querySourceFeatures($layer) falló: $e');
       return const [];
     }

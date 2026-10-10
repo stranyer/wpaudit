@@ -39,13 +39,13 @@ class TurnPlan {
 abstract final class TurnTiming {
   static const int playerStep = 300;
   static const int killStep = 240;
-  static const int pause = 450;
+  static const int pause = 500;
   static const int minWindup = 200;
   static const int maxWindup = 480;
   static const int recover = 380;
   static const int zombieStep = 520;
   static const int downDelay = 260;
-  static const int tail = 280;
+  static const int tail = 300;
 }
 
 /// Planifica un turno. `windupMs` devuelve cuánto tarda en pegar un ataque

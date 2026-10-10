@@ -5,7 +5,8 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/painting.dart';
+import 'package:flutter/animation.dart' show Curves;
+import 'package:flutter/rendering.dart';
 
 import '../core/types.dart';
 import 'combat_manifest.dart';
@@ -261,7 +262,7 @@ class ProceduralZombie {
       c.drawCircle(_headC.translate(6, 0), 1.8, _eye);
     }
     if (flash > 0) {
-      final a = (flash.clamp(0.0, 1.0) * 230).round();
+      final a = (flash.clamp(0.0, 1.0) * 150).round();
       _overlay.color = flashRed ? Color.fromARGB(a, 255, 70, 70) : Color.fromARGB(a, 240, 248, 250);
       _silhouette(c, _overlay, armL, armR);
     }

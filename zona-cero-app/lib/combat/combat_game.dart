@@ -6,11 +6,13 @@
 // pantalla (luz, viñetas, retícula) no se mueven con la cámara.
 
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/animation.dart' show Curves;
+import 'package:flutter/rendering.dart' hide Matrix4;
 import 'package:flutter/services.dart' show AssetBundle;
 
 import '../core/types.dart';
@@ -24,10 +26,12 @@ import 'fx_pool.dart';
 enum AimStyle { melee, firearm }
 
 class CombatStageGame extends FlameGame {
-  CombatStageGame({required this.zombieType, AssetBundle? bundle, this.onAimSignal, this.onReady}) : _bundle = bundle;
+  CombatStageGame({required this.zombieType, this.bundle, this.onAimSignal, this.onReady});
 
   final ZombieTypeId zombieType;
-  final AssetBundle? _bundle;
+
+  /// Bundle de assets (por defecto `rootBundle`; los tests pasan uno propio).
+  final AssetBundle? bundle;
 
   /// Umbrales de la retícula (para hápticos): cerrada, cargada.
   final void Function(AimSignal signal)? onAimSignal;
@@ -35,7 +39,7 @@ class CombatStageGame extends FlameGame {
 
   CombatArt? _art;
   CombatArt? get art => _art;
-  bool get ready => _art != null;
+  bool get artReady => _art != null;
 
   StageLayout _layout = const StageLayout(view: Size.zero, bgSize: Size(720, 1280), scale: 1, offset: Offset.zero);
   StageLayout get layout => _layout;
@@ -67,7 +71,7 @@ class CombatStageGame extends FlameGame {
 
   @override
   Future<void> onLoad() async {
-    final art = await CombatArt.load(zombieType, bundle: _bundle);
+    final art = await CombatArt.load(zombieType, bundle: bundle);
     _art = art;
     _zombie = _ZombieLayer(art);
     _fx = _FxLayer(art.fxAtlas);
@@ -88,10 +92,10 @@ class CombatStageGame extends FlameGame {
   }
 
   @override
-  void onRemove() {
+  void onDispose() {
     _art?.dispose();
     _art = null;
-    super.onRemove();
+    super.onDispose();
   }
 
   void _relayout() {
@@ -114,7 +118,9 @@ class CombatStageGame extends FlameGame {
     if (_fleeT >= 0) _fleeT = math.min(1, _fleeT + d / 0.75);
     if (_downT >= 0) _downT = math.min(1, _downT + d / 1.1);
     if (aim.active) {
-      final s = aim.advance(d * 1000);
+      // La retícula usa el tiempo real (aunque se pierdan cuadros, el ritmo
+      // de cierre no cambia).
+      final s = aim.advance(dt.clamp(0.0, 0.25) * 1000);
       if (s != AimSignal.none) onAimSignal?.call(s);
     }
     super.update(d);
@@ -145,6 +151,7 @@ class CombatStageGame extends FlameGame {
     if (art == null) return Rect.zero;
     final hf = _zombie.headInFrame();
     if (hf == null) return headRectOf(bodyRect);
+    if (hf.isEmpty) return Rect.zero; // cabeza oculta: sin zona de cabeza
     return rectToView(frameBoxToScreen(hf, art.frameSize, _frame));
   }
 
@@ -362,15 +369,16 @@ class _Backdrop extends Component with HasGameReference<CombatStageGame> {
 
 class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
   _ZombieLayer(this.art) {
+    // Destello de impacto: tinte parcial (el detalle del sprite se sigue viendo).
     for (var i = 0; i < 8; i++) {
-      final a = ((i + 1) * 30).clamp(0, 240);
+      final a = (i + 1) * 20; // hasta ~63 %
       _white.add(Paint()
         ..colorFilter = const ColorFilter.mode(Color(0xFFF2FAFB), BlendMode.srcIn)
         ..color = Color.fromARGB(a, 255, 255, 255)
         ..filterQuality = FilterQuality.medium);
       _red.add(Paint()
         ..colorFilter = const ColorFilter.mode(Color(0xFFFF4A52), BlendMode.srcIn)
-        ..color = Color.fromARGB(a, 255, 255, 255)
+        ..color = Color.fromARGB((a * 0.85).round(), 255, 255, 255)
         ..filterQuality = FilterQuality.medium);
       _glow.add(Paint()
         ..colorFilter = const ColorFilter.mode(Color(0xFFEE3B45), BlendMode.srcIn)
@@ -412,7 +420,7 @@ class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
     if (r == ZombieAnim.idle && a != ZombieAnim.idle) {
       _emu = a;
       _emuT = 0;
-      return ProceduralZombie_durations(a);
+      return _emuDuration(a);
     }
     _anim = r;
     _t = 0;
@@ -421,8 +429,7 @@ class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
     return art.durationOf(r);
   }
 
-  // ignore: non_constant_identifier_names
-  static double ProceduralZombie_durations(ZombieAnim a) => switch (a) {
+  static double _emuDuration(ZombieAnim a) => switch (a) {
         ZombieAnim.attack || ZombieAnim.charge => 0.6,
         ZombieAnim.death => 1.0,
         _ => 0.5,
@@ -459,7 +466,7 @@ class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
     _knock = math.max(0, _knock - dt / 0.22);
     if (_emu != null) {
       _emuT += dt;
-      if (_emuT > ProceduralZombie_durations(_emu!) && _emu != ZombieAnim.chargePrepare) _emu = null;
+      if (_emuT > _emuDuration(_emu!) && _emu != ZombieAnim.chargePrepare) _emu = null;
     }
     final s = art.strips[_anim];
     final dur = s != null ? s.spec.duration(art.manifest.fps) : art.durationOf(_anim);
@@ -483,7 +490,7 @@ class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
     var sq = 1.0;
     final emu = _emu;
     if (emu != null) {
-      final p = (_emuT / ProceduralZombie_durations(emu)).clamp(0.0, 1.0);
+      final p = (_emuT / _emuDuration(emu)).clamp(0.0, 1.0);
       final b = math.sin(p * math.pi);
       switch (emu) {
         case ZombieAnim.attack || ZombieAnim.charge:
@@ -633,15 +640,13 @@ class _FxLayer extends Component with HasGameReference<CombatStageGame> {
 
   // Tajo cuerpo a cuerpo.
   Path? _slash;
+  Offset _slashDir = Offset.zero;
   double _slashT = 1;
   bool _slashHeavy = false;
-  final Paint _slashCore = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeCap = StrokeCap.round;
+  final Paint _slashCore = Paint()..blendMode = BlendMode.plus;
   final Paint _slashGlow = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeCap = StrokeCap.round
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    ..blendMode = BlendMode.plus
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
 
   // Ondas (grito, aturdimiento).
   static const _rings = 6;
@@ -799,14 +804,22 @@ class _FxLayer extends Component with HasGameReference<CombatStageGame> {
     }
   }
 
+  /// Tajo en forma de media luna que cruza el objetivo (derecha → izquierda).
   void slash(Offset target, {required bool heavy}) {
-    final s = heavy ? 1.35 : 1.0;
-    final from = target.translate(150 * s, 90 * s);
-    final to = target.translate(-130 * s, -40 * s);
-    final c = target.translate(30 * s, 70 * s);
+    final s = heavy ? 1.3 : 1.0;
+    final a = target.translate(118 * s, 64 * s);
+    final b = target.translate(-112 * s, -46 * s);
+    final d = b - a;
+    final n = Offset(d.dy, -d.dx) / d.distance;
+    final mid = Offset.lerp(a, b, 0.5)!;
+    final outer = mid + n * (58 * s);
+    final inner = mid + n * (30 * s);
     _slash = Path()
-      ..moveTo(from.dx, from.dy)
-      ..quadraticBezierTo(c.dx, c.dy, to.dx, to.dy);
+      ..moveTo(a.dx, a.dy)
+      ..quadraticBezierTo(outer.dx, outer.dy, b.dx, b.dy)
+      ..quadraticBezierTo(inner.dx, inner.dy, a.dx, a.dy)
+      ..close();
+    _slashDir = d / d.distance;
     _slashT = 0;
     _slashHeavy = heavy;
   }
@@ -826,7 +839,7 @@ class _FxLayer extends Component with HasGameReference<CombatStageGame> {
   void update(double dt) {
     _dark.update(dt);
     _bright.update(dt);
-    if (_slashT < 1) _slashT = math.min(1, _slashT + dt / 0.2);
+    if (_slashT < 1) _slashT = math.min(1, _slashT + dt / 0.22);
     for (var i = 0; i < _rings; i++) {
       if (_rAge[i] < _rLife[i]) _rAge[i] += dt;
     }
@@ -837,16 +850,15 @@ class _FxLayer extends Component with HasGameReference<CombatStageGame> {
     _dark.render(canvas, atlas);
     final slash = _slash;
     if (slash != null && _slashT < 1) {
-      final a = 1 - _slashT;
-      final col = _slashHeavy ? Sutura.amber : const Color(0xFFDDF6FA);
-      _slashGlow
-        ..strokeWidth = (_slashHeavy ? 26 : 16) * a
-        ..color = col.withValues(alpha: 0.45 * a);
-      _slashCore
-        ..strokeWidth = (_slashHeavy ? 7 : 4) * a + 1
-        ..color = col.withValues(alpha: 0.95 * a);
+      final a = 1 - Curves.easeIn.transform(_slashT);
+      final col = _slashHeavy ? Sutura.amber : const Color(0xFFCFF4F8);
+      _slashGlow.color = col.withValues(alpha: 0.55 * a);
+      _slashCore.color = col.withValues(alpha: 0.9 * a);
+      canvas.save();
+      canvas.translate(_slashDir.dx * 26 * _slashT, _slashDir.dy * 26 * _slashT);
       canvas.drawPath(slash, _slashGlow);
       canvas.drawPath(slash, _slashCore);
+      canvas.restore();
     }
     for (var i = 0; i < _rings; i++) {
       final age = _rAge[i];
@@ -879,6 +891,8 @@ class _FxLayer extends Component with HasGameReference<CombatStageGame> {
 
 class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
   _ScreenLayer(this.atlas);
+
+  static final Float64List _identity = Float64List.fromList(const [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
   final ui.Image atlas;
   Size _size = Size.zero;
@@ -960,7 +974,7 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
       _scanImg = pic.toImageSync(1, 3);
       pic.dispose();
     }
-    _scan.shader = ImageShader(_scanImg!, TileMode.repeated, TileMode.repeated, Matrix4.identity().storage);
+    _scan.shader = ImageShader(_scanImg!, TileMode.repeated, TileMode.repeated, _identity);
   }
 
   @override

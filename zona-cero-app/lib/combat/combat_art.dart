@@ -43,6 +43,7 @@ class CombatArt {
     required this.placement,
     required this.bodyInFrame,
     required this.headsInFrame,
+    required this.headHoldInFrame,
     required this.fxAtlas,
     required this.procedural,
   });
@@ -62,6 +63,10 @@ class CombatArt {
   /// Vacía = usar la zona de reserva de [headRectOf]. Un solo elemento =
   /// caja fija (silueta procedural).
   final List<Rect> headsInFrame;
+
+  /// Cabeza en el último cuadro de `charge_prepare` (pose sostenida).
+  /// `Rect.zero` = no hay cabeza a la vista (el Bruto la esconde al cargar).
+  final Rect? headHoldInFrame;
   final ui.Image fxAtlas;
 
   /// Silueta de reserva (si no hay tiras).
@@ -175,6 +180,15 @@ class CombatArt {
     } else if (procedural != null) {
       heads = [procedural.headBox];
     }
+    Rect? hold;
+    final prep = strips[ZombieAnim.chargePrepare];
+    if (prep != null) {
+      hold = await _lastFrameHead(prep, manifest);
+      // Si "la cabeza" detectada es mucho más ancha que la de reposo, en
+      // realidad es la espalda encorvada: no hay tiro a la cabeza posible.
+      final ref = heads.isEmpty ? null : heads.first;
+      if (hold == null || (ref != null && hold.width > ref.width * 1.6)) hold = Rect.zero;
+    }
     body ??= procedural?.bodyBox;
     body ??= Rect.fromLTRB(
       manifest.frameWidth * 0.33,
@@ -193,6 +207,7 @@ class CombatArt {
       placement: placement,
       bodyInFrame: body,
       headsInFrame: heads,
+      headHoldInFrame: hold,
       fxAtlas: buildFxAtlas(),
       procedural: procedural,
     );
@@ -207,6 +222,22 @@ class CombatArt {
       return frame.image;
     } catch (e) {
       debugPrint('[combate] no se pudo cargar $path: $e');
+      return null;
+    }
+  }
+
+  static Future<Rect?> _lastFrameHead(ZombieStrip strip, CombatManifest m) async {
+    try {
+      final data = await strip.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (data == null) return null;
+      return alphaHeadBox(
+        rgba: data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        imageWidth: strip.image.width,
+        frameWidth: m.frameWidth,
+        frameHeight: m.frameHeight,
+        frame: strip.frames.last,
+      );
+    } catch (_) {
       return null;
     }
   }
@@ -474,6 +505,7 @@ ui.Image buildProceduralBackdrop(Size size) {
         Offset(0, horizon - h * 0.12),
         Offset(0, horizon + h * 0.12),
         const [Color(0x00283338), Color(0x50283338), Color(0x00283338)],
+        const [0, 0.5, 1],
       ),
   );
   // Viñeta.

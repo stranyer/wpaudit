@@ -126,7 +126,7 @@ class _StatusClusterState extends State<StatusCluster> {
           _ when loc.position != null && loc.status != LocationStatus.error => ('EN LÍNEA', Sutura.signal, 1.6),
           _ => ('S I N  S E Ñ A L', Sutura.offline, 1.0),
         };
-        final acc = loc.position == null ? '±— M' : '±${loc.accuracyM.round()} M';
+        final acc = loc.position == null ? '±— m' : '±${loc.accuracyM.round()} m';
         return Container(
           padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
           color: Sutura.surface1,
@@ -234,7 +234,7 @@ class VitalsPanel extends StatelessWidget {
               ),
               const SizedBox(height: 5),
               Text(
-                '${carried.toStringAsFixed(1)} / ${cap.toStringAsFixed(1)} KG',
+                '${carried.toStringAsFixed(1).replaceFirst('.', ',')} / ${cap.toStringAsFixed(1).replaceFirst('.', ',')} KG',
                 style: SuturaText.mono.copyWith(fontSize: 10.5, color: heavy ? Sutura.caution2 : Sutura.textMid),
               ),
             ],

@@ -19,6 +19,7 @@ import 'widgets/chamfer_button.dart';
 import 'widgets/hexagon.dart';
 import 'widgets/holo_in.dart';
 import 'widgets/screen_frame.dart';
+import 'widgets/seg_bar.dart';
 
 /// Transición de pantallas: aparición holográfica rápida (sin deslizamientos).
 Route<T> holoRoute<T>(Widget page, {bool opaque = true}) => PageRouteBuilder<T>(

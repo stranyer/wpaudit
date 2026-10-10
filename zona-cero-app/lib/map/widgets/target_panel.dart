@@ -80,12 +80,13 @@ class _TargetPanelState extends State<TargetPanel> {
     final left = (r.distance - r.reachM).ceil().clamp(1, 99999);
     return Row(
       children: [
-        Expanded(child: ChamferButton(label: 'Acercate ${_fmtM(left.toDouble())}', expand: true, dense: true)),
+        Expanded(child: ChamferButton(label: 'Acercate ${_fmtM(left.toDouble())}', sublabel: 'FUERA DE ALCANCE', expand: true, dense: true)),
         if (_demo) ...[
           const SizedBox(width: 8),
           Expanded(
             child: ChamferButton(
-              label: 'Caminar hasta acá',
+              label: 'Caminar',
+              sublabel: 'HASTA ACÁ',
               tone: ChamferTone.ghost,
               icon: Icons.directions_walk,
               expand: true,
@@ -197,7 +198,8 @@ class _TargetPanelState extends State<TargetPanel> {
             const SizedBox(width: 8),
             Expanded(
               child: ChamferButton(
-                label: 'Viajar (simulación)',
+                label: 'Viajar',
+                sublabel: '(SIMULACIÓN)',
                 tone: ChamferTone.ghost,
                 expand: true,
                 dense: true,
