@@ -60,10 +60,12 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
     final fix = app.location.position != null;
     // Redondeo a décimas de segundo: basta para el anillo y evita repintar de más.
     final l = (left / 100).ceil() * 100;
-    if (l != _left || fix != _hasFix) setState(() {
-      _left = l;
-      _hasFix = fix;
-    });
+    if (l != _left || fix != _hasFix) {
+      setState(() {
+        _left = l;
+        _hasFix = fix;
+      });
+    }
     if (_left > 0) {
       _timer ??= Timer.periodic(const Duration(milliseconds: 100), (_) => _sync());
       if (_idle.isAnimating) _idle.stop();

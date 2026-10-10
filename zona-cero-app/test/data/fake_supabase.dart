@@ -46,9 +46,12 @@ class RecordedRequest {
 }
 
 class FakeSupabase {
-  FakeSupabase._(this._server) {
+  FakeSupabase._(this._server) : url = 'http://${_server.address.address}:${_server.port}' {
     _server.listen(_handle);
   }
+
+  /// URL base (se fija al arrancar: sigue valiendo después de [stopServer]).
+  final String url;
 
   final HttpServer _server;
   final List<RecordedRequest> requests = [];
@@ -71,8 +74,6 @@ class FakeSupabase {
 
   static Future<FakeSupabase> start() async => FakeSupabase._(await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
 
-  String get url => 'http://${_server.address.address}:${_server.port}';
-
   /// Cliente apuntado a este servidor (se cierra en [close]).
   SupabaseClient client() {
     final c = SupabaseClient(url, 'anon-key', authOptions: const AuthClientOptions(autoRefreshToken: false));
@@ -82,11 +83,23 @@ class FakeSupabase {
 
   Iterable<RecordedRequest> rpcCalls(String fn) => requests.where((r) => r.path == '/rest/v1/rpc/$fn');
 
+  bool _serverStopped = false;
+
+  /// Apaga el servidor (simula una caída) sin cerrar los clientes.
+  Future<void> stopServer() async {
+    if (_serverStopped) return;
+    _serverStopped = true;
+    await _server.close(force: true);
+  }
+
+  /// Limpieza final: cierra los clientes y el servidor (idempotente).
   Future<void> close() async {
-    for (final c in _clients) {
+    final clients = List.of(_clients);
+    _clients.clear();
+    for (final c in clients) {
       await c.dispose();
     }
-    await _server.close(force: true);
+    await stopServer();
   }
 
   Future<void> _handle(HttpRequest req) async {

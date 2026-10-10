@@ -73,7 +73,7 @@ void main() {
 
     test('sin servidor → error de red en español (la fábrica cae a modo local)', () async {
       final repo = newRepo();
-      await fake.close();
+      await fake.stopServer();
       await expectLater(
         repo.init(),
         throwsA(isA<SupabaseRepositoryException>()
@@ -334,7 +334,7 @@ void main() {
     test('servidor caído después de iniciar → error de red en español', () async {
       final repo = newRepo();
       await repo.init();
-      await fake.close();
+      await fake.stopServer();
       await expectLater(repo.getNearbyShelters(const LatLng(-34.6, -58.4), 2000), _throwsCode('network'));
     });
 
