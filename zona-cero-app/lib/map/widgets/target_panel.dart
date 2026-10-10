@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../audio/sfx.dart';
 import '../../core/core.dart';
 import '../../state/app_state.dart';
 import '../../state/location_controller.dart';
@@ -8,6 +9,7 @@ import '../../ui/theme/tokens.dart';
 import '../../ui/widgets/chamfer_button.dart';
 import '../../ui/widgets/grit.dart';
 import '../../ui/widgets/holo_in.dart';
+import '../map_icons.dart';
 import '../map_math.dart';
 
 const threatLabels = ['Fácil', 'Parejo', 'Peligroso', 'Mortal'];
@@ -87,13 +89,28 @@ class _TargetPanelState extends State<TargetPanel> {
     return (distance: d, reachM: r, near: app.isNear(target), locked: app.location.speedLocked);
   }
 
+  /// Igual que [_reach] pero con la posición actual del spawn (los infectados
+  /// deambulan por su calle).
+  ({double distance, double reachM, bool near, bool locked}) _reachSpawn(Spawn s) {
+    final d = app.distanceToSpawn(s) ?? double.infinity;
+    final r = effectiveRadius(gameConfig.interactionRules, app.location.accuracyM);
+    return (distance: d, reachM: r, near: app.isNearSpawn(s), locked: app.location.speedLocked);
+  }
+
   bool get _demo => app.location.mode == LocationMode.demo && app.location.demo != null;
 
   Widget _approachButtons(LatLng target, ({double distance, double reachM, bool near, bool locked}) r) {
     final left = (r.distance - r.reachM).ceil().clamp(1, 99999);
     return Row(
       children: [
-        Expanded(child: ChamferButton(label: 'Acercate ${distanceLabel(left.toDouble())}', sublabel: 'FUERA DE ALCANCE', expand: true, dense: true)),
+        Expanded(
+          // Fuera de alcance: el botón está apagado; tocarlo avisa con un error.
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Sfx.play(SfxId.error, volume: 0.7),
+            child: ChamferButton(label: 'Acercate ${distanceLabel(left.toDouble())}', sublabel: 'FUERA DE ALCANCE', expand: true, dense: true),
+          ),
+        ),
         if (_demo) ...[
           const SizedBox(width: 8),
           Expanded(
@@ -116,11 +133,12 @@ class _TargetPanelState extends State<TargetPanel> {
     final def = zombieDefs[z.zombieType]!;
     final level = app.player?.level ?? 1;
     final rating = threatRating(def, level);
-    final r = _reach(z.position);
+    final r = _reachSpawn(z);
     return _Frame(
       accent: Sutura.accent,
       kicker: 'CONTACTO HOSTIL',
       title: def.name,
+      portrait: _Portrait(MapIcons.avatarAsset(z.zombieType)),
       chips: [
         _Chip(threatLabels[rating], threatColors[rating]),
         _Chip('Grado rec. ${def.recommendedLevel}', Sutura.textMid),
@@ -138,17 +156,21 @@ class _TargetPanelState extends State<TargetPanel> {
                   onPressed: _busy
                       ? null
                       : () => _run(() async {
-                            if (await app.engage(z)) widget.onOpenEncounter();
+                            if (await app.engage(z)) {
+                              widget.onOpenEncounter();
+                            } else {
+                              Sfx.play(SfxId.error);
+                            }
                           }),
                 )
-              : _approachButtons(z.position, r),
+              : _approachButtons(app.world.positionAt(z, DateTime.now().millisecondsSinceEpoch), r),
     );
   }
 
   Widget _supply(SupplySpawn s) {
     final def = supplyDefs[s.supplyType]!;
     final color = rarityColor(def.rarity.key);
-    final r = _reach(s.position);
+    final r = _reachSpawn(s);
     final stamina = app.player?.stamina ?? 0;
     final enough = stamina >= def.staminaCost;
     return _Frame(
@@ -170,7 +192,12 @@ class _TargetPanelState extends State<TargetPanel> {
                   tone: ChamferTone.amber,
                   icon: Icons.inventory_2_outlined,
                   expand: true,
-                  onPressed: _busy ? null : () => _run(() => app.scavenge(s)),
+                  onPressed: _busy
+                      ? null
+                      : () => _run(() async {
+                            if (!enough) Sfx.play(SfxId.error);
+                            await app.scavenge(s);
+                          }),
                 )
               : _approachButtons(s.position, r),
     );
@@ -250,7 +277,11 @@ class _TargetPanelState extends State<TargetPanel> {
                       ? null
                       : () => _run(() async {
                             final text = await app.answerSignal(s);
-                            if (text != null) widget.onTransmission(text);
+                            if (text != null) {
+                              widget.onTransmission(text);
+                            } else {
+                              Sfx.play(SfxId.error);
+                            }
                           }),
                 )
               : _approachButtons(s.position, r),
@@ -267,7 +298,11 @@ class _Frame extends StatelessWidget {
     required this.description,
     required this.actions,
     this.extra,
+    this.portrait,
   });
+
+  /// Retrato a la derecha del título (criaturas).
+  final Widget? portrait;
 
   final Color accent;
   final String kicker;
@@ -290,7 +325,12 @@ class _Frame extends StatelessWidget {
           _PanelHeader(kicker: kicker, color: accent),
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: GrungeTitle(title, size: 28, maxLines: 1),
+            child: Row(
+              children: [
+                Expanded(child: GrungeTitle(title, size: 28, maxLines: 1)),
+                if (portrait != null) ...[const SizedBox(width: 10), portrait!],
+              ],
+            ),
           ),
           const SizedBox(height: 9),
           Padding(
@@ -332,11 +372,36 @@ class _PanelHeader extends StatelessWidget {
           label: 'Cerrar',
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: onClose ?? () => app.world.select(null),
+            onTap: () {
+              Sfx.play(SfxId.tap, volume: 0.6);
+              (onClose ?? () => app.world.select(null))();
+            },
             child: const SizedBox.square(dimension: 36, child: Icon(Icons.close, size: 19, color: Sutura.textMid)),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Retrato circular de la criatura con anillo rojo (como su marcador en el mapa).
+class _Portrait extends StatelessWidget {
+  const _Portrait(this.asset);
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: MapIcons.hostile, width: 1.6),
+        boxShadow: const [BoxShadow(color: Color(0x80C8322B), blurRadius: 10)],
+      ),
+      child: ClipOval(
+        child: Image.asset(asset, fit: BoxFit.cover, filterQuality: FilterQuality.medium, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+      ),
     );
   }
 }
@@ -363,11 +428,15 @@ class _Locked extends StatelessWidget {
   const _Locked();
 
   @override
-  Widget build(BuildContext context) => const ChamferButton(
-        label: 'Interacciones en pausa',
-        sublabel: 'VELOCIDAD EXCESIVA',
-        icon: Icons.speed,
-        expand: true,
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Sfx.play(SfxId.error, volume: 0.7),
+        child: const ChamferButton(
+          label: 'Interacciones en pausa',
+          sublabel: 'VELOCIDAD EXCESIVA',
+          icon: Icons.speed,
+          expand: true,
+        ),
       );
 }
 

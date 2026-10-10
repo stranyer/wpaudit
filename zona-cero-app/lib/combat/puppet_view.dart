@@ -7,7 +7,11 @@
 // - sombreado "de volumen": el lado que se aleja al girar el torso se oscurece
 //   (ver `PuppetPose.yaw`);
 // - luz de linterna que barre el cuerpo lentamente, relleno cálido de los
-//   faroles y luz de borde del lado que corresponde a la placa.
+//   faroles y luz de borde del lado que corresponde a la placa;
+// - con relieve (assets/art/zombies/relief/): la luz sigue la forma real del
+//   cuerpo (mapas de borde izq./der. y frontal sacados de las normales) en UNA
+//   pasada aditiva extra, y el mapa de alturas desplaza los vértices al girar
+//   (paralaje: manos y cabeza se mueven más que el torso).
 
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -51,6 +55,51 @@ class PuppetCreatureView implements CreatureView {
     _glow = Paint()
       ..shader = _shader
       ..colorFilter = const ColorFilter.mode(Color(0xFFFF2A1E), BlendMode.srcIn);
+    _yawW = Float32List(n);
+    for (var i = 0; i < n; i++) {
+      _yawW[i] = smooth(0.08, 0.55, mesh.h[i].clamp(0.0, 1.0));
+    }
+    // Relieve (opcional): luz que sigue la forma y alturas por vértice.
+    final light = art.reliefLight;
+    if (light != null) {
+      _lightShader = ImageShader(light, TileMode.clamp, TileMode.clamp, _identity, filterQuality: FilterQuality.medium);
+      _relief = Paint()
+        ..shader = _lightShader
+        ..blendMode = BlendMode.plus;
+    }
+    final depth = art.reliefDepth;
+    if (depth != null) {
+      final d = Float32List(n);
+      for (var i = 0; i < n; i++) {
+        d[i] = depth.heightAt(mesh.uv[i * 2], mesh.uv[i * 2 + 1]) - depth.mean;
+      }
+      _depth = d;
+      _parallaxK = art.rig.body.width * 0.45;
+    }
+  }
+
+  ImageShader? _lightShader;
+  Paint? _relief;
+  Float32List? _depth;
+  double _parallaxK = 0;
+  late final Float32List _yawW;
+
+  /// Luz frontal momentánea (fogonazo o impacto), decae sola.
+  double _key = 0;
+
+  /// La vista usa los mapas de relieve.
+  bool get hasRelief => _relief != null;
+
+  /// Paralaje por altura: con el torso girado, lo que está más cerca de la
+  /// cámara (manos, cabeza) se corre más que lo que está atrás.
+  void _parallax(Float32List pos, PuppetPose p) {
+    final d = _depth;
+    if (d == null) return;
+    final k = math.sin(p.yaw) * _parallaxK * _scale;
+    if (k.abs() < 1e-3) return;
+    for (var i = 0; i < mesh.vertexCount; i++) {
+      pos[i * 2] += d[i] * k * _yawW[i];
+    }
   }
 
   final CombatArt art;
@@ -130,6 +179,7 @@ class PuppetCreatureView implements CreatureView {
   void hit(Offset at, {bool strong = false, bool crit = false, bool headshot = false, bool lethal = false}) {
     if (anim.dead) return;
     if (!lethal) anim.play(ZombieAnim.hit);
+    _key = math.max(_key, strong || crit ? 1.0 : 0.7);
     if (_scale <= 0) return;
     final lx = (at.dx - _ox) / _scale, ly = (at.dy - _oy) / _scale;
     anim.hitAt(lx, ly, art.rig.body.height * 0.07, crit: crit, headshot: headshot, strength: strong || crit ? 1.2 : 1);
@@ -146,12 +196,16 @@ class PuppetCreatureView implements CreatureView {
   // ---------------------------------------------------------------------------
 
   @override
-  void dispose() => _shader.dispose();
+  void dispose() {
+    _shader.dispose();
+    _lightShader?.dispose();
+  }
 
   @override
   void update(double dt, CreatureStage stage) {
     anim.update(dt);
     if (_fleeT >= 0) _fleeT = math.min(1, _fleeT + dt / 0.8);
+    _key = math.max(stage.flashLight, _key - dt / 0.22);
     final l = stage.layout;
     if (l == null) return;
     _ox = l.feet.dx;
@@ -161,6 +215,7 @@ class PuppetCreatureView implements CreatureView {
     anim.evaluate(pose);
     _applyFlee(pose);
     deformer.deformMesh(pose, mesh, _pos, _ox, _oy, _scale);
+    _parallax(_pos, pose);
     var minX = double.infinity, minY = double.infinity, maxX = -double.infinity, maxY = -double.infinity;
     for (var i = 0; i < mesh.vertexCount; i++) {
       final x = _pos[i * 2], y = _pos[i * 2 + 1];
@@ -332,6 +387,7 @@ class PuppetCreatureView implements CreatureView {
       for (var k = 0; k < alphas.length; k++) {
         anim.evaluate(_ghostPose, back: 0.026 * (k + 1));
         deformer.deformMesh(_ghostPose, mesh, _ghost, _ox, _oy, _scale);
+        _parallax(_ghost, _ghostPose);
         final a = blur * alphas[k];
         for (var i = 0; i < n; i++) {
           _cAux[i] = (_cMain[i] & 0x00FFFFFF) | ((a * 255).round() << 24);
@@ -343,7 +399,10 @@ class PuppetCreatureView implements CreatureView {
     // 6. Luces aditivas en una sola pasada: borde (late con la baliza),
     //    relleno cálido de los faroles y la linterna que barre el cuerpo.
     final lit = dark * pose.alpha;
-    if (lit > 0.02) {
+    final relief = _relief;
+    if (relief != null && lit > 0.02) {
+      _renderRelief(canvas, stage, relief, lit, env);
+    } else if (lit > 0.02) {
       final beacon = look.emergency ? stage.beacon : 0.0;
       final rimK = (look.rimBase + look.rimBeacon * beacon) * lit;
       final fillK = look.fillAmount * lit;
@@ -388,5 +447,50 @@ class PuppetCreatureView implements CreatureView {
         _draw(canvas, _pos, _cAux, _red);
       }
     }
+  }
+
+  static const _steel = Color(0xFF9FB6CC);
+  static const _torch = Color(0xFFDDE6F0);
+  static const _warmKey = Color(0xFFFFC488);
+
+  /// Pasada de relieve: el mapa de luz (R = borde izq., G = borde der.,
+  /// B = frontal) por la misma malla. Los colores por vértice ponderan cada
+  /// canal (r/g: borde según la altura; b: linterna que barre + fogonazo) y la
+  /// matriz de color manda cada canal a su tinte con su intensidad.
+  void _renderRelief(Canvas canvas, CreatureStage stage, Paint paint, double lit, double env) {
+    final look = stage.look;
+    final t = stage.time;
+    final n = mesh.vertexCount;
+    final beacon = look.emergency ? stage.beacon : 0.0;
+    // Borde principal (el de la placa, late con la baliza) y el otro, frío
+    // (o tibio si la placa tiene faroles de ese lado).
+    final main = (look.rimBase + look.rimBeacon * beacon) * 2.2;
+    final other = 0.3 * 1.6;
+    final otherTint = Color.lerp(_steel, look.fill, (look.fillAmount * 2.5).clamp(0.0, 0.7))!;
+    final leftMain = look.rimSide < 0;
+    final lt = leftMain ? look.rim : otherTint, rt = leftMain ? otherTint : look.rim;
+    final li = leftMain ? main : other, ri = leftMain ? other : main;
+    // Frontal: linterna fría que barre + fogonazo/impacto cálido.
+    final key = _key.clamp(0.0, 1.0);
+    final kt = Color.lerp(_torch, _warmKey, key)!;
+    final ki = 0.55 + 1.1 * key;
+    paint.colorFilter = ColorFilter.matrix([
+      lt.r * li, rt.r * ri, kt.r * ki, 0, 0, //
+      lt.g * li, rt.g * ri, kt.g * ki, 0, 0,
+      lt.b * li, rt.b * ri, kt.b * ki, 0, 0,
+      0, 0, 0, 1, 0,
+    ]);
+    final bx = 0.55 * math.sin(t * 0.41) + 0.2 * math.sin(t * 1.07 + 1.3);
+    final by = 0.62 + 0.16 * math.sin(t * 0.29 + 0.4);
+    final torchK = (0.36 + 0.08 * math.sin(t * 2.3)) * (1 - 0.6 * env);
+    for (var i = 0; i < n; i++) {
+      final va = _vertexAlpha(i) * lit;
+      final hc = mesh.h[i].clamp(0.0, 1.0);
+      final rim = 0.35 + 0.65 * hc;
+      final dx = mesh.side[i] - bx, dy = (hc - by) * 1.6;
+      final front = torchK * math.exp(-(dx * dx + dy * dy) / 0.32) + key * (0.5 + 0.5 * hc);
+      _cAux[i] = _argb(va, rim, rim, front);
+    }
+    _draw(canvas, _pos, _cAux, paint);
   }
 }

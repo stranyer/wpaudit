@@ -25,11 +25,11 @@ class PlacementProfile {
 // Como en la referencia: cuerpo entero visible, con los pies apoyados en la
 // calle justo encima de los paneles inferiores (~75 % de la altura).
 const Map<ZombieTypeId, PlacementProfile> placementProfiles = {
-  ZombieTypeId.walker: PlacementProfile(heightFrac: 0.5),
-  ZombieTypeId.runner: PlacementProfile(heightFrac: 0.44, maxWidthFrac: 0.98),
-  ZombieTypeId.bloater: PlacementProfile(heightFrac: 0.5, maxWidthFrac: 0.96),
-  ZombieTypeId.screamer: PlacementProfile(heightFrac: 0.53),
-  ZombieTypeId.brute: PlacementProfile(heightFrac: 0.52, feetFrac: 0.765, maxWidthFrac: 1.0),
+  ZombieTypeId.walker: PlacementProfile(heightFrac: 0.46, feetFrac: 0.76),
+  ZombieTypeId.runner: PlacementProfile(heightFrac: 0.42, feetFrac: 0.76, maxWidthFrac: 0.9),
+  ZombieTypeId.bloater: PlacementProfile(heightFrac: 0.45, feetFrac: 0.76, maxWidthFrac: 0.86),
+  ZombieTypeId.screamer: PlacementProfile(heightFrac: 0.48, feetFrac: 0.76),
+  ZombieTypeId.brute: PlacementProfile(heightFrac: 0.47, feetFrac: 0.77, maxWidthFrac: 0.8),
 };
 
 class StageLayout {
@@ -48,6 +48,7 @@ class StageLayout {
   /// fracción de la altura de la vista que la placa cubre como mínimo (con
   /// menos de 1 se ve más ancho de la placa; el hueco de abajo se completa con
   /// el piso espejado). `plateFocusX` = punto de la placa que se intenta centrar.
+  /// `plateTopGap` = cuánto puede bajar la placa dejando cielo arriba.
   factory StageLayout.compute({
     required Size view,
     required Size plate,
@@ -57,6 +58,7 @@ class StageLayout {
     double horizonAt = 0.40,
     double plateCover = 1,
     double plateFocusX = 0.5,
+    double plateTopGap = 0,
   }) {
     if (view.isEmpty || plate.isEmpty || rig.body.isEmpty) {
       return StageLayout(view: view, plateRect: Offset.zero & view, scale: 1, feet: Offset.zero, rigFeet: rig.feet, body: Rect.zero, head: Rect.zero);
@@ -66,7 +68,7 @@ class StageLayout {
     final s = math.max(view.width / plate.width, view.height * plateCover.clamp(0.3, 1.0) / plate.height);
     final pw = plate.width * s;
     final ph = plate.height * s;
-    final double top = (view.height * horizonAt - plateHorizon * ph).clamp(math.min(0.0, view.height - ph), 0.0).toDouble();
+    final double top = (view.height * horizonAt - plateHorizon * ph).clamp(math.min(0.0, view.height - ph), view.height * plateTopGap).toDouble();
     final left = (view.width / 2 - plateFocusX * pw).clamp(view.width - pw, 0.0);
     final plateRect = Rect.fromLTWH(left, top, pw, ph);
 

@@ -132,6 +132,9 @@ class CombatStageGame extends FlameGame implements CreatureStage, HandStage {
   double get beacon => _ScreenLayer.beacon(time, charging);
 
   @override
+  double get flashLight => _hand?.rig.flash ?? 0;
+
+  @override
   Size get viewSize => _layout?.view ?? Size(size.x, size.y);
 
   @override
@@ -197,6 +200,8 @@ class CombatStageGame extends FlameGame implements CreatureStage, HandStage {
       plateHorizon: art.plateHorizon,
       plateCover: art.plateCover,
       plateFocusX: art.plateFocusX,
+      plateTopGap: art.plateTopGap,
+      horizonAt: art.plateHorizonAt,
     );
     _layout = l;
     _layoutVersion++;
@@ -518,10 +523,11 @@ class _Backdrop extends Component with HasGameReference<CombatStageGame> {
   final Rect _src, _skySrc, _leftSrc, _rightSrc;
   Rect _groundSrc = Rect.zero;
   // Un punto más oscura que el arte original (clave baja, como la referencia).
-  final Paint _paint = Paint()
+  late final Paint _paint = Paint()
     ..filterQuality = FilterQuality.medium
-    ..colorFilter = const ColorFilter.mode(Color(0xFFB0B4B8), BlendMode.modulate);
+    ..colorFilter = ColorFilter.mode(art.plateTint, BlendMode.modulate);
   final Paint _groundShade = Paint();
+  final Paint _skyShade = Paint();
   int _ver = -1;
   Rect _dst = Rect.zero, _sky = Rect.zero, _ground = Rect.zero, _left = Rect.zero, _right = Rect.zero;
 
@@ -531,7 +537,9 @@ class _Backdrop extends Component with HasGameReference<CombatStageGame> {
     _ver = game._layoutVersion;
     _dst = l.plateRect;
     // Extensiones para que el temblor/zoom nunca muestre el vacío.
-    _sky = Rect.fromLTRB(_dst.left, _dst.top - 300, _dst.right, _dst.top + 1);
+    _sky = Rect.fromLTRB(_dst.left, math.min(0, _dst.top) - 300, _dst.right, _dst.top + 1);
+    // Cielo estirado (si la placa bajó): se oscurece hacia arriba.
+    _skyShade.shader = ui.Gradient.linear(Offset(0, _dst.top), Offset(0, math.min(0.0, _dst.top - 40)), const [Color(0x00000000), Color(0xD0020304)]);
     _left = Rect.fromLTRB(_dst.left - 300, _dst.top - 300, _dst.left + 1, _dst.bottom + 300);
     _right = Rect.fromLTRB(_dst.right - 1, _dst.top - 300, _dst.right + 300, _dst.bottom + 300);
     // Piso: la franja de abajo de la placa, espejada (asfalto mojado que sigue).
@@ -555,6 +563,7 @@ class _Backdrop extends Component with HasGameReference<CombatStageGame> {
     canvas.drawImageRect(img, _leftSrc, _left, _paint);
     canvas.drawImageRect(img, _rightSrc, _right, _paint);
     canvas.drawImageRect(img, _skySrc, _sky, _paint);
+    if (_dst.top > 0) canvas.drawRect(_sky, _skyShade);
     // Piso espejado (sin costura: arranca en el borde inferior de la placa).
     canvas.save();
     canvas.translate(0, _ground.top);

@@ -576,17 +576,17 @@ class CombatLog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shown = lines.length > visible ? lines.sublist(lines.length - visible) : lines;
-    final line = SuturaText.body.copyWith(fontSize: 12.5, height: 1.3, letterSpacing: 0.7, fontWeight: FontWeight.w500);
+    final line = SuturaText.body.copyWith(fontSize: 11.5, height: 1.2, letterSpacing: 0.6, fontWeight: FontWeight.w500);
     return IgnorePointer(
       child: CustomPaint(
         painter: const _LogFramePainter(),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+          padding: const EdgeInsets.fromLTRB(10, 5, 8, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('REGISTRO DE COMBATE', maxLines: 1, style: _label(8.5, Sutura.textLow).copyWith(letterSpacing: 2)),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Expanded(
                 child: ClipRect(
                   child: SingleChildScrollView(
@@ -608,7 +608,7 @@ class CombatLog extends StatelessWidget {
                                   Expanded(
                                     child: Text(
                                       l.text,
-                                      maxLines: i == shown.length - 1 ? 2 : 1,
+                                      maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: line.copyWith(color: i == shown.length - 1 ? l.color : (i == shown.length - 2 ? Sutura.textHi.withValues(alpha: 0.85) : Sutura.textMid)),
                                     ),
@@ -1139,7 +1139,7 @@ class CallOut extends StatelessWidget {
               decoration: BoxDecoration(
                 boxShadow: [BoxShadow(color: color.withValues(alpha: 0.18), blurRadius: 30, spreadRadius: -6)],
               ),
-              child: GrungeTitle(text, size: 42, color: color, letterSpacing: 2.2, maxLines: 1, textAlign: TextAlign.center),
+              child: GrungeTitle(text, size: 37, color: color, letterSpacing: 2, maxLines: 1, textAlign: TextAlign.center),
             ),
           ),
           if (sub != null) ...[

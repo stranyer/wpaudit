@@ -43,11 +43,12 @@ class _ScanWaveState extends State<ScanWave> with SingleTickerProviderStateMixin
   static const _tailMs = 420;
   static const _totalMs = WorldController.scanDurationMs + _tailMs;
   static const _shakeMs = 420;
+  static const _slow = int.fromEnvironment('ZC_WAVE_SLOWMO', defaultValue: 1); // TEMP capturas
 
   static Future<ui.FragmentProgram?>? _program;
   ui.FragmentShader? _shader;
 
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: _totalMs))
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: _totalMs * _slow))
     ..addListener(_onTick)
     ..addStatusListener((s) {
       if (s == AnimationStatus.completed) {
@@ -100,7 +101,7 @@ class _ScanWaveState extends State<ScanWave> with SingleTickerProviderStateMixin
     if (dt < 0 || dt >= WorldController.scanDurationMs) return;
     _origin = w.lastScanOrigin ?? app.location.position;
     _seed = w.lastScanAt;
-    _c.forward(from: dt / _totalMs);
+    _c.forward(from: dt / (_totalMs * _slow));
     setState(() {});
   }
 
@@ -233,8 +234,8 @@ class _WavePainter extends CustomPainter {
           ..shader = ui.Gradient.radial(center, r, [
             _steel.withValues(alpha: 0),
             _steel.withValues(alpha: 0),
-            _steel.withValues(alpha: 0.10 * a),
-            _steel.withValues(alpha: 0.02 * a),
+            _steel.withValues(alpha: 0.16 * a),
+            _steel.withValues(alpha: 0.03 * a),
           ], [0, 0.5, 0.96, 1]),
       );
       Paint ring(Color c, double w, double alpha, {double blur = 0, BlendMode mode = BlendMode.srcOver}) {
@@ -251,15 +252,16 @@ class _WavePainter extends CustomPainter {
       for (var i = 1; i <= 5; i++) {
         final ri = r - i * (4 + 5 * f.radius);
         if (ri <= 0) break;
-        canvas.drawCircle(center, ri, ring(_steel, 2.4, 0.16 * a * (1 - i / 6), blur: 1.5 + i * 0.6));
+        canvas.drawCircle(center, ri, ring(_steel, 3, 0.22 * a * (1 - i / 6), blur: 1.5 + i * 0.8));
       }
       // Resplandor del frente.
-      canvas.drawCircle(center, r, ring(_steel, 12, 0.42 * a, blur: 7));
-      // Separación cromática.
-      canvas.drawCircle(center, r + 2.6, ring(_red, 1.6, 0.42 * a, mode: BlendMode.plus));
-      canvas.drawCircle(center, r - 2.6, ring(_cyan, 1.6, 0.42 * a, mode: BlendMode.plus));
+      canvas.drawCircle(center, r, ring(_steel, 18, 0.5 * a, blur: 10));
+      canvas.drawCircle(center, r, ring(const Color(0xFFCFE6F2), 6, 0.45 * a, blur: 3));
+      // Separación cromática (la "refracción" del frente de onda).
+      canvas.drawCircle(center, r + 3.6, ring(_red, 2, 0.55 * a, mode: BlendMode.plus));
+      canvas.drawCircle(center, r - 3.6, ring(_cyan, 2, 0.55 * a, mode: BlendMode.plus));
       // Núcleo del anillo.
-      canvas.drawCircle(center, r, ring(const Color(0xFFF1F6F8), 1.8, 0.95 * a));
+      canvas.drawCircle(center, r, ring(const Color(0xFFF4F9FB), 2.4, a));
       // Marcas de radar sobre el frente.
       final tick = ring(const Color(0xFFF1F6F8), 1.4, 0.55 * a);
       final rot = t / 1000 * 0.6;

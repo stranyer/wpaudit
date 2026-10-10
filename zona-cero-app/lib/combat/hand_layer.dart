@@ -51,6 +51,7 @@ class HandLayer extends Component {
   bool _disposed = false;
 
   final HandPose _pose = HandPose();
+  double _restRot = 0;
   final Paint _paint = Paint()..filterQuality = FilterQuality.medium;
   final Paint _add = Paint()
     ..filterQuality = FilterQuality.low
@@ -98,7 +99,7 @@ class HandLayer extends Component {
     final v = stage.viewSize;
     final base = handRect(handSpecs[rig.kind]!, v, stage.handBase);
     final spec = handSpecs[rig.kind]!;
-    // Desde la muñeca que golpea (en puños, alternan) hacia el blanco.
+    // Desde el pivote de la mano que golpea (en puños, alternan) hacia el blanco.
     final side = rig.kind == HandKind.fists ? -rig.punchSide : 0;
     final pv = side < 0 || !spec.split ? spec.pivot : spec.pivotRight;
     final wrist = Offset(base.left + pv.dx * base.width, base.top + pv.dy * base.height);
@@ -210,6 +211,7 @@ class HandLayer extends Component {
     _paint.colorFilter = ColorFilter.mode(Color.lerp(look.lightTint, const Color(0xFFFFFFFF), 0.25)!, BlendMode.modulate);
 
     final iw = img.width.toDouble(), ih = img.height.toDouble();
+    _restRot = spec.restRot;
     final parts = spec.split ? const [-1, 1] : const [0];
     final speed = rig.swingSpeed;
     for (final side in parts) {
@@ -260,7 +262,7 @@ class HandLayer extends Component {
       if (mu != null && side == 0) {
         final m = Offset(r.left + mu.dx * r.width, r.top + mu.dy * r.height);
         _muzzleAt = _apply(m, pivot, v.width);
-        final c = math.cos(_pose.rot), s = math.sin(_pose.rot);
+        final c = math.cos(_pose.rot + _restRot), s = math.sin(_pose.rot + _restRot);
         final d = spec.muzzleDir;
         _muzzleDir = Offset(d.dx * c - d.dy * s, d.dx * s + d.dy * c);
       }
@@ -276,13 +278,14 @@ class HandLayer extends Component {
   /// Muñeca + pose: traslada, gira y escala alrededor del pivote.
   void _transform(Canvas canvas, Offset pivot, double w) {
     canvas.translate(pivot.dx + _pose.dx * w, pivot.dy + _pose.dy * w);
-    if (_pose.rot != 0) canvas.rotate(_pose.rot);
+    final rot = _pose.rot + _restRot;
+    if (rot != 0) canvas.rotate(rot);
     if (_pose.scale != 1) canvas.scale(_pose.scale);
     canvas.translate(-pivot.dx, -pivot.dy);
   }
 
   Offset _apply(Offset p, Offset pivot, double w) {
-    final c = math.cos(_pose.rot), s = math.sin(_pose.rot);
+    final c = math.cos(_pose.rot + _restRot), s = math.sin(_pose.rot + _restRot);
     final x = (p.dx - pivot.dx) * _pose.scale, y = (p.dy - pivot.dy) * _pose.scale;
     return Offset(pivot.dx + _pose.dx * w + x * c - y * s, pivot.dy + _pose.dy * w + x * s + y * c);
   }

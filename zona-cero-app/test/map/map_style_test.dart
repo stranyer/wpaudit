@@ -49,4 +49,53 @@ void main() {
       'green-base',
     ]));
   });
+
+  group('imagen satelital', () {
+    final sources = style['sources'] as Map<String, dynamic>;
+    final ids = [for (final l in layers) l['id'] as String];
+
+    test('fuente raster de Esri World Imagery (o la de SATELLITE_TILES)', () {
+      final sat = sources[SuturaMapStyle.satelliteSource] as Map<String, dynamic>;
+      expect(sat['type'], 'raster');
+      expect(sat['tileSize'], 256);
+      expect(sat['maxzoom'], 19);
+      final url = (sat['tiles'] as List).single as String;
+      expect(url, contains('{z}'));
+      expect(url.indexOf('{y}'), lessThan(url.indexOf('{x}')), reason: 'Esri usa {z}/{y}/{x}');
+      expect(sat['attribution'], contains('Esri'));
+      // Se conserva la atribución de OpenStreetMap / OpenFreeMap.
+      expect((sources[SuturaMapStyle.source] as Map)['attribution'], contains('OpenStreetMap'));
+    });
+
+    test('desaturada y oscura', () {
+      final layer = layers.firstWhere((l) => l['id'] == SuturaMapStyle.satelliteLayer);
+      final paint = layer['paint'] as Map;
+      expect(paint['raster-saturation'], closeTo(-0.85, 0.05));
+      expect(paint['raster-brightness-max'], closeTo(0.45, 0.05));
+      expect(paint['raster-contrast'], closeTo(0.1, 0.05));
+    });
+
+    test('el respaldo vectorial queda debajo; cordones y rótulos, encima', () {
+      final sat = ids.indexOf(SuturaMapStyle.satelliteLayer);
+      for (final below in ['bg', 'green-base', SuturaMapStyle.waterLayer, SuturaMapStyle.buildingEdgeLayer, SuturaMapStyle.roadLayer, 'road-dash']) {
+        expect(ids.indexOf(below), lessThan(sat), reason: below);
+      }
+      for (final above in [SuturaMapStyle.roadCasingLayer, SuturaMapStyle.labelLayer, 'poi-label']) {
+        expect(ids.indexOf(above), greaterThan(sat), reason: above);
+      }
+    });
+
+    test('los cordones son dos líneas finas a los lados de la calzada', () {
+      final layer = layers.firstWhere((l) => l['id'] == SuturaMapStyle.roadCasingLayer);
+      expect((layer['paint'] as Map).containsKey('line-gap-width'), isTrue);
+    });
+
+    test('rotula plazas y lugares destacados como el Teatro Colón', () {
+      final layer = layers.firstWhere((l) => l['id'] == 'poi-label');
+      final filter = jsonEncode(layer['filter']);
+      expect(filter, contains('theatre'));
+      expect(filter, contains('park'));
+      expect(SuturaMapStyle.landmarkClasses, containsAll(['theatre', 'museum', 'monument']));
+    });
+  });
 }

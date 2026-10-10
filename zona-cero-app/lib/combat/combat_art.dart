@@ -25,8 +25,11 @@ enum CombatPlate {
   colon(
     'assets/art/bg/combat_colon.webp',
     horizon: 0.525,
+    horizonAt: 0.57,
+    topGap: 0.18,
     cover: 0.8,
-    focusX: 0.53,
+    focusX: 0.55,
+    tint: Color(0xFFC9C5C0),
     look: PlateLook(
       shadowTint: Color(0xFF6E6A6C),
       lightTint: Color(0xFFC4BCB4),
@@ -43,12 +46,31 @@ enum CombatPlate {
   /// Avenida con el Obelisco al fondo y luz de emergencia roja.
   obelisco('assets/art/bg/combat_street.webp', horizon: 0.39, cover: 1, focusX: 0.5, look: PlateLook());
 
-  const CombatPlate(this.asset, {required this.horizon, required this.cover, required this.focusX, required this.look});
+  const CombatPlate(
+    this.asset, {
+    required this.horizon,
+    this.horizonAt = 0.4,
+    this.topGap = 0,
+    required this.cover,
+    required this.focusX,
+    this.tint = const Color(0xFFB0B4B8),
+    required this.look,
+  });
 
   final String asset;
 
   /// Altura del punto de fuga en la placa (fracción).
   final double horizon;
+
+  /// Dónde se quiere el punto de fuga en pantalla (fracción de la altura).
+  final double horizonAt;
+
+  /// Cuánto puede bajar la placa dejando cielo arriba (fracción de la altura
+  /// de la vista; ese hueco queda bajo el HUD superior).
+  final double topGap;
+
+  /// Tinte multiplicativo de la placa (clave baja).
+  final Color tint;
 
   /// Fracción de la altura de la vista que la placa cubre como mínimo (el
   /// resto, abajo, se completa con el piso espejado y queda bajo el HUD).
@@ -59,18 +81,20 @@ enum CombatPlate {
   final PlateLook look;
 }
 
-/// Hash FNV-1a de 32 bits (determinístico entre plataformas).
-int _fnv1a(String s) {
+/// Hash FNV-1a de 32 bits, idéntico en nativo y en web (en JS los enteros son
+/// dobles: el producto se parte para no pasar de 2^53).
+int fnv1a32(String s) {
   var h = 0x811C9DC5;
   for (final c in s.codeUnits) {
-    h ^= c;
-    h = (h * 0x01000193) & 0xFFFFFFFF;
+    h = (h ^ c) % 0x100000000;
+    // h × 0x01000193 = h × 0x193 + h × 2^24 (mód 2^32).
+    h = (h * 0x193 + (h % 256) * 0x1000000) % 0x100000000;
   }
   return h;
 }
 
 /// Placa del encuentro, fija por aparición: ~60 % Colón, ~40 % Obelisco.
-CombatPlate plateForSpawn(String spawnId) => _fnv1a(spawnId) % 100 < 60 ? CombatPlate.colon : CombatPlate.obelisco;
+CombatPlate plateForSpawn(String spawnId) => fnv1a32(spawnId) % 100 < 60 ? CombatPlate.colon : CombatPlate.obelisco;
 
 /// Regiones del atlas de partículas.
 abstract final class FxAtlas {
@@ -79,6 +103,47 @@ abstract final class FxAtlas {
   static const streak = Rect.fromLTWH(128, 32, 32, 8);
   static const shard = Rect.fromLTWH(128, 44, 16, 16);
   static const ring = Rect.fromLTWH(128, 64, 32, 32);
+}
+
+/// Mapa de alturas de la criatura (relieve), a 1/4 del recorte: R = altura
+/// (1 = lo más cerca de la cámara), G = cavidad, B = alfa.
+class ReliefDepth {
+  ReliefDepth(this.width, this.height, this.rgba, {required this.cutoutWidth, required this.cutoutHeight}) {
+    var sum = 0.0, wsum = 0.0;
+    for (var i = 0; i < width * height; i++) {
+      final a = rgba[i * 4 + 2] / 255;
+      sum += rgba[i * 4] / 255 * a;
+      wsum += a;
+    }
+    mean = wsum > 0 ? sum / wsum : 0.5;
+  }
+
+  final int width, height;
+  final Uint8List rgba;
+  final int cutoutWidth, cutoutHeight;
+
+  /// Altura media de la silueta (ponderada por alfa).
+  late final double mean;
+
+  /// Altura suavizada en el píxel (`u`, `v`) del recorte: promedio ponderado
+  /// por alfa de un vecindario (fuera de la silueta toma la de los bordes, o
+  /// la media si no hay nada cerca).
+  double heightAt(double u, double v, {int radius = 3}) {
+    final cx = (u / cutoutWidth * width).floor(), cy = (v / cutoutHeight * height).floor();
+    var sum = 0.0, wsum = 0.0;
+    for (var y = cy - radius; y <= cy + radius; y++) {
+      if (y < 0 || y >= height) continue;
+      for (var x = cx - radius; x <= cx + radius; x++) {
+        if (x < 0 || x >= width) continue;
+        final o = (y * width + x) * 4;
+        final a = rgba[o + 2] / 255;
+        if (a <= 0) continue;
+        sum += rgba[o] / 255 * a;
+        wsum += a;
+      }
+    }
+    return wsum > 0.05 ? sum / wsum : mean;
+  }
 }
 
 class CombatArt {
@@ -90,12 +155,17 @@ class CombatArt {
     required this.plateHorizon,
     required this.plateCover,
     required this.plateFocusX,
+    required this.plateHorizonAt,
+    required this.plateTopGap,
+    required this.plateTint,
     required this.look,
     required this.cutout,
     required this.fallbackCutout,
     required this.rig,
     required this.fxAtlas,
     required this.grain,
+    this.reliefLight,
+    this.reliefDepth,
   });
 
   final ZombieTypeId type;
@@ -110,9 +180,12 @@ class CombatArt {
   /// Altura del punto de fuga en la placa (fracción).
   final double plateHorizon;
 
-  /// Ver [CombatPlate.cover] y [CombatPlate.focusX].
+  /// Ver [CombatPlate].
   final double plateCover;
   final double plateFocusX;
+  final double plateHorizonAt;
+  final double plateTopGap;
+  final Color plateTint;
 
   /// Luz de la placa para la criatura y la mano.
   final PlateLook look;
@@ -126,6 +199,12 @@ class CombatArt {
   /// Ruido para el grano de película (se repite en mosaico).
   final ui.Image grain;
 
+  /// Relieve de la criatura (null si falta o si la silueta es procedural):
+  /// luz del mismo tamaño que el recorte (R = borde izq., G = borde der.,
+  /// B = luz frontal) y alturas a 1/4.
+  final ui.Image? reliefLight;
+  final ReliefDepth? reliefDepth;
+
   Size get plateSize => Size(plate.width.toDouble(), plate.height.toDouble());
 
   void dispose() {
@@ -133,11 +212,14 @@ class CombatArt {
     cutout.dispose();
     fxAtlas.dispose();
     grain.dispose();
+    reliefLight?.dispose();
   }
 
   /// Placa por defecto.
   static final plateAsset = CombatPlate.colon.asset;
   static String cutoutAsset(ZombieTypeId type) => 'assets/art/zombies/${type.key}.webp';
+  static String reliefLightAsset(ZombieTypeId type) => 'assets/art/zombies/relief/${type.key}_light.webp';
+  static String reliefDepthAsset(ZombieTypeId type) => 'assets/art/zombies/relief/${type.key}_depth.webp';
 
   /// Carga todo lo necesario para pelear contra `type` sobre `plate` (si falta
   /// se prueba la otra placa y, si tampoco está, un fondo procedural).
@@ -167,6 +249,31 @@ class CombatArt {
       cut = z.toImage();
       rig = z.rig();
     }
+    // Relieve: solo con el recorte real y si los tamaños coinciden.
+    ui.Image? light;
+    ReliefDepth? depth;
+    if (identical(cut, loaded)) {
+      final lf = _image(b, reliefLightAsset(type));
+      final df = _image(b, reliefDepthAsset(type));
+      light = await lf;
+      final dImg = await df;
+      if (light != null && (light.width != cut.width || light.height != cut.height)) {
+        debugPrint('[combate] relieve de ${type.key}: tamaño distinto al recorte, se ignora');
+        light.dispose();
+        light = null;
+      }
+      if (light != null && dImg != null) {
+        try {
+          final data = await dImg.toByteData(format: ui.ImageByteFormat.rawRgba);
+          if (data != null) {
+            depth = ReliefDepth(dImg.width, dImg.height, data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes), cutoutWidth: cut.width, cutoutHeight: cut.height);
+          }
+        } catch (e) {
+          debugPrint('[combate] no se pudo leer la altura del relieve: $e');
+        }
+      }
+      dImg?.dispose();
+    }
     final procedural = plateImg == null;
     return CombatArt._(
       type: type,
@@ -176,12 +283,17 @@ class CombatArt {
       plateHorizon: procedural ? 0.42 : kind.horizon,
       plateCover: procedural ? 1 : kind.cover,
       plateFocusX: procedural ? 0.5 : kind.focusX,
+      plateHorizonAt: procedural ? 0.4 : kind.horizonAt,
+      plateTopGap: procedural ? 0 : kind.topGap,
+      plateTint: procedural ? const Color(0xFFBCC2C8) : kind.tint,
       look: procedural ? const PlateLook() : kind.look,
       cutout: cut,
       fallbackCutout: !identical(cut, loaded),
       rig: rig,
       fxAtlas: buildFxAtlas(),
       grain: buildGrain(),
+      reliefLight: light,
+      reliefDepth: depth,
     );
   }
 
@@ -213,7 +325,7 @@ class CombatArt {
 /// Profundidad de campo barata, horneada una sola vez: la calle detrás de la
 /// criatura queda apenas desenfocada (y un punto más oscura) y el piso de
 /// adelante, nítido. Libera `src`.
-ui.Image bakeDepthOfField(ui.Image src, {double sigma = 1.7}) {
+ui.Image bakeDepthOfField(ui.Image src, {double sigma = 1.15}) {
   final w = src.width.toDouble(), h = src.height.toDouble();
   final rect = Rect.fromLTWH(0, 0, w, h);
   final rec = ui.PictureRecorder();

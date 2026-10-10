@@ -11,17 +11,31 @@ import '../../state/app_state.dart';
 import '../../state/location_controller.dart';
 import '../../state/world_controller.dart';
 import '../../ui/theme/tokens.dart';
-import '../../ui/widgets/ecg_monitor.dart';
 import '../../ui/widgets/grit.dart';
 import '../game_map.dart';
 import '../map_math.dart';
+import '../map_style.dart';
 import '../weather.dart';
 
 /// Borde de los controles del mapa (un poco más claro que el de los paneles).
-const kMapControlBorder = Color(0xFF575B5E);
+const kMapControlBorder = Color(0xFF63676A);
 
 /// Fondo de los controles y tarjetas sobre el mapa.
-const kMapControlFill = Color(0xE8101213);
+const kMapControlFill = Color(0xE00E1011);
+
+/// Esquinas recortadas de los controles (como en la referencia).
+const kMapCuts = Cuts(topLeft: 5, topRight: 5, bottomRight: 5, bottomLeft: 5);
+
+/// Foto del Obelisco (encabezado y tarjeta de objetivo, muy tenue).
+const _obelisco = 'assets/art/bg/obelisco.webp';
+
+/// Desatura una imagen a gris.
+const _greyscale = ColorFilter.matrix([
+  0.25, 0.55, 0.12, 0, 0, //
+  0.25, 0.55, 0.12, 0, 0,
+  0.25, 0.55, 0.12, 0, 0,
+  0, 0, 0, 1, 0,
+]);
 
 // -----------------------------------------------------------------------------
 // Modelo del HUD: clima y región
@@ -41,8 +55,12 @@ class MapHudModel extends ChangeNotifier {
   LatLng? _placeAt;
   int _placeQueriedAt = 0;
   ({String city, String region}) _labels = regionLabels(null);
+  List<String> _caption = regionCaption(null);
 
   ({String city, String region}) get labels => _labels;
+
+  /// Pie junto al emblema ("CIUDAD AUTÓNOMA / DE BUENOS AIRES / ARG.").
+  List<String> get caption => _caption;
   WeatherReading? get reading => weather.reading;
 
   void _onLocation() {
@@ -64,9 +82,12 @@ class MapHudModel extends ChangeNotifier {
   }
 
   void _relabel() {
-    final next = regionLabels(app.location.position, placeName: _place);
-    if (next != _labels) {
+    final p = app.location.position;
+    final next = regionLabels(p, placeName: _place);
+    final caption = regionCaption(p, placeName: _place);
+    if (next != _labels || !listEquals(caption, _caption)) {
       _labels = next;
+      _caption = caption;
       notifyListeners();
     }
   }
@@ -91,37 +112,47 @@ class MapHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: IgnorePointer(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const GrungeTitle('ZONA CERO', size: 33, letterSpacing: 4.4, maxLines: 1),
-                  const SizedBox(height: 5),
-                  Text(
-                    'VITA-7  //  PROTOCOLO SUTURA',
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                    style: SuturaText.label.copyWith(fontSize: 9.5, letterSpacing: 3.0, color: Sutura.signal),
-                  ),
-                ],
+    return LayoutBuilder(
+      builder: (context, c) {
+        // La nota a mano solo si entra (pantallas de 370 px o más).
+        final note = c.maxWidth >= 340;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              child: IgnorePointer(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topLeft,
+                  child: const ZcLogo(size: 27),
+                ),
               ),
             ),
-          ),
-        ),
-        StatusCard(model: model),
-      ],
+            const SizedBox(width: 10),
+            StatusCard(model: model),
+            if (note)
+              const IgnorePointer(
+                child: Padding(
+                  padding: EdgeInsets.only(left: 2, top: 4),
+                  child: SizedBox(
+                    width: 42,
+                    height: 52,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.topLeft,
+                      child: HandNote('Mismas\ncalles\notra\nhistoria', size: 11, angle: -0.22, color: Color(0xFF8A8781)),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
-/// "SIMULACIÓN · 15:58 | ☁ 16° BUENOS AIRES".
+/// "BUENOS AIRES · SIMULACIÓN · 15:58 | DÍA 7 · ☁ 16°C", con el Obelisco tenue.
 class StatusCard extends StatefulWidget {
   const StatusCard({super.key, required this.model});
 
@@ -153,66 +184,112 @@ class _StatusCardState extends State<StatusCard> {
     final t = DateTime.now();
     final hhmm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
     return ListenableBuilder(
-      listenable: Listenable.merge([app.location, widget.model]),
+      listenable: Listenable.merge([app.location, widget.model, app]),
       builder: (context, _) {
         final loc = app.location;
         final (label, color) = switch (loc.mode) {
-          LocationMode.demo => ('SIMULACIÓN', Sutura.textMid),
-          _ when loc.position != null && loc.status != LocationStatus.error => ('EN LÍNEA', Sutura.textMid),
+          LocationMode.demo => ('SIMULACIÓN', Sutura.textLow),
+          _ when loc.position != null && loc.status != LocationStatus.error => ('EN LÍNEA', Sutura.textLow),
           _ => ('SIN SEÑAL', Sutura.danger),
         };
         final w = widget.model.reading;
         final city = widget.model.labels.city;
+        final p = app.player;
+        final day = p == null ? 1 : survivalDay(p.createdAt, t.millisecondsSinceEpoch);
+        final small = SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 1.7, color: Sutura.textLow, height: 1.1);
         return Semantics(
-          label: '$label, $hhmm${w != null ? ', ${w.tempLabel}' : ''}, $city',
-          child: GritPanel(
-            padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
-            background: kMapControlFill,
-            border: Sutura.lineHair,
-            corners: null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(label, style: SuturaText.label.copyWith(fontSize: 8, letterSpacing: 1.8, color: color)),
-                    const SizedBox(height: 4),
-                    Text(hhmm, style: SuturaText.number.copyWith(fontSize: 22, letterSpacing: 2.2, fontWeight: FontWeight.w500)),
-                  ],
-                ),
-                Container(width: 1, height: 30, margin: const EdgeInsets.symmetric(horizontal: 8), color: Sutura.lineStrong),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 74),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (w != null)
+          label: '$city, $label, $hhmm, día $day${w != null ? ', ${w.tempLabel}C' : ''}',
+          child: IgnorePointer(
+            child: SizedBox(
+              width: 128,
+              height: 54,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0x660B0C0D),
+                        border: Border.all(color: const Color(0xFF3B3F42), width: 0.8),
+                      ),
+                    ),
+                  ),
+                  // Obelisco: silueta tenue a la derecha de la tarjeta.
+                  Positioned(
+                    right: 1,
+                    top: -9,
+                    bottom: 1,
+                    width: 20,
+                    child: ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (r) => const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFFFFFFFF), Color(0xCCFFFFFF), Color(0x00FFFFFF)],
+                        stops: [0, 0.7, 1],
+                      ).createShader(r),
+                      child: Opacity(
+                        opacity: 0.55,
+                        child: ColorFiltered(
+                          colorFilter: _greyscale,
+                          child: Image.asset(_obelisco, fit: BoxFit.fitHeight, alignment: const Alignment(-0.08, -1), filterQuality: FilterQuality.medium),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 22, 5),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            SizedBox(
-                              width: 19,
-                              height: 14,
-                              child: CustomPaint(painter: WeatherGlyphPainter(w.kind, day: w.isDay)),
+                            Expanded(
+                              child: Text(
+                                city,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: SuturaText.label.copyWith(fontSize: 9.5, letterSpacing: 1.6, color: Sutura.textHi, height: 1.1),
+                              ),
                             ),
-                            const SizedBox(width: 5),
-                            Text(w.tempLabel, style: SuturaText.number.copyWith(fontSize: 16.5, letterSpacing: 0.6)),
+                            if (w != null)
+                              SizedBox(
+                                width: 17,
+                                height: 12,
+                                child: CustomPaint(painter: WeatherGlyphPainter(w.kind, day: w.isDay)),
+                              ),
                           ],
                         ),
-                      if (w != null) const SizedBox(height: 4),
-                      Text(
-                        city,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: SuturaText.label.copyWith(fontSize: 7, letterSpacing: 1.3, color: Sutura.textMid),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Expanded(child: Text(label, maxLines: 1, style: small.copyWith(color: color))),
+                            Text(
+                              w != null ? '${w.tempC.round()}°C' : '—°C',
+                              style: SuturaText.label.copyWith(fontSize: 10, letterSpacing: 0.6, color: w != null ? Sutura.textHi : Sutura.textLow),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              hhmm,
+                              style: SuturaText.number.copyWith(fontSize: 20, letterSpacing: 1.4, fontWeight: FontWeight.w500, color: const Color(0xFFD9D6CF)),
+                            ),
+                            Container(width: 1, height: 13, margin: const EdgeInsets.fromLTRB(6, 0, 5, 2), color: Sutura.lineStrong),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Text('DÍA $day', style: small),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -221,7 +298,8 @@ class _StatusCardState extends State<StatusCard> {
   }
 }
 
-/// Glifo de clima dibujado (nube gris, sol, luna, lluvia, tormenta, niebla, nieve).
+/// Glifo de clima de línea fina (nube con sol, sol, luna, lluvia, tormenta,
+/// niebla, nieve), como el de la referencia.
 class WeatherGlyphPainter extends CustomPainter {
   WeatherGlyphPainter(this.kind, {this.day = true});
 
@@ -233,29 +311,33 @@ class WeatherGlyphPainter extends CustomPainter {
     final s = size.height / 14;
     canvas.save();
     canvas.scale(s);
-    const grey = Color(0xFFB9BBBC);
-    const dim = Color(0xFF8D9092);
-    final fill = Paint()..color = grey;
+    const grey = Color(0xFFCFD1D2);
+    const dim = Color(0xFF9A9D9F);
     final line = Paint()
       ..color = grey
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.3
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = 1.25
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
-    void cloud(Offset o, Color c) {
-      final p = Paint()..color = c;
-      canvas.drawCircle(o + const Offset(-4, 1.5), 3.2, p);
-      canvas.drawCircle(o + const Offset(0.5, -0.8), 4.4, p);
-      canvas.drawCircle(o + const Offset(4.6, 1.6), 3, p);
-      canvas.drawRRect(RRect.fromLTRBR(o.dx - 7, o.dy + 0.5, o.dx + 7.6, o.dy + 4.6, const Radius.circular(2)), p);
+    Path cloudPath(Offset o) {
+      final p = Path()
+        ..moveTo(o.dx - 6.5, o.dy + 4)
+        ..arcToPoint(Offset(o.dx - 4.2, o.dy - 0.6), radius: const Radius.circular(2.6))
+        ..arcToPoint(Offset(o.dx + 3.4, o.dy - 1), radius: const Radius.circular(4.2))
+        ..arcToPoint(Offset(o.dx + 6.4, o.dy + 4), radius: const Radius.circular(2.8))
+        ..close();
+      return p;
     }
 
+    void cloud(Offset o, [Color c = grey]) => canvas.drawPath(cloudPath(o), line..color = c);
+
     void sun(Offset o, double r) {
-      canvas.drawCircle(o, r, fill);
+      canvas.drawCircle(o, r, line);
       for (var i = 0; i < 8; i++) {
         final a = i * math.pi / 4;
         final d = Offset(math.cos(a), math.sin(a));
-        canvas.drawLine(o + d * (r + 1.6), o + d * (r + 3.2), line);
+        canvas.drawLine(o + d * (r + 1.5), o + d * (r + 2.8), line);
       }
     }
 
@@ -265,40 +347,43 @@ class WeatherGlyphPainter extends CustomPainter {
         Path()..addOval(Rect.fromCircle(center: o, radius: r)),
         Path()..addOval(Rect.fromCircle(center: o + Offset(r * 0.55, -r * 0.35), radius: r * 0.85)),
       );
-      canvas.drawPath(p, fill);
+      canvas.drawPath(p, line);
     }
 
-    const c = Offset(9.5, 6);
     switch (kind) {
       case WeatherKind.clear:
-        day ? sun(const Offset(9.5, 7), 3.6) : moon(const Offset(9.5, 7), 5.2);
+        day ? sun(const Offset(9.5, 7), 3.2) : moon(const Offset(9.5, 7), 5);
       case WeatherKind.partly:
-        day ? sun(const Offset(13, 4.5), 2.6) : moon(const Offset(13.5, 4.5), 3.6);
-        cloud(const Offset(8, 7.5), grey);
+        // Sol (o luna) asomando detrás de la nube.
+        canvas.save();
+        canvas.clipPath(Path.combine(PathOperation.difference, Path()..addRect(const Rect.fromLTWH(0, 0, 20, 14)), cloudPath(const Offset(8, 8))));
+        day ? sun(const Offset(13.2, 4.6), 2.4) : moon(const Offset(13.5, 4.5), 3.4);
+        canvas.restore();
+        cloud(const Offset(8, 8));
       case WeatherKind.cloud:
-        cloud(c, grey);
+        cloud(const Offset(9.5, 6.5));
       case WeatherKind.fog:
         for (final (i, y) in [3.5, 7.0, 10.5].indexed) {
           canvas.drawLine(Offset(2.5 + i * 1.5, y), Offset(16.5 - (2 - i) * 1.2, y), line);
         }
       case WeatherKind.drizzle || WeatherKind.rain:
-        cloud(const Offset(9.5, 4), grey);
+        cloud(const Offset(9.5, 3.8));
         final drop = Paint()
           ..color = dim
-          ..strokeWidth = 1.2
+          ..strokeWidth = 1.1
           ..strokeCap = StrokeCap.round;
         final n = kind == WeatherKind.rain ? 3 : 2;
         for (var i = 0; i < n; i++) {
           final x = 6.5 + i * (n == 3 ? 3.2 : 5.0);
-          canvas.drawLine(Offset(x, 10.2), Offset(x - 1.2, 13), drop);
+          canvas.drawLine(Offset(x, 10.4), Offset(x - 1.1, 13), drop);
         }
       case WeatherKind.snow:
-        cloud(const Offset(9.5, 4), grey);
+        cloud(const Offset(9.5, 3.8));
         for (var i = 0; i < 3; i++) {
-          canvas.drawCircle(Offset(6.5 + i * 3.2, 11.8), 0.95, Paint()..color = dim);
+          canvas.drawCircle(Offset(6.5 + i * 3.2, 11.8), 0.9, Paint()..color = dim);
         }
       case WeatherKind.storm:
-        cloud(const Offset(9.5, 4), dim);
+        cloud(const Offset(9.5, 3.8), dim);
         canvas.drawPath(
           Path()
             ..moveTo(10.5, 8.2)
@@ -346,14 +431,14 @@ class MapObjective {
     final selId = w.selectedId;
     final sel = w.spawnById(selId);
     if (sel != null) {
-      final d = app.distanceTo(sel.position) ?? 0;
-      final inReach = app.isNear(sel.position);
+      final d = app.distanceToSpawn(sel) ?? 0;
+      final inReach = app.isNearSpawn(sel);
       final text = switch (sel) {
         ZombieSpawn() => inReach ? 'Enfrentá al infectado' : 'Acercate al infectado · ${near(d)}',
         SupplySpawn() => inReach ? 'Recuperá el suministro' : 'Acercate al saqueo · ${near(d)}',
       };
       final color = inReach ? (sel is ZombieSpawn ? Sutura.danger : Sutura.amber) : Sutura.textHi;
-      return MapObjective(text, color, target: sel.position, targetId: sel.id);
+      return MapObjective(text, color, target: w.positionAt(sel, now), targetId: sel.id);
     }
     final sig = w.signalById(selId);
     if (sig != null) {
@@ -369,7 +454,7 @@ class MapObjective {
     final node = w.shelterById(selId);
     if (node != null) {
       return app.isNear(node.position)
-          ? MapObjective('Abrí el nodo de relevo', Sutura.signal, target: node.position, targetId: node.id)
+          ? MapObjective('Abrí el nodo de relevo', Sutura.refuge, target: node.position, targetId: node.id)
           : MapObjective(
               'Llegá al refugio · ${near(app.distanceTo(node.position) ?? 0)}',
               Sutura.textHi,
@@ -383,7 +468,7 @@ class MapObjective {
     var closestD = double.infinity;
     for (final s in w.drawable) {
       if (w.visibilityOf(s, pos, now) == SpawnVisibility.hidden) continue;
-      final d = haversineM(pos, s.position);
+      final d = haversineM(pos, w.positionAt(s, now));
       if (d < closestD) {
         closest = s;
         closestD = d;
@@ -393,14 +478,15 @@ class MapObjective {
     if (nearestSignal != null && app.isNear(nearestSignal.$2)) {
       return MapObjective('Respondé la señal de auxilio', Sutura.amber, target: nearestSignal.$2, targetId: nearestSignal.$1);
     }
-    if (closest != null && app.isNear(closest.position)) {
+    if (closest != null && app.isNearSpawn(closest)) {
+      final at = w.positionAt(closest, now);
       return switch (closest) {
-        ZombieSpawn() => MapObjective('Enfrentá al infectado', Sutura.danger, target: closest.position, targetId: closest.id),
-        SupplySpawn() => MapObjective('Recuperá el suministro', Sutura.amber, target: closest.position, targetId: closest.id),
+        ZombieSpawn() => MapObjective('Enfrentá al infectado', Sutura.danger, target: at, targetId: closest.id),
+        SupplySpawn() => MapObjective('Recuperá el suministro', Sutura.amber, target: at, targetId: closest.id),
       };
     }
     if (closest != null) {
-      return MapObjective('Acercate a un contacto', Sutura.textHi, target: closest.position, targetId: closest.id);
+      return MapObjective('Acercate a un contacto', Sutura.textHi, target: w.positionAt(closest, now), targetId: closest.id);
     }
     if (w.scanCooldownLeft(now) == 0) return const MapObjective('Escaneá la zona', Sutura.textHi);
     if (nearestSignal != null && haversineM(pos, nearestSignal.$2) < 1200) {
@@ -423,11 +509,14 @@ class MapObjective {
   }
 }
 
-/// Tarjeta "OBJETIVO ACTUAL": al tocarla, la cámara va hasta el objetivo.
+/// Tarjeta "OBJETIVO ACTUAL" a todo el ancho, con una franja de foto a la
+/// derecha ("ZONA CERO / SIGUE EN PIE"). Al tocarla, la cámara va al objetivo.
 class ObjectiveCard extends StatelessWidget {
   const ObjectiveCard({super.key, required this.camera});
 
   final GameMapController camera;
+
+  static const _cuts = Cuts(topLeft: 6, topRight: 9, bottomRight: 9, bottomLeft: 6);
 
   @override
   Widget build(BuildContext context) {
@@ -449,46 +538,96 @@ class ObjectiveCard extends StatelessWidget {
                 camera.focus(t, select: o.targetId);
               }
             },
-            child: GritPanel(
-              padding: const EdgeInsets.fromLTRB(14, 8, 8, 9),
-              background: kMapControlFill,
-              border: const Color(0xFF6A6E71),
-              corners: null,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('OBJETIVO ACTUAL', style: SuturaText.label.copyWith(fontSize: 9.5, letterSpacing: 3.2)),
-                        const SizedBox(height: 3),
-                        AnimatedSwitcher(
-                          duration: Sutura.fast,
-                          layoutBuilder: (current, previous) => Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
-                          child: FittedBox(
-                            key: ValueKey(o.text),
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              o.text,
-                              maxLines: 1,
-                              style: TextStyle(
-                                fontFamily: Sutura.fUi,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 20,
-                                letterSpacing: 1.1,
-                                height: 1.15,
-                                color: o.color,
-                              ),
+            child: SizedBox(
+              height: 50,
+              child: CustomPaint(
+                foregroundPainter: _FramePainter(_cuts, const Color(0xFF55595C)),
+                child: ClipPath(
+                  clipper: _CutsClip(_cuts),
+                  child: Stack(
+                    children: [
+                      const Positioned.fill(child: ColoredBox(color: Color(0xD90B0C0D))),
+                      // Franja de foto, desvanecida hacia la izquierda.
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 190,
+                        child: ShaderMask(
+                          blendMode: BlendMode.dstIn,
+                          shaderCallback: (r) => const LinearGradient(
+                            colors: [Color(0x00FFFFFF), Color(0xB3FFFFFF), Color(0xFFFFFFFF)],
+                            stops: [0, 0.55, 1],
+                          ).createShader(r),
+                          child: Opacity(
+                            opacity: 0.72,
+                            child: ColorFiltered(
+                              colorFilter: _greyscale,
+                              child: Image.asset(_obelisco, fit: BoxFit.cover, alignment: const Alignment(0, 0.25), filterQuality: FilterQuality.medium),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 7, 12, 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(width: 1, height: 9, color: Sutura.textLow),
+                                      const SizedBox(width: 4),
+                                      Text('OBJETIVO ACTUAL', style: SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 2.6, color: Sutura.textLow)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.only(right: 9, left: 1),
+                                        child: Icon(Icons.chevron_right, size: 17, color: Sutura.textMid),
+                                      ),
+                                      Expanded(
+                                        child: AnimatedSwitcher(
+                                          duration: Sutura.fast,
+                                          layoutBuilder: (current, previous) =>
+                                              Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                                          child: FittedBox(
+                                            key: ValueKey(o.text),
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              o.text,
+                                              maxLines: 1,
+                                              style: TextStyle(
+                                                fontFamily: Sutura.fUi,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 17.5,
+                                                letterSpacing: 0.9,
+                                                height: 1.1,
+                                                color: o.color == Sutura.textHi ? const Color(0xFFE2DFD8) : o.color,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const _StillStanding(),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const Icon(Icons.chevron_right, size: 24, color: Sutura.textMid),
-                ],
+                ),
               ),
             ),
           ),
@@ -498,9 +637,86 @@ class ObjectiveCard extends StatelessWidget {
   }
 }
 
+/// "ZONA CERO / SIGUE EN PIE" con un subrayado rojo a mano.
+class _StillStanding extends StatelessWidget {
+  const _StillStanding();
+
+  @override
+  Widget build(BuildContext context) {
+    final style = SuturaText.label.copyWith(fontSize: 8, letterSpacing: 1.9, color: const Color(0xFFBDBAB3), height: 1.3);
+    return IgnorePointer(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 6),
+          Text('ZONA CERO', style: style),
+          Text('SIGUE EN PIE', style: style),
+          // Solo el trazo de HandNote (sin texto): un subrayado corto, rojo.
+          Transform.translate(
+            offset: const Offset(10, -9),
+            child: const SizedBox(height: 10, child: HandNote('', size: 12, angle: -0.06, underline: Sutura.accent)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CutsClip extends CustomClipper<Path> {
+  const _CutsClip(this.cuts);
+  final Cuts cuts;
+  @override
+  Path getClip(Size size) => cuts.path(size);
+  @override
+  bool shouldReclip(_CutsClip old) => old.cuts != cuts;
+}
+
+/// Marco fino con esquinas recortadas.
+class _FramePainter extends CustomPainter {
+  const _FramePainter(this.cuts, this.color);
+  final Cuts cuts;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      cuts.path(size),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_FramePainter old) => old.color != color || old.cuts != cuts;
+}
+
 // -----------------------------------------------------------------------------
 // Controles de cámara
 // -----------------------------------------------------------------------------
+
+/// Marco de los controles del mapa: borde fino y esquinas recortadas.
+class MapControlFrame extends StatelessWidget {
+  const MapControlFrame({super.key, required this.child, this.border = kMapControlBorder, this.background = kMapControlFill, this.glow});
+
+  final Widget child;
+  final Color border;
+  final Color background;
+  final Color? glow;
+
+  @override
+  Widget build(BuildContext context) => GritPanel(
+        padding: EdgeInsets.zero,
+        background: background,
+        border: border,
+        corners: null,
+        cuts: kMapCuts,
+        glow: glow,
+        child: child,
+      );
+}
 
 /// Botón cuadrado de los controles del mapa.
 class MapControlButton extends StatelessWidget {
@@ -510,8 +726,8 @@ class MapControlButton extends StatelessWidget {
     required this.label,
     this.onTap,
     this.onLongPress,
-    this.width = 44,
-    this.height = 44,
+    this.width = 42,
+    this.height = 42,
     this.active = false,
   });
 
@@ -540,11 +756,8 @@ class MapControlButton extends StatelessWidget {
         child: SizedBox(
           width: width,
           height: height,
-          child: GritPanel(
-            padding: EdgeInsets.zero,
-            background: kMapControlFill,
+          child: MapControlFrame(
             border: active ? Sutura.signal.withValues(alpha: 0.8) : kMapControlBorder,
-            corners: null,
             child: Center(child: child),
           ),
         ),
@@ -553,35 +766,51 @@ class MapControlButton extends StatelessWidget {
   }
 }
 
-/// Brújula: "N" sobre una flecha; gira con el mapa. Tocar = norte arriba;
-/// mantener = vista inclinada.
-class CompassButton extends StatelessWidget {
-  const CompassButton({super.key, required this.camera});
+/// Indicador de norte, sin caja: "N" sobre una flecha; gira con el mapa.
+/// Tocar = norte arriba; mantener = vista inclinada.
+class NorthIndicator extends StatelessWidget {
+  const NorthIndicator({super.key, required this.camera});
 
   final GameMapController camera;
 
   @override
   Widget build(BuildContext context) {
-    return MapControlButton(
-      label: 'Brújula: tocá para poner el norte arriba',
-      width: 42,
-      height: 42,
-      onTap: camera.resetNorth,
-      onLongPress: camera.togglePitch,
-      child: ListenableBuilder(
-        listenable: camera,
-        builder: (context, _) => Transform.rotate(
-          angle: -camera.bearing * math.pi / 180,
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'N',
-                style: TextStyle(fontFamily: Sutura.fUi, fontWeight: FontWeight.w600, fontSize: 11, height: 1, color: Sutura.textHi),
+    return Semantics(
+      button: true,
+      label: 'Norte: tocá para poner el norte arriba',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          camera.resetNorth();
+        },
+        onLongPress: camera.togglePitch,
+        child: SizedBox(
+          width: 36,
+          height: 52,
+          child: ListenableBuilder(
+            listenable: camera,
+            builder: (context, _) => Transform.rotate(
+              angle: -camera.bearing * math.pi / 180,
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'N',
+                    style: TextStyle(
+                      fontFamily: Sutura.fUi,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                      height: 1,
+                      color: Color(0xFFD5D7D8),
+                      shadows: [Shadow(color: Color(0xCC000000), blurRadius: 3)],
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  SizedBox(width: 18, height: 24, child: CustomPaint(painter: _ArrowPainter())),
+                ],
               ),
-              SizedBox(height: 3),
-              SizedBox(width: 14, height: 16, child: CustomPaint(painter: _ArrowPainter())),
-            ],
+            ),
           ),
         ),
       ),
@@ -596,7 +825,7 @@ class _ArrowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size s) {
     final tip = Offset(s.width / 2, 0);
-    final notch = Offset(s.width / 2, s.height * 0.72);
+    final notch = Offset(s.width / 2, s.height * 0.74);
     final left = Path()
       ..moveTo(tip.dx, tip.dy)
       ..lineTo(0, s.height)
@@ -607,8 +836,12 @@ class _ArrowPainter extends CustomPainter {
       ..lineTo(s.width, s.height)
       ..lineTo(notch.dx, notch.dy)
       ..close();
-    canvas.drawPath(left, Paint()..color = const Color(0xFFC9CCCD));
-    canvas.drawPath(right, Paint()..color = const Color(0xFF7D8183));
+    final shadow = Paint()
+      ..color = const Color(0x99000000)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    canvas.drawPath(Path()..addPath(left, Offset.zero)..addPath(right, Offset.zero), shadow);
+    canvas.drawPath(left, Paint()..color = const Color(0xFFE1E3E4));
+    canvas.drawPath(right, Paint()..color = const Color(0xFF9A9EA0));
   }
 
   @override
@@ -617,7 +850,7 @@ class _ArrowPainter extends CustomPainter {
 
 /// "+" / "−" en un mismo panel.
 class ZoomButtons extends StatelessWidget {
-  const ZoomButtons({super.key, required this.camera, this.width = 44});
+  const ZoomButtons({super.key, required this.camera, this.width = 42});
 
   final GameMapController camera;
   final double width;
@@ -636,22 +869,18 @@ class ZoomButtons extends StatelessWidget {
         child: SizedBox(
           width: width,
           height: 44,
-          child: Icon(icon, size: 22, color: Sutura.textHi),
+          child: Icon(icon, size: 21, color: Sutura.textHi),
         ),
       ),
     );
     return SizedBox(
       width: width,
-      child: GritPanel(
-        padding: EdgeInsets.zero,
-        background: kMapControlFill,
-        border: kMapControlBorder,
-        corners: null,
+      child: MapControlFrame(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             btn(Icons.add, 'Acercar', camera.zoomIn),
-            Container(height: 1, margin: const EdgeInsets.symmetric(horizontal: 6), color: kMapControlBorder),
+            Container(height: 1, margin: const EdgeInsets.symmetric(horizontal: 8), color: kMapControlBorder.withValues(alpha: 0.7)),
             btn(Icons.remove, 'Alejar', camera.zoomOut),
           ],
         ),
@@ -676,7 +905,7 @@ class LocateButton extends StatelessWidget {
         onTap: camera.recenter,
         child: Transform.rotate(
           angle: math.pi / 4,
-          child: Icon(Icons.navigation, size: 21, color: camera.follow ? Sutura.textHi : Sutura.signal),
+          child: Icon(Icons.navigation, size: 19, color: camera.follow ? Sutura.textHi : Sutura.signal),
         ),
       ),
     );
@@ -684,7 +913,7 @@ class LocateButton extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// Pie del mapa: región y escala
+// Pie del mapa: emblema y región, escala y créditos de los datos
 // -----------------------------------------------------------------------------
 
 class MapCaption extends StatelessWidget {
@@ -694,42 +923,125 @@ class MapCaption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final low = SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 2.6, color: const Color(0xFF8C8F91), height: 1.35);
+    final style = SuturaText.label.copyWith(fontSize: 7.5, letterSpacing: 2, color: const Color(0xFF8F9294), height: 1.45);
     return ListenableBuilder(
       listenable: model,
-      builder: (context, _) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context, _) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(model.labels.region, style: low.copyWith(fontSize: 11, letterSpacing: 3, color: const Color(0xFFC4C6C7))),
-          Text('MAPA DE EXPLORACIÓN', style: low),
-          Text('V.1.3', style: low),
+          const SizedBox.square(dimension: 30, child: CustomPaint(painter: SutureSealPainter())),
+          const SizedBox(width: 9),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [for (final l in model.caption) Text(l, style: style)],
+          ),
         ],
       ),
     );
   }
 }
 
+/// Emblema propio de la terminal (no es un escudo oficial): sello redondo con
+/// un hexágono "suturado" y las iniciales ZC.
+class SutureSealPainter extends CustomPainter {
+  const SutureSealPainter({this.color = const Color(0xFF7D8183)});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2 - 0.5;
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9
+      ..color = color;
+    canvas.drawCircle(c, r, line);
+    canvas.drawCircle(c, r - 2.6, line..strokeWidth = 0.6);
+    // Corona de marcas finas entre los dos anillos.
+    final tick = Paint()
+      ..strokeWidth = 0.6
+      ..color = color.withValues(alpha: 0.8);
+    for (var i = 0; i < 36; i++) {
+      final a = i * math.pi / 18;
+      final d = Offset(math.cos(a), math.sin(a));
+      canvas.drawLine(c + d * (r - 2.3), c + d * (r - 0.6), tick);
+    }
+    // Hexágono.
+    final hr = r * 0.6;
+    final hex = Path();
+    for (var i = 0; i < 6; i++) {
+      final a = -math.pi / 2 + i * math.pi / 3;
+      final v = c + Offset(math.cos(a), math.sin(a)) * hr;
+      i == 0 ? hex.moveTo(v.dx, v.dy) : hex.lineTo(v.dx, v.dy);
+    }
+    hex.close();
+    canvas.drawPath(hex, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9
+      ..color = color);
+    // Sutura: costura en diagonal con puntadas.
+    final a = c + Offset(-hr * 0.62, hr * 0.5);
+    final b = c + Offset(hr * 0.62, -hr * 0.5);
+    canvas.drawLine(a, b, Paint()
+      ..strokeWidth = 0.8
+      ..color = const Color(0xFF9C3A33));
+    final dir = (b - a) / (b - a).distance;
+    final n = Offset(-dir.dy, dir.dx);
+    for (var i = 1; i <= 4; i++) {
+      final p = a + (b - a) * (i / 5);
+      canvas.drawLine(p - n * 1.8, p + n * 1.8, Paint()
+        ..strokeWidth = 0.8
+        ..color = const Color(0xFF9C3A33));
+    }
+    // "ZC".
+    final tp = TextPainter(
+      text: TextSpan(
+        text: 'ZC',
+        style: TextStyle(fontFamily: Sutura.fDisplay, fontWeight: FontWeight.w700, fontSize: r * 0.5, color: color, letterSpacing: 0.4),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(SutureSealPainter old) => old.color != color;
+}
+
+/// Escala táctica ("0  100  300 m") y créditos de los datos debajo.
 class ScaleBar extends StatelessWidget {
-  const ScaleBar({super.key, required this.camera, this.maxWidth = 110});
+  const ScaleBar({super.key, required this.camera, this.maxWidth = 92});
 
   final GameMapController camera;
   final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
+    final credit = SuturaText.label.copyWith(fontSize: 7.5, letterSpacing: 1.7, color: const Color(0xFF8F9294), height: 1.45);
+    final satellite = SuturaMapStyle.satelliteTiles.isNotEmpty;
     return ListenableBuilder(
       listenable: camera,
       builder: (context, _) {
         final lat = camera.latitude ?? app.location.position?.lat ?? gameConfig.demo.start.lat;
-        final spec = scaleBarFor(lat: lat, zoom: camera.zoom, maxPx: maxWidth);
-        final style = SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 1.2, color: const Color(0xFFB3B6B7), height: 1);
+        final spec = tacticalScaleFor(lat: lat, zoom: camera.zoom, maxPx: maxWidth);
+        final style = SuturaText.label.copyWith(fontSize: 8, letterSpacing: 1, color: const Color(0xFFB9BCBD), height: 1);
         return Semantics(
           label: 'Escala: ${spec.labels.last}',
-          child: SizedBox(
-            width: spec.px + 26,
-            height: 26,
-            child: CustomPaint(painter: _ScalePainter(spec, style)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: spec.px + 22,
+                height: 20,
+                child: CustomPaint(painter: _ScalePainter(spec, style)),
+              ),
+              const SizedBox(height: 9),
+              Text(satellite ? 'DATOS SATELITALES  //  VITA-7' : 'CARTOGRAFÍA OSM  //  VITA-7', style: credit),
+              Text('USO TÁCTICO ÚNICAMENTE', style: credit),
+            ],
           ),
         );
       },
@@ -739,105 +1051,31 @@ class ScaleBar extends StatelessWidget {
 
 class _ScalePainter extends CustomPainter {
   _ScalePainter(this.spec, this.style);
-  final ScaleBarSpec spec;
+  final TacticalScale spec;
   final TextStyle style;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final x0 = 4.0;
-    final y = size.height - 4;
+    final x0 = size.width - spec.px - 4;
+    final y = size.height - 3;
     final line = Paint()
       ..color = const Color(0xFFB3B6B7)
       ..strokeWidth = 1;
     canvas.drawLine(Offset(x0, y), Offset(x0 + spec.px, y), line);
-    for (final (i, f) in [0.0, 0.5, 1.0].indexed) {
+    for (final (i, f) in spec.ticks.indexed) {
       final x = x0 + spec.px * f;
-      canvas.drawLine(Offset(x, y - 4), Offset(x, y + 3), line);
+      canvas.drawLine(Offset(x, y - 4), Offset(x, y), line);
       final tp = TextPainter(
         text: TextSpan(text: spec.labels[i], style: style),
         textDirection: TextDirection.ltr,
       )..layout();
-      final dx = i == 2 ? x - 4 : x - tp.width / 2;
-      tp.paint(canvas, Offset(dx.clamp(0, size.width - tp.width), y - 9 - tp.height));
+      final dx = i == spec.ticks.length - 1 ? x - tp.width + 6 : x - tp.width / 2;
+      tp.paint(canvas, Offset(dx.clamp(0, size.width - tp.width), y - 8 - tp.height));
     }
   }
 
   @override
   bool shouldRepaint(_ScalePainter old) => old.spec.px != spec.px || old.spec.meters != spec.meters;
-}
-
-// -----------------------------------------------------------------------------
-// Panel ESTADO
-// -----------------------------------------------------------------------------
-
-class StatusPanel extends StatelessWidget {
-  const StatusPanel({super.key, this.height = 96});
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: app,
-      builder: (context, _) {
-        final p = app.player;
-        final ratio = p == null ? 1.0 : (p.health / maxHealth(p)).clamp(0.0, 1.0);
-        final stamina = p == null ? 1.0 : (p.stamina / maxStamina(p)).clamp(0.0, 1.0);
-        final vital = vitalFor(ratio);
-        final rowStyle = SuturaText.label.copyWith(fontSize: 10, letterSpacing: 1.8, color: Sutura.textMid);
-        Widget row(String label, double v, Color c) => Row(
-          children: [
-            SizedBox(width: 74, child: Text(label, style: rowStyle)),
-            Expanded(
-              child: StatBar(ratio: v, color: c, height: 6),
-            ),
-          ],
-        );
-        return Semantics(
-          label: 'Estado ${vitalLabel(vital)}. Salud ${(ratio * 100).round()} %. Resistencia ${(stamina * 100).round()} %.',
-          child: GritPanel(
-            padding: const EdgeInsets.fromLTRB(14, 8, 12, 10),
-            accent: const Color(0xFF8E9295),
-            child: SizedBox(
-              height: height - 18,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('ESTADO', style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 2.6)),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, c) => Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Positioned(
-                            left: 0,
-                            top: 2,
-                            child: EcgMonitor(ratio: ratio, width: c.maxWidth * 0.82, height: c.maxHeight - 4, showLabel: false),
-                          ),
-                          Positioned(
-                            right: 0,
-                            bottom: 1,
-                            child: Text(
-                              vitalLabel(vital),
-                              style: SuturaText.label.copyWith(fontSize: 12.5, letterSpacing: 2.2, color: vitalColor(vital)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  row('SALUD', ratio, Sutura.fine),
-                  const SizedBox(height: 6),
-                  row('RESISTENCIA', stamina, Sutura.signal),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 // -----------------------------------------------------------------------------
@@ -873,6 +1111,46 @@ class SpeedLockBanner extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Entrada: rótulo mientras la cámara vuela hasta el jugador
+// -----------------------------------------------------------------------------
+
+class IntroCaption extends StatelessWidget {
+  const IntroCaption({super.key, required this.camera});
+
+  final GameMapController camera;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ListenableBuilder(
+        listenable: camera,
+        builder: (context, _) => AnimatedOpacity(
+          opacity: camera.intro ? 1 : 0,
+          duration: Sutura.heavy,
+          child: Align(
+            alignment: const Alignment(0, -0.3),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ENLACE SATELITAL',
+                  style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 4.4, color: Sutura.textHi, shadows: const [Shadow(color: Color(0xE6000000), blurRadius: 6)]),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'VITA-7  //  TRIANGULANDO TU POSICIÓN',
+                  style: SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 2.4, color: Sutura.signal, shadows: const [Shadow(color: Color(0xE6000000), blurRadius: 6)]),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

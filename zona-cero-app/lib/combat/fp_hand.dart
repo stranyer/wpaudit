@@ -55,6 +55,7 @@ class HandSpec {
     this.split = false,
     this.pivotRight = const Offset(0.75, 0.6),
     this.extendLeft = false,
+    this.restRot = 0,
   });
 
   /// Ancho / alto del recorte.
@@ -69,8 +70,13 @@ class HandSpec {
   /// Cuánto baja por debajo de la base (borde superior de la botonera).
   final double overBottom;
 
-  /// Muñeca: pivote de los giros (fracción de la imagen).
+  /// Pivote de los giros (fracción de la imagen): la muñeca para las armas
+  /// de fuego; el hombro/codo (donde el brazo sale del cuadro) para golpes
+  /// amplios, así el corte del brazo nunca entra en pantalla.
   final Offset pivot;
+
+  /// Giro de reposo (rad, alrededor de [pivot]).
+  final double restRot;
 
   /// Boca del cañón (fracción de la imagen) y hacia dónde apunta.
   final Offset? muzzle;
@@ -89,9 +95,9 @@ class HandSpec {
 const Map<HandKind, HandSpec> handSpecs = {
   HandKind.pistol: HandSpec(
     aspect: 1,
-    width: 0.6,
-    overRight: 0.06,
-    overBottom: 0.05,
+    width: 0.68,
+    overRight: 0.1,
+    overBottom: -0.05,
     pivot: Offset(0.6, 0.6),
     muzzle: Offset(0.252, 0.207),
     muzzleDir: Offset(-0.99, -0.16),
@@ -106,14 +112,15 @@ const Map<HandKind, HandSpec> handSpecs = {
     muzzleDir: Offset(-0.88, -0.48),
     extendLeft: true,
   ),
-  HandKind.melee: HandSpec(aspect: 1, width: 0.7, overRight: 0.07, overBottom: 0.06, pivot: Offset(0.6, 0.7)),
+  // El bate (cualquier arma cuerpo a cuerpo) en alto a la derecha, más vertical.
+  HandKind.melee: HandSpec(aspect: 1, width: 0.62, overRight: 0.1, overBottom: -0.17, pivot: Offset(0.92, 0.98), restRot: 0.28),
   HandKind.fists: HandSpec(
     aspect: 1.5,
     width: 1.06,
     overRight: 0.03,
-    overBottom: 0.07,
-    pivot: Offset(0.27, 0.58),
-    pivotRight: Offset(0.74, 0.62),
+    overBottom: -0.1,
+    pivot: Offset(0.12, 1),
+    pivotRight: Offset(0.88, 1),
     split: true,
     extendLeft: true,
   ),
@@ -294,16 +301,16 @@ class HandRig {
           p.rot -= 0.2 * g;
           p.scale += 0.08 * g;
         case HandKind.melee:
-          p.dx -= 0.2 * g;
-          p.dy -= 0.03 * g;
-          p.rot -= 0.85 * g;
+          p.dx -= 0.12 * g;
+          p.dy -= 0.05 * g;
+          p.rot -= 0.55 * g;
           p.scale += 0.05 * g;
         case HandKind.fists:
           final s = side == 0 ? 1.0 : side.toDouble();
-          p.dx -= 0.09 * g * s;
-          p.dy -= 0.1 * g;
-          p.rot -= 0.12 * g * s;
-          p.scale += 0.12 * g;
+          p.dx -= 0.03 * g * s;
+          p.dy -= 0.07 * g;
+          p.rot -= 0.16 * g * s;
+          p.scale += 0.1 * g;
       }
     }
 
@@ -357,50 +364,50 @@ class HandRig {
     p.dy += 0.75 * lowerK * lowerK;
   }
 
-  /// Bate/caño/machete: amague hacia atrás, barrido de derecha a izquierda
-  /// cruzando la pantalla, vuelta.
+  /// Bate/caño/machete (gira desde el hombro): amague hacia atrás, barrido
+  /// de derecha a izquierda cruzando el blanco, vuelta.
   void _swing(HandPose p, double u) {
-    final h = _heavy ? 1.2 : 1.0;
+    final h = _heavy ? 1.15 : 1.0;
     if (u < 0.16) {
       final w = _easeOut(u / 0.16);
-      p.rot += 0.32 * w * h;
-      p.dx += 0.05 * w;
-      p.dy += 0.03 * w;
+      p.rot += 0.22 * w * h;
+      p.dx += 0.04 * w;
+      p.dy += 0.02 * w;
     } else if (u < 0.36) {
       final s = _easeIn((u - 0.16) / 0.2);
-      p.rot += (0.32 - 1.6 * s) * h;
-      p.dx += 0.05 - 0.42 * s;
-      p.dy += 0.03 + 0.14 * s;
-      p.scale += 0.06 * s;
+      p.rot += (0.22 - 1.0 * s) * h;
+      p.dx += 0.04 - 0.22 * s;
+      p.dy += 0.02 + 0.06 * s;
+      p.scale += 0.05 * s;
     } else {
       final r = _smooth(0.36, 1, u);
-      p.rot += -1.28 * h * (1 - r);
-      p.dx += -0.37 * (1 - r);
-      p.dy += 0.17 * (1 - r) + 0.05 * _bump(u, 0.36, 0.6, 1);
-      p.scale += 0.06 * (1 - r);
+      p.rot += -0.78 * h * (1 - r);
+      p.dx += -0.18 * (1 - r);
+      p.dy += 0.08 * (1 - r) + 0.04 * _bump(u, 0.36, 0.6, 1);
+      p.scale += 0.05 * (1 - r);
     }
   }
 
-  /// Puños: la mano que golpea va hacia el blanco y se aleja de la cámara
-  /// (se achica); la otra se cubre.
+  /// Puños (giran desde el codo): el que pega sale hacia el centro y se aleja
+  /// de la cámara (se achica); el otro se cubre.
   void _punch(HandPose p, double u, int side) {
     if (u >= 1) return;
+    final sd = side == 0 ? 1.0 : side.toDouble();
     final hitter = side == 0 || side == punchSide;
     if (!hitter) {
       final k = _bump(u, 0, 0.3, 1);
       p.dy -= 0.03 * k;
-      p.dx += 0.02 * k * side;
+      p.rot -= 0.06 * k * sd;
       return;
     }
     final h = _heavy ? 1.25 : 1.0;
     final wind = _bump(u, 0, 0.12, 0.3);
-    p.dy += 0.03 * wind;
-    p.scale += 0.05 * wind;
-    final s = _bump(u, 0.1, 0.32, 1);
-    final reach = 0.55 * h;
-    p.dx += _target.dx * reach * s;
-    p.dy += _target.dy * reach * s;
-    p.scale -= 0.32 * s * h;
-    p.rot += -0.25 * s * (side == 0 ? 1 : side);
+    p.dy += 0.025 * wind;
+    p.scale += 0.03 * wind;
+    final s = _bump(u, 0.1, 0.3, 1);
+    p.rot += -0.22 * s * sd * h;
+    p.dx += _target.dx * 0.12 * s - 0.03 * s * sd;
+    p.dy += (-0.07 + _target.dy * 0.08) * s * h;
+    p.scale -= 0.2 * s * h;
   }
 }

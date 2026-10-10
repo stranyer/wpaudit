@@ -159,12 +159,15 @@ class AmbientEventScheduler {
     final d = haversineM(player, pos);
     final dir = compassLabel(bearingDeg(player, pos));
     final street = kind == AmbientKind.shots || kind == AmbientKind.radio || kind == AmbientKind.rotor ? null : streetAt?.call(pos);
+    final text = ambientText(kind, street: street == null ? null : shortStreetName(street), dir: dir);
+    final dist = distanceLabel((d / 10).round() * 10.0);
     return AmbientEvent(
       id: ++_seq,
       kind: kind,
       position: pos,
-      text: ambientText(kind, street: street == null ? null : shortStreetName(street), dir: dir),
-      detail: '${distanceLabel((d / 10).round() * 10.0)} · $dir',
+      text: text,
+      // Si el texto ya dice el rumbo ("Gritos hacia el E"), solo la distancia.
+      detail: text.endsWith(' $dir') ? dist : '$dist · $dir',
       at: now,
       until: now + pingMs,
     );

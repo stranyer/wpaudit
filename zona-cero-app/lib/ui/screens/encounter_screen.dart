@@ -109,13 +109,13 @@ class _EncounterScreenState extends State<EncounterScreen> {
       final ability = zombieDefs[s.zombie.typeId]!.ability;
       switch (ability) {
         case ZombieAbility.toxicBurst:
-          _addLog('Explota al morir: rematalo con un disparo.', const Color(0xFFA6D86A));
+          _addLog('Explota al morir: rematalo de lejos.', const Color(0xFFA6D86A));
         case ZombieAbility.charge:
-          _addLog('Prepara embestidas: cubrite a tiempo.', Sutura.caution);
+          _addLog('Embiste: cubrite a tiempo.', Sutura.caution);
         case ZombieAbility.callHorde:
           _addLog('Si grita, llegan refuerzos.', Sutura.caution);
         case ZombieAbility.doubleStrike:
-          _addLog('Es rápido: puede atacar dos veces.', Sutura.caution);
+          _addLog('Rápido: puede atacar dos veces.', Sutura.caution);
         case ZombieAbility.none:
           break;
       }
@@ -617,7 +617,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
     final compact = size.height < 720;
     // Abajo: botonera, y encima registro (izq.) + arma (der., sobre la mano).
     final buttonsH = compact ? 52.0 : 58.0;
-    final panelH = compact ? 58.0 : 66.0;
+    final panelH = compact ? 58.0 : 68.0;
     final buttonsBottom = pad.bottom + 10;
     final rowBottom = buttonsBottom + buttonsH + 10;
     final bottomBlock = rowBottom + panelH;
@@ -638,7 +638,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
     final threat = threatRating(zombieDefs[s.zombie.typeId]!, player?.level ?? 1);
     final items = usableItems(s);
     final controls = _canAct && !_aiming;
-    final weaponW = math.min(164.0, w * 0.42);
+    final weaponW = math.min(152.0, w * 0.39);
     final firearm = _mode == WeaponMode.firearm;
     final callout = _callout ?? (_charging && !_ended ? const _CallOutSpec(0, '¡CUBRITE!', hudRed, 'Prepara una embestida') : null);
     // El chip de carga repite al aviso fijo: solo se ve si otro aviso lo tapa.
@@ -840,7 +840,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: CombatLog(lines: _log)),
+                  Expanded(child: CombatLog(lines: _log, visible: compact ? 2 : 3)),
                   const SizedBox(width: 10),
                   SizedBox(
                     width: weaponW,

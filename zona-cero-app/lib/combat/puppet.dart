@@ -206,7 +206,8 @@ class PuppetDeformer {
     // lado que se aleja se comprime y el que se acerca se ensancha. Los pies
     // quedan plantados (el giro crece con la altura).
     if (p.yaw != 0) {
-      final w = smooth(0.08, 0.55, hc);
+      // El torso gira entero; la cabeza acompaña a medias (tiene su propio giro).
+      final w = smooth(0.08, 0.55, hc) * (1 - 0.5 * smooth(0.78, 0.98, hc));
       if (w > 0) {
         final s = ((x - cx) / halfW).clamp(-0.985, 0.985);
         final th = math.asin(s);
@@ -327,7 +328,7 @@ class PuppetStyle {
     this.attackScale = 1.45,
     this.chargeScale = 1.62,
     this.tremble = 0,
-    this.yawAmp = 0.11,
+    this.yawAmp = 0.09,
   });
 
   final double breathPeriod;

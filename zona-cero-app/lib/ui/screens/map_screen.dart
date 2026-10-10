@@ -1,25 +1,33 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/core.dart';
+import '../../audio/sfx.dart';
 import '../../map/game_map.dart';
+import '../../map/widgets/event_feed.dart';
 import '../../map/widgets/hud.dart';
 import '../../map/widgets/joystick.dart';
 import '../../map/widgets/pointer_shield.dart';
 import '../../map/widgets/scan_button.dart';
+import '../../map/widgets/scan_wave.dart';
 import '../../map/widgets/target_panel.dart';
+import '../../map/widgets/vitals_panel.dart';
 import '../../state/app_state.dart';
 import '../../state/location_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/toast_feed.dart';
-import '../widgets/weapon_panel.dart';
 
-/// Pantalla principal: mapa de exploración con el HUD de la terminal VITA-7.
+/// Pantalla principal: mapa satelital de exploración con el HUD de la
+/// terminal VITA-7.
 ///
-/// - Arriba: logo, tarjeta de estado (modo, hora, clima y ciudad), objetivo
-///   actual (tocar = ir al objetivo), brújula y feed de avisos.
-/// - Derecha: escáner (mantener y soltar), zoom y volver a mi posición.
-/// - Abajo: región y escala; paneles ESTADO y ARMA EQUIPADA.
-/// - Al seleccionar un marcador, su ficha reemplaza la fila inferior.
+/// - Arriba: logo, tarjeta de estado (ciudad, modo, hora, día y clima),
+///   objetivo actual a todo el ancho (tocar = ir al objetivo), indicador de
+///   norte y feeds de avisos (juego y ambiente).
+/// - Derecha: ubicar, zoom y escáner (mantener y soltar).
+/// - Abajo: emblema y región, escala y créditos; panel SIGNOS VITALES | ARMA
+///   EQUIPADA. Al seleccionar un marcador, su ficha reemplaza el panel.
+/// - El pulso del escáner es una onda de choque que distorsiona el mapa.
 /// - Modo simulación: joystick chico y mantener presionado el mapa para saltar.
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key, required this.onOpenEncounter, required this.onOpenNode});
@@ -35,11 +43,11 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  static const _panelH = 96.0;
+  static const _panelH = 78.0;
   static const _bottomGap = 10.0;
 
-  /// Distancia desde abajo hasta el pie del mapa (región y escala).
-  static const _captionBottom = _bottomGap + _panelH + 14;
+  /// Distancia desde abajo hasta el pie del mapa (emblema, escala y créditos).
+  static const _captionBottom = _bottomGap + _panelH + 18;
 
   final _camera = GameMapController();
   late final _hud = MapHudModel(_camera);
@@ -47,79 +55,142 @@ class _MapScreenState extends State<MapScreen> {
   /// Texto de la última señal respondida (se muestra hasta cerrarlo).
   final _transmission = ValueNotifier<String?>(null);
 
+  /// Sacudón de la vista al disparar el escáner.
+  final _shake = ValueNotifier<Offset>(Offset.zero);
+
   // El mapa se construye una sola vez: el resto del HUD se reconstruye solo.
   late final Widget _map = GameMap(controller: _camera);
 
+  ValueListenable<TickerModeData>? _tickerMode;
+  bool? _visible;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final mode = TickerMode.getValuesNotifier(context);
+    if (mode != _tickerMode) {
+      _tickerMode?.removeListener(_syncAmbience);
+      _tickerMode = mode..addListener(_syncAmbience);
+      _syncAmbience();
+    }
+  }
+
+  /// Ambiente de ciudad mientras el mapa está a la vista. Al pasar a otra
+  /// pestaña se apaga; si lo tapa una pantalla (combate, nodo) no se toca: esa
+  /// pantalla pone el suyo.
+  void _syncAmbience() {
+    final visible = _tickerMode?.value.enabled ?? true;
+    if (visible == _visible) return;
+    _visible = visible;
+    if (visible) {
+      Sfx.ambience(Ambience.map);
+    } else if (app.ui.tab != 0 && app.combat == null) {
+      Sfx.ambience(null);
+    }
+  }
+
   @override
   void dispose() {
+    _tickerMode?.removeListener(_syncAmbience);
     _hud.dispose();
     _camera.dispose();
     _transmission.dispose();
+    _shake.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
-    final width = MediaQuery.sizeOf(context).width;
     return ColoredBox(
       color: Sutura.map,
       child: Stack(
         children: [
-          Positioned.fill(child: _map),
-          // Degradés para leer el HUD sobre el mapa.
+          // Mapa y onda del escáner (los dos se sacuden con el pulso).
+          Positioned.fill(
+            child: ValueListenableBuilder<Offset>(
+              valueListenable: _shake,
+              builder: (context, o, child) => Transform.translate(offset: o, child: child),
+              child: Stack(
+                children: [
+                  Positioned.fill(child: _map),
+                  Positioned.fill(child: ScanWave(camera: _camera, shake: _shake)),
+                ],
+              ),
+            ),
+          ),
+          // Viñeta y polvo sobre la imagen (como una foto vieja de la terminal).
+          const Positioned.fill(child: IgnorePointer(child: _MapGrain())),
+          // Degradés: el encabezado y el panel inferior quedan sobre fondo oscuro.
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: pad.top + 210,
-            child: const IgnorePointer(child: _Scrim(top: true)),
+            height: pad.top + 150,
+            child: IgnorePointer(child: _Scrim(top: true, solidUntil: (pad.top + 66) / (pad.top + 150))),
           ),
-          const Positioned(bottom: 0, left: 0, right: 0, height: 300, child: IgnorePointer(child: _Scrim(top: false))),
-          // Arriba: encabezado, objetivo, brújula y avisos.
+          const Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: _captionBottom + 70,
+            child: IgnorePointer(child: _Scrim(top: false, solidUntil: (_captionBottom - 16) / (_captionBottom + 70))),
+          ),
+          // Arriba: encabezado y línea.
           Positioned(
-            top: pad.top + 12,
+            top: pad.top + 10,
             left: 16,
-            right: 14,
-            child: Column(
+            right: 6,
+            child: MapHeader(model: _hud),
+          ),
+          Positioned(
+            top: pad.top + 68,
+            left: 0,
+            right: 0,
+            height: 1,
+            child: const IgnorePointer(child: ColoredBox(color: Color(0xFF26292C))),
+          ),
+          // Objetivo actual, a todo el ancho.
+          Positioned(
+            top: pad.top + 76,
+            left: 14,
+            right: 12,
+            child: PointerShield(child: ObjectiveCard(camera: _camera)),
+          ),
+          // Norte y avisos.
+          Positioned(
+            top: pad.top + 132,
+            left: 10,
+            right: 48,
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                MapHeader(model: _hud),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: (width - 16 - 118).clamp(200.0, 420.0),
-                  child: PointerShield(child: ObjectiveCard(camera: _camera)),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    PointerShield(child: CompassButton(camera: _camera)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: IgnorePointer(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SpeedLockBanner(),
-                            const SizedBox(height: 4),
-                            ToastFeed(ui: app.ui),
-                          ],
-                        ),
+                PointerShield(child: NorthIndicator(camera: _camera)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: IgnorePointer(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SpeedLockBanner(),
+                          ToastFeed(ui: app.ui),
+                          MapEventFeed(camera: _camera),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
           // Controles del mapa (se ocultan con una ficha abierta).
           Positioned.fill(
-            child: _MapControls(camera: _camera, hud: _hud, transmission: _transmission, captionBottom: _captionBottom),
+            child: _MapControls(camera: _camera, hud: _hud, transmission: _transmission, captionBottom: _captionBottom, top: pad.top),
           ),
-          // Abajo: paneles, ficha del objetivo o transmisión recibida.
+          // Abajo: panel, ficha del objetivo o transmisión recibida.
           Positioned(
             left: 12,
             right: 12,
@@ -144,7 +215,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   );
                 } else {
-                  child = const _BottomHud(key: ValueKey('hud'), height: _panelH);
+                  child = const PointerShield(key: ValueKey('hud'), child: MapVitalsPanel(height: _panelH));
                 }
                 return AnimatedSwitcher(
                   duration: Sutura.base,
@@ -156,6 +227,7 @@ class _MapScreenState extends State<MapScreen> {
               },
             ),
           ),
+          Positioned.fill(child: IntroCaption(camera: _camera)),
           const Positioned.fill(child: GnssSearchOverlay()),
         ],
       ),
@@ -163,22 +235,27 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-/// Columna derecha (escáner, zoom, ubicar), pie del mapa y joystick. Solo se
+/// Columna derecha (ubicar, zoom, escáner), pie del mapa y joystick. Solo se
 /// reconstruye cuando cambia si hay ficha abierta o el modo simulación (no en
 /// cada lectura de GPS).
 class _MapControls extends StatefulWidget {
-  const _MapControls({required this.camera, required this.hud, required this.transmission, required this.captionBottom});
+  const _MapControls({required this.camera, required this.hud, required this.transmission, required this.captionBottom, required this.top});
 
   final GameMapController camera;
   final MapHudModel hud;
   final ValueNotifier<String?> transmission;
   final double captionBottom;
 
+  /// Margen superior del sistema.
+  final double top;
+
   @override
   State<_MapControls> createState() => _MapControlsState();
 }
 
 class _MapControlsState extends State<_MapControls> {
+  static const _columnH = 42 + 10 + 89 + 12 + 60.0;
+
   bool _panel = false;
   bool _demo = false;
 
@@ -215,111 +292,119 @@ class _MapControlsState extends State<_MapControls> {
   @override
   Widget build(BuildContext context) {
     final b = widget.captionBottom;
-    return AnimatedOpacity(
-      opacity: _panel ? 0 : 1,
-      duration: Sutura.fast,
-      child: IgnorePointer(
-        ignoring: _panel,
-        child: Stack(
-          children: [
-            // Línea que separa el mapa de los paneles.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: b - 7,
-              height: 1,
-              child: const IgnorePointer(child: ColoredBox(color: Color(0xFF2C2F32))),
-            ),
-            Positioned(
-              left: 16,
-              bottom: b,
-              child: IgnorePointer(child: MapCaption(model: widget.hud)),
-            ),
-            Positioned(
-              right: 14,
-              bottom: b,
-              child: IgnorePointer(child: ScaleBar(camera: widget.camera)),
-            ),
-            // Sin ficha abierta: en web los escudos (aunque invisibles) taparían el mapa.
-            if (!_panel)
-              Positioned(
-                right: 14,
-                bottom: b + 26 + 12,
-                // Un solo escudo para toda la columna: en web cada escudo es una
-                // vista de plataforma y CanvasKit admite pocas superficies.
-                child: PointerShield(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const ScanButton(),
-                      const SizedBox(height: 12),
-                      ZoomButtons(camera: widget.camera),
-                      const SizedBox(height: 12),
-                      LocateButton(camera: widget.camera),
-                    ],
-                  ),
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Columna a la altura de la referencia (un tercio de la pantalla),
+        // sin pisar el pie del mapa en pantallas bajas.
+        final colTop = math.min(widget.top + 226, c.maxHeight - b - 56 - _columnH);
+        return AnimatedOpacity(
+          opacity: _panel ? 0 : 1,
+          duration: Sutura.fast,
+          child: IgnorePointer(
+            ignoring: _panel,
+            child: Stack(
+              children: [
+                // Línea que separa el mapa del panel inferior.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: b - 9,
+                  height: 1,
+                  child: const IgnorePointer(child: ColoredBox(color: Color(0xFF2A2D30))),
                 ),
-              ),
-            if (_demo && !_panel)
-              Positioned(
-                left: 14,
-                bottom: b + 48,
-                child: PointerShield(child: DemoJoystick(bearingOf: () => widget.camera.bearing)),
-              ),
-          ],
+                Positioned(
+                  left: 14,
+                  bottom: b,
+                  child: IgnorePointer(child: MapCaption(model: widget.hud)),
+                ),
+                Positioned(
+                  right: 14,
+                  bottom: b,
+                  child: IgnorePointer(child: ScaleBar(camera: widget.camera)),
+                ),
+                // Sin ficha abierta: en web los escudos (aunque invisibles) taparían el mapa.
+                if (!_panel)
+                  Positioned(
+                    right: 12,
+                    top: colTop,
+                    // Un solo escudo para toda la columna: en web cada escudo es una
+                    // vista de plataforma y CanvasKit admite pocas superficies.
+                    child: PointerShield(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          LocateButton(camera: widget.camera),
+                          const SizedBox(height: 10),
+                          ZoomButtons(camera: widget.camera),
+                          const SizedBox(height: 12),
+                          const ScanButton(),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (_demo && !_panel)
+                  Positioned(
+                    left: 12,
+                    bottom: b + 52,
+                    child: PointerShield(child: DemoJoystick(bearingOf: () => widget.camera.bearing, size: 78)),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Viñeta oscura en los bordes y una textura de manchas muy tenue: el mapa
+/// se lee como una toma satelital gastada. Estática (se rasteriza una vez).
+class _MapGrain extends StatelessWidget {
+  const _MapGrain();
+
+  @override
+  Widget build(BuildContext context) {
+    return const RepaintBoundary(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          image: DecorationImage(image: AssetImage(Sutura.texMottle), repeat: ImageRepeat.repeat, opacity: 0.07, scale: 1.4),
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              radius: 0.95,
+              colors: [Color(0x00000000), Color(0x00000000), Color(0x8C050606)],
+              stops: [0, 0.55, 1],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class _BottomHud extends StatelessWidget {
-  const _BottomHud({super.key, required this.height});
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return PointerShield(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(child: StatusPanel(height: height)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: app,
-              builder: (context, _) {
-                final p = app.player;
-                return WeaponPanel(
-                  weapon: p == null ? null : displayedWeapon(p.equipment),
-                  ammo: p == null ? 0 : countOf(p.inventory, ItemId.ammo),
-                  height: height,
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _Scrim extends StatelessWidget {
-  const _Scrim({required this.top});
+  const _Scrim({required this.top, required this.solidUntil});
   final bool top;
 
+  /// Fracción (desde el borde) que queda casi opaca.
+  final double solidUntil;
+
   @override
   Widget build(BuildContext context) {
+    final s = solidUntil.clamp(0.0, 0.95);
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: top ? Alignment.topCenter : Alignment.bottomCenter,
           end: top ? Alignment.bottomCenter : Alignment.topCenter,
-          colors: top
-              ? [Sutura.void_.withValues(alpha: 0.96), Sutura.void_.withValues(alpha: 0.72), Sutura.void_.withValues(alpha: 0)]
-              : [Sutura.void_.withValues(alpha: 0.94), Sutura.void_.withValues(alpha: 0.78), Sutura.void_.withValues(alpha: 0)],
-          stops: top ? const [0, 0.45, 1] : const [0, 0.42, 1],
+          colors: [
+            const Color(0xFF0A0B0C),
+            const Color(0xF20A0B0C),
+            const Color(0x8C0A0B0C),
+            const Color(0x000A0B0C),
+          ],
+          stops: [0, s, s + (1 - s) * 0.4, 1],
         ),
       ),
     );

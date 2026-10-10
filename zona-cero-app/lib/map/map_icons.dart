@@ -562,7 +562,9 @@ abstract final class MapIcons {
   static void _player(Canvas c, {required bool heading}) {
     const center = Offset(playerSize / 2, playerSize / 2);
     const ring = 12.5;
-    if (heading) {
+    // Cono de visión. Sin rumbo conocido apunta al norte, más tenue.
+    final k = heading ? 1.0 : 0.45;
+    {
       const len = 60.0;
       const half = 0.34;
       final cone = Path()
@@ -578,7 +580,7 @@ abstract final class MapIcons {
           ..shader = ui.Gradient.linear(
             center + const Offset(0, -ring),
             center + const Offset(0, -len),
-            [const Color(0x8CF4F6F7), const Color(0x52E9EDEF), const Color(0x14E9EDEF)],
+            [const Color(0x8CF4F6F7), const Color(0x52E9EDEF), const Color(0x14E9EDEF)].map((x) => x.withValues(alpha: x.a * k)).toList(),
             [0, 0.55, 1],
           )
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8),

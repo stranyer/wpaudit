@@ -33,7 +33,8 @@ const kMapPitch = 45.0;
 const kIntroZoom = 11.2;
 const kIntroPitch = 52.0;
 const kIntroBearing = -38.0;
-const kIntroMs = 3100;
+/// Duración del vuelo (ms). `--dart-define=ZC_INTRO_MS=...` solo para capturas.
+const kIntroMs = int.fromEnvironment('ZC_INTRO_MS', defaultValue: 3100);
 
 /// Distancia (px lógicos, sin contar el margen superior del sistema) desde el
 /// borde superior del mapa hasta el botón (i) de atribución: a la derecha, en
@@ -389,7 +390,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         initialCameraPosition: _introDone
             ? ml.CameraPosition(target: _ll(start), zoom: kMapZoom)
             : ml.CameraPosition(target: _ll(_introFrom(start)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
-        onMapCreated: (c) => _map = c,
+        onMapCreated: _onMapCreated,
         onStyleLoadedCallback: _onStyleLoaded,
         onMapClick: (_, _) => app.world.select(null),
         onMapLongClick: _onLongPress,
@@ -412,6 +413,18 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
       ),
     );
+  }
+
+  void _onMapCreated(ml.MapLibreMapController c) {
+    _map = c;
+    // En web la cámara inicial no siempre respeta inclinación y rumbo: fijar
+    // la pose de la entrada ya, así no "salta" al empezar el vuelo.
+    if (!_introDone) {
+      final start = app.location.position ?? app.demoPosition ?? gameConfig.demo.start;
+      c.moveCamera(ml.CameraUpdate.newCameraPosition(
+        ml.CameraPosition(target: _ll(_introFrom(start)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
+      ));
+    }
   }
 
   /// Punto de partida de la entrada: un poco al noroeste, para que la cámara
@@ -548,8 +561,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
             iconSize: _iconBase,
             textField: SuturaMapStyle.stationName,
             textFont: const ['Noto Sans Regular'],
-            textSize: 11,
-            textLetterSpacing: 0.06,
+            textSize: 9.5,
+            textTransform: 'uppercase',
+            textLetterSpacing: 0.22,
             textAnchor: 'top',
             textOffset: const [0, 1.05],
             textPadding: 4,
@@ -593,7 +607,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       const ml.LineLayerProperties(
         lineColor: ['match', ['get', 'st'], 'loot', amber, steel],
         lineWidth: 1,
-        lineOpacity: ['match', ['get', 'st'], 'loot', 0.32, 0.18],
+        lineOpacity: ['match', ['get', 'st'], 'loot', 0.22, 0.12],
         lineDasharray: [4, 3],
       ),
       belowLayerId: label,
@@ -1004,7 +1018,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   }
 
   static Color _distanceColor(_Mark m) => switch (m.kind) {
-        MarkKind.zombie || MarkKind.zone => const Color(0xFFE5574C),
+        MarkKind.zombie || MarkKind.zone => const Color(0xFFF06A5E),
         _ => markColor(m.kind, own: m.own),
       };
 
@@ -1455,6 +1469,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
 
   void _onCameraMove(ml.CameraPosition cp) {
     _camera = cp;
+    debugPrint('ZCDBG cam z=${cp.zoom.toStringAsFixed(2)} tilt=${cp.tilt.toStringAsFixed(1)} b=${cp.bearing.toStringAsFixed(1)} intro=$_intro t=${_now % 100000}');
     widget.controller._setCamera(cp.bearing, cp.zoom, cp.target.latitude);
     // Las etiquetas dependen de la escala y el rumbo: recalcular si cambiaron bastante.
     final db = ((cp.bearing - _labelBearing + 540) % 360 - 180).abs();

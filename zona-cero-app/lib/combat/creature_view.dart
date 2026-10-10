@@ -69,6 +69,9 @@ abstract interface class CreatureStage {
 
   /// Baliza de emergencia (0…1).
   double get beacon;
+
+  /// Luz frontal momentánea desde el lado del jugador (fogonazo), 0…1.
+  double get flashLight;
 }
 
 /// Renderizador intercambiable de la criatura. Coordenadas de "mundo" = las
