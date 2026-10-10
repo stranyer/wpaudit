@@ -75,7 +75,7 @@ class ProfileScreen extends StatelessWidget {
               const SectionLabel('Terminal'),
               const _Settings(),
               const SizedBox(height: 22),
-              Center(child: MicroText('ZONA CERO · PROTOCOLO SUTURA · v0.3', color: Sutura.textLow.withValues(alpha: 0.7))),
+              Center(child: MicroText('ZONA CERO · PROTOCOLO SUTURA · v0.4', color: Sutura.textLow.withValues(alpha: 0.7))),
             ],
           ),
         );

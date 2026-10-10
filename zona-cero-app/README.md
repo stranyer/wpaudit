@@ -7,7 +7,7 @@ infectados y reconstruís una red de nodos (refugios) junto a otros sobrevivient
 Escenario inicial: **Buenos Aires** (simulación desde el Obelisco), pero funciona en cualquier
 ciudad: el mundo se genera de forma determinística a partir de la ubicación.
 
-> Estado: **v0.3 jugable**. Funciona completo sin backend (datos locales + comunidad simulada) y
+> Estado: **v0.4 jugable**. Funciona completo sin backend (datos locales + comunidad simulada) y
 > se conecta a **Supabase/PostGIS** si le pasás credenciales.
 
 Esta app reemplaza a la versión web de `../zona-cero` (React + Three.js) con la misma lógica de
@@ -15,7 +15,7 @@ juego, portada a Dart y verificada contra la versión original con tests de pari
 
 ---
 
-## Dirección de arte (v0.3): survival horror de calle
+## Dirección de arte (v0.4): survival horror de calle
 
 Panel de metal gastado, títulos condensados con desgaste y la ciudad real bajo la lluvia. IP propia
 (sin marcas de terceros).
@@ -25,6 +25,9 @@ Panel de metal gastado, títulos condensados con desgaste y la ciudad real bajo 
 | Paleta | Fondo `#0A0B0C`; **rojo de emergencia** `#C8322B` para lo activo y lo hostil; **ámbar** `#D9A233` para recursos y entregas; **azul acero** `#8DB4C9` para la red, los refugios y la resistencia; verde ECG para la salud |
 | Tipografía | Oswald (títulos, con textura de desgaste en dos capas: manchas + rayones), Barlow Condensed (interfaz, rótulos espaciados), Share Tech Mono (registros), Courier Prime (documentos), Special Elite (sellos). Todas OFL e incluidas |
 | Paneles | Metal oscuro con textura, borde fino, marcas en las esquinas y esquinas cortadas a 45° |
+| Encabezado | Logo ZONA CERO con el subtítulo de cada pestaña y una nota escrita a mano en un papelito |
+| Maletín | Una valija de metal abierta: el equipo va en la tapa y el inventario en compartimentos de la base (la valija se estira según las filas) |
+| Nodo | Foto del campamento a sangre, nivel en verde, antena, recursos con barras finas, botón ámbar pintado y bitácora con íconos |
 | Mapa | Estilo "foto aérea" nocturna (texturas de techos y copas de árboles sobre teselas vectoriales), marcadores con tallo y rótulo (SAQUEO, REFUGIO, SEÑAL DE AUXILIO, infectados), zonas infectadas como resplandor rojo, clima real |
 | Combate | Criaturas en alta definición animadas en tiempo real (ver abajo) sobre una calle de Buenos Aires con el Obelisco |
 
@@ -40,6 +43,12 @@ destello), grita (Chillón), se agacha para cargar (Bruto), suelta gas (Hinchado
 (se disuelve en ceniza). La zona de la cabeza se detecta sola a partir del recorte, para la
 puntería. Se eligió este enfoque frente a 3D en tiempo real porque da calidad de ilustración con
 un costo bajo en celulares de gama media (ver `lib/combat/puppet.dart` y `cutout_rig.dart`).
+
+**Relieve (v0.4).** Para que no se vean "de papel", cada criatura tiene un mapa de profundidad
+(Depth Anything V2) del que salen sus normales: la luz de borde roja de la baliza, la luz fría del
+otro lado y el fogonazo de los disparos siguen la forma del cuerpo, y la malla gira con paralaje
+(las manos y la cabeza se desplazan más que el torso). Los mapas están en
+`assets/art/zombies/relief/` y se regeneran con `tool/art/relief.py`.
 
 ## Cómo se juega
 
@@ -171,7 +180,10 @@ puntería del combate y la grilla del maletín.
 
 - `assets/art/zombies/`: las cinco criaturas recortadas (WebP con transparencia).
 - `assets/art/items/`: fotos de los 18 objetos (256×256).
-- `assets/art/bg/`: calle del combate, campamento del nodo, retrato del enlace y miniatura de pulsos.
+- `assets/art/bg/`: calles del combate (Obelisco, Teatro Colón), campamentos de nodo, valija del maletín, retrato del enlace.
+- `assets/art/fp/`: manos en primera persona para el combate.
+- `assets/art/avatars/`: retratos de las criaturas para el mapa.
+- `assets/art/zombies/relief/`: luz por forma y profundidad de cada criatura.
 - `assets/art/tex/`: texturas de paneles, desgaste de títulos y del mapa (techos y árboles).
 - `assets/fonts/`: tipografías con licencia OFL.
 - Mapa: teselas vectoriales de [OpenFreeMap](https://openfreemap.org) (datos © OpenStreetMap).
