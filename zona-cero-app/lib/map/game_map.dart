@@ -8,11 +8,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
 
+import '../audio/sfx.dart';
 import '../core/core.dart';
 import '../state/app_state.dart';
 import '../state/location_controller.dart';
 import '../state/world_controller.dart';
 import '../ui/theme/tokens.dart';
+import 'map_events.dart';
 import 'map_features.dart';
 import 'map_icons.dart';
 import 'map_math.dart';
@@ -26,26 +28,42 @@ const kMapZoom = 16.0;
 /// Inclinación de la vista 3D opcional (mantener presionada la brújula).
 const kMapPitch = 45.0;
 
-/// Distancia (px lógicos) desde el borde inferior del mapa hasta la atribución
-/// de OpenStreetMap: queda justo encima de la columna de controles de la derecha.
-const kMapAttributionBottom = 392.0;
+/// Entrada al mapa: la cámara arranca lejos sobre la ciudad, inclinada y
+/// girada, y vuela hasta el jugador.
+const kIntroZoom = 11.2;
+const kIntroPitch = 52.0;
+const kIntroBearing = -38.0;
+const kIntroMs = 3100;
+
+/// Distancia (px lógicos, sin contar el margen superior del sistema) desde el
+/// borde superior del mapa hasta el botón (i) de atribución: a la derecha, en
+/// la fila de la brújula, debajo de la tarjeta de objetivo.
+const kMapAttributionTop = 128.0;
 
 /// Estado de cámara que la interfaz necesita (seguir al jugador, rumbo para la
 /// brújula y el joystick, zoom y latitud para la escala) y acciones (recentrar,
-/// norte arriba, zoom, enfocar un objetivo).
+/// norte arriba, zoom, enfocar un objetivo). También publica los avisos
+/// ambientales activos y si se está jugando la entrada.
 class GameMapController extends ChangeNotifier {
   bool _follow = true;
   bool _pitched = false;
+  bool _intro = false;
   double _bearing = 0;
   double _zoom = kMapZoom;
   double? _lat;
   _GameMapState? _state;
+
+  /// Avisos ambientales recientes ("Disparos a lo lejos"), el último al final.
+  final events = ValueNotifier<List<AmbientEvent>>(const []);
 
   /// La cámara sigue al jugador. Se apaga al arrastrar el mapa o al enfocar un objetivo.
   bool get follow => _follow;
 
   /// Vista inclinada (45°) o cenital (0°).
   bool get pitched => _pitched;
+
+  /// La cámara está volando desde la vista de la ciudad hasta el jugador.
+  bool get intro => _intro;
 
   /// Rumbo de la cámara en grados (0 = norte arriba, sentido horario).
   double get bearing => _bearing;
@@ -69,6 +87,27 @@ class GameMapController extends ChangeNotifier {
   /// Lugar más cercano según los rótulos del mapa (solo Android/iOS).
   Future<String?> nearestPlaceName() async => _state?._nearestPlace();
 
+  /// Posición en pantalla (px lógicos, relativa al mapa de tamaño `size`) de
+  /// un punto, según la última cámara conocida. Aproximada con la vista
+  /// inclinada. null antes de crear el mapa.
+  Offset? screenOffsetOf(LatLng p, Size size) {
+    final cam = _state?._cam;
+    if (cam == null) return null;
+    final mpp = metersPerPixel(cam.target.latitude, cam.zoom);
+    final xy = toLocalXY(_core(cam.target), p);
+    final th = cam.bearing * math.pi / 180;
+    final x = xy.x * math.cos(th) - xy.y * math.sin(th);
+    final y = xy.x * math.sin(th) + xy.y * math.cos(th);
+    final k = math.cos(cam.tilt * math.pi / 180);
+    return Offset(size.width / 2 + x / mpp, size.height / 2 - y * k / mpp);
+  }
+
+  /// Metros por píxel en el centro de la cámara.
+  double get metersPerPx => metersPerPixel(_lat ?? gameConfig.demo.start.lat, _zoom);
+
+  /// Inclinación actual (grados).
+  double get tilt => _state?._cam?.tilt ?? 0;
+
   void _setFollow(bool v) {
     if (_follow == v) return;
     _follow = v;
@@ -81,12 +120,24 @@ class GameMapController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _setIntro(bool v) {
+    if (_intro == v) return;
+    _intro = v;
+    notifyListeners();
+  }
+
   void _setCamera(double bearing, double zoom, double lat) {
     final changed = (bearing - _bearing).abs() > 0.5 || (zoom - _zoom).abs() > 0.01 || _lat == null || (lat - _lat!).abs() > 0.002;
     _bearing = bearing;
     _zoom = zoom;
     _lat = lat;
     if (changed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    events.dispose();
+    super.dispose();
   }
 }
 
@@ -98,7 +149,8 @@ abstract final class _Src {
   static const scan = 'zc-scan';
   static const marks = 'zc-marks';
   static const player = 'zc-player';
-  static const all = [cells, infect, reach, sutures, marks, player];
+  static const events = 'zc-events';
+  static const all = [cells, infect, reach, sutures, marks, player, events];
 }
 
 abstract final class _Lyr {
@@ -109,12 +161,15 @@ abstract final class _Lyr {
   static const metro = 'metro-label';
   static const cellsFill = 'zc-cells-fill';
   static const cellsLine = 'zc-cells-line';
-  static const infect = 'zc-infect-heat';
+  static const zoneArea = 'zc-zone-area';
+  static const zoneEdge = 'zc-zone-edge';
   static const reach = 'zc-reach-line';
   static const sutures = 'zc-sutures-line';
   static const scanA = 'zc-scan-a';
   static const scanB = 'zc-scan-b';
   static const pulse = 'zc-signal-pulse';
+  static const ping = 'zc-event-ping';
+  static const pingDot = 'zc-event-dot';
   static const marks = 'zc-marks-sym';
   static const player = 'zc-player-sym';
 }
@@ -131,24 +186,28 @@ class _RawProps implements ml.LayerProperties {
 /// Un marcador antes de convertirse en feature.
 class _Mark {
   const _Mark(this.id, this.position, this.kind, this.title,
-      {this.subtitle, this.echo = false, this.own = false, this.mortal = false, required this.z, this.weight = 1});
+      {this.echo = false, this.own = false, this.mortal = false, this.avatar, required this.z, this.weight = 1, this.radiusM});
   final String id;
   final LatLng position;
   final MarkKind kind;
   final String title;
-  final String? subtitle;
   final bool echo;
   final bool own;
   final bool mortal;
+  final ZombieTypeId? avatar;
   final int z;
   final double weight;
+
+  /// Zona infectada: radio del área roja.
+  final double? radiusM;
 }
 
-/// Mapa del juego: MapLibre con el estilo ZONA CERO y los overlays GeoJSON
-/// (habitaciones escaneadas, contagio, alcance, red de relevo, pulso del
-/// escáner, marcadores y jugador). Escucha directamente a `app.location`,
-/// `app.world` y `app`, y actualiza fuentes (máximo 10 por segundo) sin
-/// reconstruir el widget del mapa.
+/// Mapa del juego: MapLibre con el estilo ZONA CERO (imagen satelital oscura
+/// sobre un respaldo vectorial) y los overlays GeoJSON (habitaciones
+/// escaneadas, zonas infectadas, alcance, red de relevo, pulso del escáner,
+/// avisos ambientales, marcadores y jugador). Escucha directamente a
+/// `app.location`, `app.world` y `app`, y actualiza fuentes (máximo 10 por
+/// segundo) sin reconstruir el widget del mapa.
 class GameMap extends StatefulWidget {
   const GameMap({super.key, required this.controller});
 
@@ -163,6 +222,11 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   static const _signalRadiusM = 1500.0;
   static const _pulseEchoDelayMs = 180;
   static const _maxLabels = 5;
+  static const _heartbeatMs = 150;
+  static const _eventToastMs = 6500;
+
+  /// La entrada se juega una vez por sesión (no al volver de otra pestaña).
+  static bool _introDone = false;
 
   ml.MapLibreMapController? _map;
   bool _styleReady = false;
@@ -181,6 +245,17 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   double _labelZoom = kMapZoom;
   double _labelBearing = 0;
 
+  // Entrada y "golpe" de cámara del escáner
+  bool _intro = false;
+  Timer? _introTimer;
+  Timer? _fadeTimer;
+  Timer? _bumpTimer;
+  double? _bumpZoom;
+  int _bumpUntil = 0;
+
+  /// Multiplicador de opacidad de los marcadores (aparecen después de la entrada).
+  double _markFade = 1;
+
   // Selección: la que hace el propio mapa no mueve la cámara.
   String? _lastSel;
   String? _selfSel;
@@ -194,7 +269,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   Set<String> _shownCells = {};
   Set<String> _labelled = {};
   String? _clusterKey;
-  List<LatLng> _clusters = const [];
+  List<InfestedCluster> _clusters = const [];
+  bool _walkers = false;
 
   // Imágenes de marcadores (se registran a pedido).
   final Set<String> _images = {};
@@ -210,21 +286,34 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   int _pendingSpawns = -1;
   int _pendingCellsCount = -1;
   int _lastHaptic = 0;
+  int _lastPing = 0;
   double _ringLat = 0;
 
-  // Latido de las señales de auxilio
+  // Latido de las señales de auxilio y de los avisos ambientales
   late final Ticker _pulseTicker = createTicker(_onPulse);
   int _lastPulsePush = 0;
+  bool _signalsOn = false;
+  bool _pulseLit = false;
+  bool _pingLit = false;
+
+  // Pulso de vida: infectados que caminan y avisos ambientales.
+  Timer? _heartbeat;
+  ValueListenable<TickerModeData>? _tickerMode;
+  final _ambient = AmbientEventScheduler();
+  final List<AmbientEvent> _events = [];
 
   // Ubicación de spawns en calles
   PlacementData? _placement;
   LatLng? _placementCenter;
+  List<NamedSegment> _streets = const [];
   int _lastPlaceAt = 0;
   int _emptyQueries = 0;
   bool _placing = false;
   Timer? _placeDebounce;
 
   int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  bool get _visible => _tickerMode?.value.enabled ?? true;
 
   @override
   void initState() {
@@ -233,11 +322,22 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     _seenScanAt = app.world.lastScanAt;
     _lastFix = app.location.position;
     _lastSel = app.world.selectedId;
+    if (!_introDone) _markFade = 0;
     app.location.addListener(_onLocation);
     app.world.addListener(_onWorld);
     app.addListener(_onApp);
     app.world.placementSource = _placementFor;
-    installMapWebTweaks(kMapAttributionBottom);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final mode = TickerMode.getValuesNotifier(context);
+    if (mode != _tickerMode) {
+      _tickerMode?.removeListener(_syncHeartbeat);
+      _tickerMode = mode..addListener(_syncHeartbeat);
+      _syncHeartbeat();
+    }
   }
 
   @override
@@ -255,9 +355,14 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     app.location.removeListener(_onLocation);
     app.world.removeListener(_onWorld);
     app.removeListener(_onApp);
+    _tickerMode?.removeListener(_syncHeartbeat);
     if (app.world.placementSource == _placementFor) app.world.placementSource = null;
     _flushTimer?.cancel();
     _placeDebounce?.cancel();
+    _introTimer?.cancel();
+    _fadeTimer?.cancel();
+    _bumpTimer?.cancel();
+    _heartbeat?.cancel();
     _ticker.dispose();
     _pulseTicker.dispose();
     _map = null;
@@ -272,6 +377,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final start = app.location.position ?? app.demoPosition ?? gameConfig.demo.start;
     final dpr = MediaQuery.devicePixelRatioOf(context);
+    final top = MediaQuery.paddingOf(context).top + kMapAttributionTop;
+    installMapWebTweaks(top: top, right: 14);
     return Listener(
       onPointerDown: _onPointerDown,
       onPointerMove: _onPointerMove,
@@ -279,7 +386,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       onPointerCancel: _onPointerEnd,
       child: ml.MapLibreMap(
         styleString: _style,
-        initialCameraPosition: ml.CameraPosition(target: _ll(start), zoom: kMapZoom),
+        initialCameraPosition: _introDone
+            ? ml.CameraPosition(target: _ll(start), zoom: kMapZoom)
+            : ml.CameraPosition(target: _ll(_introFrom(start)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
         onMapCreated: (c) => _map = c,
         onStyleLoadedCallback: _onStyleLoaded,
         onMapClick: (_, _) => app.world.select(null),
@@ -293,17 +402,21 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         rotateGesturesEnabled: true,
         // En web el doble clic es el "mantener presionado" (teletransporte demo).
         doubleClickZoomEnabled: kIsWeb ? false : null,
-        minMaxZoomPreference: const ml.MinMaxZoomPreference(13, 19.5),
+        minMaxZoomPreference: const ml.MinMaxZoomPreference(10.5, 19.5),
         annotationOrder: const [],
         logoEnabled: false,
-        // Atribución OSM a la derecha, justo encima de la columna de controles
-        // (márgenes en píxeles físicos).
-        attributionButtonPosition: ml.AttributionButtonPosition.bottomRight,
-        attributionButtonMargins: math.Point((14 * dpr).round(), (kMapAttributionBottom * dpr).round()),
+        // Atribución (OSM, OpenFreeMap, Esri) compacta: botón (i) arriba a la
+        // derecha, debajo de la tarjeta de objetivo (márgenes en píxeles físicos).
+        attributionButtonPosition: ml.AttributionButtonPosition.topRight,
+        attributionButtonMargins: math.Point((14 * dpr).round(), (top * dpr).round()),
         gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
       ),
     );
   }
+
+  /// Punto de partida de la entrada: un poco al noroeste, para que la cámara
+  /// cruce la ciudad al acercarse.
+  static LatLng _introFrom(LatLng p) => offsetM(p, 700, -1100);
 
   // ---------------------------------------------------------------------------
   // Estilo, imágenes y capas
@@ -314,6 +427,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     if (c == null || !mounted) return;
     final gen = ++_styleGen;
     _styleReady = false;
+    _pulseLit = false;
+    _pingLit = false;
     _sig.clear();
     _images.clear();
     _imagesPending.clear();
@@ -337,8 +452,13 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       ..add(_onFeatureTap);
     _dirty.addAll(_Src.all);
     _flush();
-    final p = app.location.position;
-    if (p != null && widget.controller.follow) _moveCameraTo(p, animate: false);
+    _syncHeartbeat();
+    if (!_introDone) {
+      _maybeIntro();
+    } else {
+      final p = app.location.position;
+      if (p != null && widget.controller.follow) _moveCameraTo(p, animate: false);
+    }
     if (app.world.lastScanAt != _seenScanAt) _onWorld();
   }
 
@@ -367,8 +487,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     return (roofs: roofs, ground: ground, canopy: canopy);
   }
 
-  /// Capas del mapa base que usan imágenes: textura del suelo, copas de árboles
-  /// en plazas, techos y estaciones de subte. Van sobre las anclas del estilo.
+  /// Capas del respaldo vectorial que usan imágenes (textura del suelo, copas
+  /// de árboles en plazas, techos) y las estaciones de subte. Van sobre las
+  /// anclas del estilo; las primeras quedan debajo de la imagen satelital.
   Future<void> _addBaseLayers(ml.MapLibreMapController c, ({bool roofs, bool ground, bool canopy}) tex) async {
     const src = SuturaMapStyle.source;
     Future<void> guard(String what, Future<void> Function() add) async {
@@ -423,17 +544,17 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
           src,
           _Lyr.metro,
           ml.SymbolLayerProperties(
-            iconImage: SuturaMapStyle.metroIcon,
+            iconImage: MapIcons.metro,
             iconSize: _iconBase,
             textField: SuturaMapStyle.stationName,
             textFont: const ['Noto Sans Regular'],
-            textSize: 11.5,
+            textSize: 11,
             textLetterSpacing: 0.06,
             textAnchor: 'top',
             textOffset: const [0, 1.05],
             textPadding: 4,
             textOptional: true,
-            textColor: '#DDE0E1',
+            textColor: '#D5D8D9',
             textHaloColor: SuturaMapStyle.halo,
             textHaloWidth: 1.5,
           ),
@@ -448,21 +569,22 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     for (final id in [..._Src.all, _Src.scan]) {
       await c.addGeoJsonSource(id, emptyCollection(), promoteId: id == _Src.marks ? 'id' : null);
     }
-    const casing = SuturaMapStyle.roadCasingLayer;
+    const outline = SuturaMapStyle.roadCasingLayer;
     const label = SuturaMapStyle.labelLayer;
     const steel = '#8DB4C9';
     const amber = '#D9A233';
+    const red = '#E0453A';
     final lat = app.location.position?.lat ?? gameConfig.demo.start.lat;
 
-    // Habitaciones escaneadas (debajo de las calles, apenas teñidas).
+    // Habitaciones escaneadas (sobre la imagen, debajo de los cordones, apenas teñidas).
     await c.addFillLayer(
       _Src.cells,
       _Lyr.cellsFill,
       const ml.FillLayerProperties(
         fillColor: ['match', ['get', 'st'], 'loot', amber, steel],
-        fillOpacity: ['match', ['get', 'st'], 'loot', 0.045, 0.025],
+        fillOpacity: ['match', ['get', 'st'], 'loot', 0.05, 0.03],
       ),
-      belowLayerId: casing,
+      belowLayerId: outline,
       enableInteraction: false,
     );
     await c.addLineLayer(
@@ -478,41 +600,42 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       enableInteraction: false,
     );
 
-    // Contagio: mancha roja difusa sobre las zonas infestadas.
-    await c.addHeatmapLayer(
+    // Zonas infectadas: área roja suave con un borde fino (como en la referencia).
+    await c.addCircleLayer(
       _Src.infect,
-      _Lyr.infect,
-      ml.HeatmapLayerProperties(
-        heatmapRadius: _metersToPx(lat, 165),
-        heatmapWeight: 1,
-        heatmapIntensity: 1.5,
-        heatmapColor: const [
-          'interpolate',
-          ['linear'],
-          ['heatmap-density'],
-          0,
-          'rgba(150,20,16,0)',
-          0.12,
-          'rgba(150,20,16,0)',
-          0.22,
-          'rgba(160,26,20,0.24)',
-          0.38,
-          'rgba(176,30,24,0.36)',
-          0.7,
-          'rgba(192,38,30,0.46)',
-          1,
-          'rgba(205,46,36,0.52)',
-        ],
-        heatmapOpacity: 1,
+      _Lyr.zoneArea,
+      ml.CircleLayerProperties(
+        circleRadius: _metersToPxExpr(lat, ['get', 'rm']),
+        circleColor: '#8A1610',
+        circleOpacity: 0.32,
+        circleBlur: 0.45,
+        circlePitchAlignment: 'map',
+        circlePitchScale: 'map',
       ),
       belowLayerId: label,
+      enableInteraction: false,
+    );
+    await c.addCircleLayer(
+      _Src.infect,
+      _Lyr.zoneEdge,
+      ml.CircleLayerProperties(
+        circleRadius: _metersToPxExpr(lat, ['get', 'rm']),
+        circleOpacity: 0,
+        circleStrokeColor: red,
+        circleStrokeWidth: 0.9,
+        circleStrokeOpacity: 0.32,
+        circlePitchAlignment: 'map',
+        circlePitchScale: 'map',
+      ),
+      belowLayerId: label,
+      enableInteraction: false,
     );
 
     // Alcance de interacción: círculo fino y claro.
     await c.addLineLayer(
       _Src.reach,
       _Lyr.reach,
-      const ml.LineLayerProperties(lineColor: '#D8E0E4', lineWidth: 1.1, lineOpacity: 0.55),
+      const ml.LineLayerProperties(lineColor: '#E4E8EA', lineWidth: 1.1, lineOpacity: 0.62),
       enableInteraction: false,
     );
 
@@ -530,7 +653,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       enableInteraction: false,
     );
 
-    // Pulso del escáner: dos anillos sobre el suelo.
+    // Pulso del escáner en el suelo: lavado interior y eco (el anillo
+    // brillante y la distorsión los dibuja Flutter encima, ver ScanWave).
     for (final id in [_Lyr.scanB, _Lyr.scanA]) {
       await c.addCircleLayer(
         _Src.scan,
@@ -540,7 +664,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
           circleColor: steel,
           circleOpacity: 0,
           circleStrokeColor: steel,
-          circleStrokeWidth: id == _Lyr.scanA ? 2.2 : 1.2,
+          circleStrokeWidth: id == _Lyr.scanA ? 1.6 : 1.1,
           circleStrokeOpacity: 0,
           circlePitchAlignment: 'map',
           circlePitchScale: 'map',
@@ -566,14 +690,43 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       enableInteraction: false,
     );
 
-    // Marcadores: insignia + mástil + etiqueta horneada; la distancia, como texto.
+    // Avisos ambientales: ping que late en una calle cercana.
+    const toneColor = ['match', ['get', 't'], 'hostile', red, 'signal', steel, amber];
+    await c.addCircleLayer(
+      _Src.events,
+      _Lyr.ping,
+      const ml.CircleLayerProperties(
+        circleRadius: 4,
+        circleOpacity: 0,
+        circleStrokeColor: toneColor,
+        circleStrokeWidth: 1.3,
+        circleStrokeOpacity: 0,
+        circlePitchAlignment: 'map',
+      ),
+      enableInteraction: false,
+    );
+    await c.addCircleLayer(
+      _Src.events,
+      _Lyr.pingDot,
+      const ml.CircleLayerProperties(
+        circleRadius: 2.6,
+        circleColor: toneColor,
+        circleOpacity: ['get', 'op'],
+        circleBlur: 0.3,
+        circlePitchAlignment: 'map',
+      ),
+      enableInteraction: false,
+    );
+
+    // Marcadores: insignia y título horneados; la distancia, como texto
+    // debajo, del color del tipo.
     await c.addSymbolLayer(
       _Src.marks,
       _Lyr.marks,
       ml.SymbolLayerProperties(
         iconImage: ['get', 'icon'],
         iconSize: _iconBase,
-        iconAnchor: 'bottom-left',
+        iconAnchor: 'top',
         iconOffset: MapIcons.iconOffset(_iconBase),
         iconOpacity: ['get', 'op'],
         iconAllowOverlap: true,
@@ -585,16 +738,17 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         textField: ['get', 'dist'],
         textFont: const ['Noto Sans Regular'],
         textSize: MapIcons.distanceSize,
-        textAnchor: 'bottom-left',
-        textJustify: 'left',
+        textAnchor: 'top',
+        textJustify: 'center',
         textOffset: ['get', 'toff'],
-        textLetterSpacing: 0.06,
+        textLetterSpacing: 0.12,
         textAllowOverlap: true,
         textIgnorePlacement: false,
         textOpacity: ['get', 'op'],
-        textColor: '#E2DFD8',
-        textHaloColor: '#0A0B0C',
-        textHaloWidth: 1,
+        textColor: ['get', 'dc'],
+        textHaloColor: '#08090A',
+        textHaloWidth: 1.2,
+        textHaloBlur: 0.4,
       ),
     );
 
@@ -618,6 +772,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     if (layerId != _Lyr.marks) return;
     HapticFeedback.selectionClick();
     if (id.startsWith('zone:')) {
+      Sfx.play(SfxId.tap, volume: 0.6);
       app.ui.toast('Zona infectada: escaneá para revelar contactos.');
       return;
     }
@@ -678,6 +833,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         _Src.cells => _buildCells(now),
         _Src.marks => _buildMarks(now),
         _Src.sutures => _buildSutures(),
+        _Src.events => _buildEvents(now),
         _ => null,
       };
       if (data != null) {
@@ -712,18 +868,23 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     return _diff(_Src.reach, '${p.lat},${p.lng},$r', () => circleCollection(p, r));
   }
 
-  Json? _buildInfect() {
-    final zones = app.world.zones;
-    return _diff(_Src.infect, contagionKey(zones), () => infestedHeatCollection(zones));
-  }
-
-  List<LatLng> _clusterCenters() {
+  List<InfestedCluster> _zoneClusters() {
     final key = contagionKey(app.world.zones);
     if (key != _clusterKey) {
       _clusterKey = key;
-      _clusters = infestedClusterCenters(app.world.zones);
+      _clusters = infestedClusters(app.world.zones);
     }
     return _clusters;
+  }
+
+  Json? _buildInfect() {
+    final pos = app.location.position;
+    final zones = [
+      for (final z in _zoneClusters())
+        if (pos == null || haversineM(pos, z.center) < 2500) z,
+    ];
+    final sig = [for (final z in zones) '${z.center.lat},${z.center.lng},${z.radiusM.round()}'].join(';');
+    return _diff(_Src.infect, sig, () => featureCollection([for (final z in zones) pointFeature(z.center, {'rm': z.radiusM})]));
   }
 
   Json? _buildMarks(int now) {
@@ -736,8 +897,10 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     bool far(LatLng p, double maxM) => pos != null && haversineM(pos, p) > maxM;
 
     final shown = <String>{};
+    var walkers = false;
     for (final s in w.drawable) {
-      if (far(s.position, _markerRadiusM)) continue;
+      final at = w.positionAt(s, now);
+      if (far(at, _markerRadiusM)) continue;
       final v = w.visibilityOf(s, pos, now);
       if (v == SpawnVisibility.hidden || _pendingSpawn(s, v, now)) continue;
       shown.add(s.id);
@@ -745,24 +908,26 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       switch (s) {
         case ZombieSpawn z:
           final def = zombieDefs[z.zombieType]!;
-          marks.add(_Mark(s.id, s.position, MarkKind.zombie, echo ? 'Hostil' : def.name,
-              echo: echo, mortal: threatRating(def, level) >= 3, z: 50));
+          walkers = true;
+          marks.add(_Mark(s.id, at, MarkKind.zombie, echo ? 'Hostil' : def.name,
+              echo: echo, mortal: threatRating(def, level) >= 3, avatar: z.zombieType, z: 50));
         case SupplySpawn _:
-          marks.add(_Mark(s.id, s.position, MarkKind.supply, 'Saqueo', echo: echo, z: 40));
+          marks.add(_Mark(s.id, at, MarkKind.supply, 'Saqueo', echo: echo, z: 40));
       }
     }
     _shownSpawns = shown;
+    _walkers = walkers;
     for (final sig in w.signals) {
       if (far(sig.position, _signalRadiusM)) continue;
       marks.add(_Mark(sig.id, sig.position, MarkKind.signal, 'Señal de auxilio', z: 60, weight: 0.9));
     }
     for (final n in w.shelters) {
       final own = n.id == ownId;
-      marks.add(_Mark(n.id, n.position, MarkKind.node, 'Refugio', subtitle: shelterShortName(n.name), own: own, z: own ? 35 : 30));
+      marks.add(_Mark(n.id, n.position, MarkKind.node, own ? 'Tu refugio' : 'Refugio', own: own, z: own ? 35 : 30));
     }
-    for (final c in _clusterCenters()) {
-      if (far(c, _signalRadiusM)) continue;
-      marks.add(_Mark('zone:${cellId(cellOf(c))}', c, MarkKind.zone, 'Zona infectada', z: 20, weight: 1.35));
+    for (final z in _zoneClusters()) {
+      if (far(z.center, _signalRadiusM)) continue;
+      marks.add(_Mark('zone:${cellId(cellOf(z.center))}', z.center, MarkKind.zone, 'Zona infectada', z: 20, weight: 1.35, radiusM: z.radiusM));
     }
 
     // Etiquetas: el seleccionado y los más cercanos que no se pisen.
@@ -778,7 +943,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       labelled = pickLabelled(
         [
           for (final m in marks)
-            LabelCandidate(m.id, m.position, haversineM(pos, m.position), weight: m.weight, width: _labelWidth(m)),
+            LabelCandidate(m.id, m.position, haversineM(pos, m.position), weight: m.weight, width: MapIcons.labelWidth(m.title)),
         ],
         metersPerPx: metersPerPixel(pos.lat, zoom),
         bearingDeg: bearing,
@@ -790,7 +955,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     _labelled = labelled;
 
     final feats = <Json>[];
-    final sig = StringBuffer();
+    final sig = StringBuffer()..write(_markFade.toStringAsFixed(2));
     var signals = false;
     for (final m in marks) {
       final isLabelled = labelled.contains(m.id);
@@ -799,15 +964,15 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         m.kind,
         state,
         title: isLabelled ? m.title : '',
-        subtitle: isLabelled ? m.subtitle : null,
         labelled: isLabelled,
         own: m.own,
         mortal: m.mortal,
+        avatar: m.avatar,
       );
       if (!_ensureImage(spec)) continue;
       final icon = spec.name;
       final dist = isLabelled && pos != null ? distanceLabel(haversineM(pos, m.position)) : '';
-      final op = m.echo ? 0.7 : 1.0;
+      final op = (m.echo ? 0.72 : 1.0) * _markFade;
       final z = m.id == sel ? 100 : m.z;
       if (m.kind == MarkKind.signal) signals = true;
       sig
@@ -815,8 +980,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         ..write(icon)
         ..write(dist)
         ..write(z)
-        ..write(m.position.lat)
-        ..write(m.position.lng)
+        ..write(m.position.lat.toStringAsFixed(7))
+        ..write(m.position.lng.toStringAsFixed(7))
         ..write(';');
       feats.add(pointFeature(
         m.position,
@@ -827,18 +992,21 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
           'op': op,
           'z': z,
           'dist': dist,
-          'toff': isLabelled ? MapIcons.distanceOffset(spec.bakedLines) : const [0.0, 0.0],
+          'dc': hexColor(_distanceColor(m)),
+          'toff': isLabelled ? MapIcons.distanceOffset(m.kind, spec.lines.length) : const [0.0, 0.0],
         },
         id: m.id,
       ));
     }
-    _setPulse(signals);
+    _signalsOn = signals;
+    _syncPulse();
     return _diff(_Src.marks, sig.toString(), () => featureCollection(feats));
   }
 
-  /// Ancho aproximado (px) de la etiqueta de un marcador, para evitar choques.
-  static double _labelWidth(_Mark m) =>
-      22 + math.max(m.title.length * 7.6, math.max((m.subtitle?.length ?? 0) * 6.4, 46));
+  static Color _distanceColor(_Mark m) => switch (m.kind) {
+        MarkKind.zombie || MarkKind.zone => const Color(0xFFE5574C),
+        _ => markColor(m.kind, own: m.own),
+      };
 
   Json? _buildCells(int now) {
     final w = app.world;
@@ -870,15 +1038,39 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     return _diff(_Src.sutures, sig, () => suturesCollection(w.shelters, ownId));
   }
 
+  Json? _buildEvents(int now) {
+    _events.removeWhere((e) => e.until <= now);
+    final sig = [for (final e in _events) '${e.id}:${_eventOpacity(e, now).toStringAsFixed(1)}'].join(',');
+    return _diff(
+      _Src.events,
+      sig,
+      () => featureCollection([
+        for (final e in _events) pointFeature(e.position, {'t': e.tone.name, 'op': _eventOpacity(e, now)}),
+      ]),
+    );
+  }
+
+  /// El punto del aviso se apaga en el último tramo de su vida.
+  static double _eventOpacity(AmbientEvent e, int now) => ((e.until - now) / 1800).clamp(0.0, 1.0) * 0.95;
+
   // ---------------------------------------------------------------------------
-  // Latido de las señales
+  // Latidos: señales de auxilio y avisos ambientales
   // ---------------------------------------------------------------------------
 
-  void _setPulse(bool on) {
+  void _syncPulse() {
+    final on = (_signalsOn || _events.isNotEmpty) && _styleReady;
     if (on && !_pulseTicker.isActive) _pulseTicker.start();
-    if (!on && _pulseTicker.isActive) {
-      _pulseTicker.stop();
-      _map?.setLayerProperties(_Lyr.pulse, const _RawProps({'circle-stroke-opacity': 0})).catchError((_) {});
+    if (!on && _pulseTicker.isActive) _pulseTicker.stop();
+    final c = _map;
+    if (c == null || !_styleReady) return;
+    // Apagar los anillos solo al dejar de usarlos (cada llamada cruza al mapa).
+    if (!_signalsOn && _pulseLit) {
+      _pulseLit = false;
+      c.setLayerProperties(_Lyr.pulse, const _RawProps({'circle-stroke-opacity': 0})).catchError((_) {});
+    }
+    if (_events.isEmpty && _pingLit) {
+      _pingLit = false;
+      c.setLayerProperties(_Lyr.ping, const _RawProps({'circle-stroke-opacity': 0})).catchError((_) {});
     }
   }
 
@@ -888,18 +1080,79 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     // ~9 cuadros por segundo alcanzan para un latido suave (cada uno es una llamada al mapa).
     if (c == null || !_styleReady || now - _lastPulsePush < 110) return;
     _lastPulsePush = now;
-    const period = 2000;
-    final t = (now % period) / period;
-    final k = Curves.easeOut.transform(t);
-    c
-        .setLayerProperties(
-          _Lyr.pulse,
-          _RawProps({
-            'circle-radius': 4 + 26 * k,
-            'circle-stroke-opacity': 0.75 * (1 - t),
-          }),
-        )
-        .catchError((Object e) => debugPrint('[Zona Cero] latido: $e'));
+    if (_signalsOn) {
+      _pulseLit = true;
+      const period = 2000;
+      final t = (now % period) / period;
+      final k = Curves.easeOut.transform(t);
+      c
+          .setLayerProperties(_Lyr.pulse, _RawProps({'circle-radius': 4 + 26 * k, 'circle-stroke-opacity': 0.75 * (1 - t)}))
+          .catchError((Object e) => debugPrint('[Zona Cero] latido: $e'));
+    }
+    if (_events.isNotEmpty) {
+      _pingLit = true;
+      const period = 1500;
+      final t = (now % period) / period;
+      final k = Curves.easeOut.transform(t);
+      c
+          .setLayerProperties(_Lyr.ping, _RawProps({'circle-radius': 3 + 20 * k, 'circle-stroke-opacity': 0.85 * (1 - t)}))
+          .catchError((Object e) => debugPrint('[Zona Cero] ping: $e'));
+    }
+  }
+
+  /// Pulso de vida del mapa (~7 por segundo, solo con el mapa a la vista): los
+  /// infectados caminan por su calle y la ciudad emite avisos ambientales.
+  void _syncHeartbeat() {
+    final on = _visible && _styleReady && mounted;
+    if (on && _heartbeat == null) {
+      _heartbeat = Timer.periodic(const Duration(milliseconds: _heartbeatMs), (_) => _onHeartbeat());
+    } else if (!on && _heartbeat != null) {
+      _heartbeat?.cancel();
+      _heartbeat = null;
+    }
+  }
+
+  void _onHeartbeat() {
+    if (!mounted || !_styleReady) return;
+    final now = _now;
+    if (_walkers) _markDirty(const [_Src.marks]);
+    // Avisos ambientales.
+    if (_introDone && !_intro) {
+      _ambient.start(now);
+      final busy = now - app.world.lastScanAt < WorldController.scanDurationMs + 600 || app.location.position == null;
+      final e = _ambient.poll(
+        now: now,
+        player: app.location.position,
+        busy: busy,
+        pickPoint: (p, lo, hi, rng) {
+          final w = _placement?.walkable;
+          return w == null ? null : pointOnStreets(w, p, lo, hi, rng);
+        },
+        streetAt: (p) => _streets.isEmpty ? null : nearestStreetName(_streets, p),
+      );
+      if (e != null) {
+        _events.add(e);
+        if (_events.length > 4) _events.removeAt(0);
+        _publishEvents(now);
+        _syncPulse();
+      }
+    }
+    if (_events.isNotEmpty) {
+      _markDirty(const [_Src.events]);
+      if (_events.every((e) => e.until <= now)) {
+        _events.clear();
+        _syncPulse();
+      }
+      _publishEvents(now);
+    }
+  }
+
+  void _publishEvents(int now) {
+    final toasts = [for (final e in _events) if (now - e.at < _eventToastMs) e];
+    final cur = widget.controller.events.value;
+    if (toasts.length != cur.length || !toasts.every(cur.contains)) {
+      widget.controller.events.value = List.unmodifiable(toasts.length > 2 ? toasts.sublist(toasts.length - 2) : toasts);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -931,7 +1184,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     if (_preScanSpawns.contains(s.id)) return false;
     final o = w.lastScanOrigin;
     if (o == null) return false;
-    return dt < _ringReachMs(haversineM(o, s.position));
+    return dt < _ringReachMs(haversineM(o, w.positionAt(s, w.lastScanAt)));
   }
 
   bool _pendingCell(String id, int scannedAt, LatLng center, int now) {
@@ -958,6 +1211,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     _lastRingPush = 0;
     c.setGeoJsonSource(_Src.scan, featureCollection([pointFeature(o, const {})]));
     if (!_ticker.isActive) _ticker.start();
+    _bump();
   }
 
   void _onFrame(Duration _) {
@@ -987,7 +1241,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     var cells = 0;
     if (o != null) {
       for (final s in w.drawable) {
-        if (haversineM(o, s.position) > WorldController.scanRadiusM) continue;
+        if (haversineM(o, w.positionAt(s, w.lastScanAt)) > WorldController.scanRadiusM) continue;
         if (_pendingSpawn(s, w.visibilityOf(s, pos, now), now)) spawns++;
       }
       for (final e in w.scannedCells.entries) {
@@ -995,9 +1249,16 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       }
     }
     if (spawns != _pendingSpawns || cells != _pendingCellsCount) {
-      if (_pendingSpawns > spawns && now - _lastHaptic > 70) {
-        _lastHaptic = now;
-        HapticFeedback.selectionClick();
+      if (_pendingSpawns > spawns) {
+        if (now - _lastHaptic > 70) {
+          _lastHaptic = now;
+          HapticFeedback.selectionClick();
+        }
+        // El frente de onda alcanzó un contacto: ping suave (con límite).
+        if (now - _lastPing > 140) {
+          _lastPing = now;
+          Sfx.play(SfxId.contactPing, volume: 0.35);
+        }
       }
       _pendingSpawns = spawns;
       _pendingCellsCount = cells;
@@ -1020,8 +1281,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
           layer,
           _RawProps({
             'circle-radius': _metersToPx(_ringLat, meters),
-            'circle-opacity': 0.10 * strength * fade * appear,
-            'circle-stroke-opacity': 0.95 * strength * fade * appear,
+            'circle-opacity': 0.09 * strength * fade * appear,
+            'circle-stroke-opacity': 0.55 * strength * fade * appear,
           }),
         )
         .catchError((Object e) => debugPrint('[Zona Cero] pulso: $e'));
@@ -1033,18 +1294,45 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     return ['interpolate', ['exponential', 2], ['zoom'], 10, px(10), 22, px(22)];
   }
 
+  /// Igual que [_metersToPx] pero con los metros de una propiedad del feature.
+  static List<Object> _metersToPxExpr(double lat, Object meters) {
+    final ground = 40075016.686 * math.cos(lat * math.pi / 180);
+    double k(int z) => 512 * math.pow(2, z) / ground;
+    return ['interpolate', ['exponential', 2], ['zoom'], 10, ['*', meters, k(10)], 22, ['*', meters, k(22)]];
+  }
+
+  /// "Golpe" de cámara al disparar el pulso: un acercamiento breve y vuelta.
+  void _bump() {
+    final c = _map;
+    final cam = _cam;
+    if (c == null || cam == null || _intro || _pointers > 0) return;
+    final z0 = _bumpZoom ?? cam.zoom;
+    _bumpZoom = z0;
+    _bumpUntil = _now + 700;
+    _bumpTimer?.cancel();
+    c.animateCamera(ml.CameraUpdate.zoomTo(z0 + 0.14), duration: const Duration(milliseconds: 110));
+    _bumpTimer = Timer(const Duration(milliseconds: 140), () {
+      _map?.animateCamera(ml.CameraUpdate.zoomTo(z0), duration: const Duration(milliseconds: 460));
+      _bumpTimer = Timer(const Duration(milliseconds: 520), () => _bumpZoom = null);
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Escuchas del estado
   // ---------------------------------------------------------------------------
 
   void _onLocation() {
     final p = app.location.position;
-    _markDirty(const [_Src.player, _Src.reach, _Src.marks, _Src.cells]);
+    _markDirty(const [_Src.player, _Src.reach, _Src.marks, _Src.cells, _Src.infect]);
     if (p == null) return;
+    if (!_introDone) {
+      _maybeIntro();
+      return;
+    }
     final last = _lastFix;
     if (last == p) return;
     _lastFix = p;
-    if (widget.controller.follow) {
+    if (widget.controller.follow && !_intro) {
       final jump = last == null || haversineM(last, p) > 150;
       _moveCameraTo(p, animate: !jump && app.location.mode != LocationMode.demo);
     }
@@ -1056,13 +1344,14 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       _seenScanAt = w.lastScanAt;
       if (_now - w.lastScanAt < WorldController.scanDurationMs) _startPulse();
     }
-    // Selección hecha desde afuera del mapa (p. ej. "VER EN EL MAPA" del nodo):
-    // llevar la cámara hasta el objetivo.
     final sel = w.selectedId;
     if (sel != _lastSel) {
       final external = sel != null && sel != _selfSel;
       _lastSel = sel;
       _selfSel = null;
+      if (sel != null) Sfx.play(w.signalById(sel) != null ? SfxId.signal : SfxId.open, volume: 0.8);
+      // Selección hecha desde afuera del mapa (p. ej. "VER EN EL MAPA" del
+      // nodo): llevar la cámara hasta el objetivo.
       if (external) {
         final p = _positionOf(sel);
         if (p != null) _focus(p);
@@ -1079,7 +1368,67 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
 
   LatLng? _positionOf(String id) {
     final w = app.world;
-    return w.spawnById(id)?.position ?? w.shelterById(id)?.position ?? w.signalById(id)?.position;
+    final s = w.spawnById(id);
+    if (s != null) return w.positionAt(s, _now);
+    return w.shelterById(id)?.position ?? w.signalById(id)?.position;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Entrada: de la ciudad al jugador
+  // ---------------------------------------------------------------------------
+
+  void _maybeIntro() {
+    if (_introDone || _intro || !_styleReady) return;
+    final p = app.location.position;
+    final c = _map;
+    if (p == null || c == null) return;
+    _intro = true;
+    _markFade = 0;
+    _lastFix = p;
+    widget.controller._setIntro(true);
+    widget.controller._setFollow(true);
+    c.moveCamera(ml.CameraUpdate.newCameraPosition(
+      ml.CameraPosition(target: _ll(_introFrom(p)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
+    ));
+    // Un instante sobre la ciudad (cargan las teselas lejanas) y a volar.
+    _introTimer = Timer(const Duration(milliseconds: 500), () {
+      final to = app.location.position ?? p;
+      _map?.animateCamera(
+        ml.CameraUpdate.newCameraPosition(ml.CameraPosition(target: _ll(to), zoom: kMapZoom, tilt: 0, bearing: 0)),
+        duration: const Duration(milliseconds: kIntroMs),
+      );
+      _introTimer = Timer(const Duration(milliseconds: kIntroMs + 150), () => _endIntro());
+    });
+  }
+
+  void _endIntro({bool aborted = false}) {
+    if (!_intro) return;
+    _introTimer?.cancel();
+    _intro = false;
+    _introDone = true;
+    widget.controller._setIntro(false);
+    final p = app.location.position;
+    if (!aborted && p != null) {
+      widget.controller._setFollow(true);
+      _lastFix = p;
+      final cam = _cam;
+      // Si el jugador se movió durante el vuelo, alcanzarlo.
+      if (cam != null && haversineM(_core(cam.target), p) > 3) {
+        _moveCameraTo(p, animate: true);
+      } else {
+        _segA = p;
+        _segB = p;
+      }
+    }
+    // Los marcadores aparecen después de llegar.
+    _fadeTimer?.cancel();
+    final t0 = _now;
+    _fadeTimer = Timer.periodic(const Duration(milliseconds: 90), (t) {
+      _markFade = Curves.easeOut.transform(((_now - t0) / 750).clamp(0.0, 1.0));
+      _markDirty(const [_Src.marks]);
+      if (_markFade >= 1) t.cancel();
+    });
+    _ambient.start(_now);
   }
 
   // ---------------------------------------------------------------------------
@@ -1092,10 +1441,15 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     final cam = _camera ?? c.cameraPosition;
     _segA = cam != null ? _core(cam.target) : p;
     _segB = p;
+    // Durante el "golpe" del escáner, moverse también restituye el zoom.
+    final z0 = _bumpZoom;
+    final update = z0 != null && _now < _bumpUntil && cam != null
+        ? ml.CameraUpdate.newCameraPosition(ml.CameraPosition(target: _ll(p), zoom: z0, tilt: cam.tilt, bearing: cam.bearing))
+        : ml.CameraUpdate.newLatLng(_ll(p));
     if (animate) {
-      c.animateCamera(ml.CameraUpdate.newLatLng(_ll(p)), duration: const Duration(milliseconds: 650));
+      c.animateCamera(update, duration: const Duration(milliseconds: 650));
     } else {
-      c.moveCamera(ml.CameraUpdate.newLatLng(_ll(p)));
+      c.moveCamera(update);
     }
   }
 
@@ -1109,7 +1463,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       _labelBearing = cp.bearing;
       _markDirty(const [_Src.marks]);
     }
-    if (!widget.controller.follow) return;
+    if (_intro || !widget.controller.follow) return;
     final b = _segB;
     if (b == null) return;
     // Si la cámara se aparta del recorrido que le pedimos, la movió el usuario.
@@ -1125,6 +1479,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     final d = _downAt;
     if (d != null && (e.position - d).distance > 14) {
       _downAt = null;
+      // Arrastrar durante la entrada la corta: el mapa queda donde lo dejó.
+      if (_intro) _endIntro(aborted: true);
       widget.controller._setFollow(false);
     }
   }
@@ -1137,6 +1493,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   ml.CameraPosition? get _cam => _camera ?? _map?.cameraPosition;
 
   void _recenter() {
+    if (_intro) _endIntro();
     widget.controller._setFollow(true);
     final c = _map;
     final p = app.location.position;
@@ -1156,6 +1513,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   }
 
   void _focus(LatLng p, {String? select}) {
+    if (_intro) _endIntro(aborted: true);
     widget.controller._setFollow(false);
     if (select != null) {
       _selfSel = select;
@@ -1179,7 +1537,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   void _resetNorth() {
     final c = _map;
     final cam = _cam;
-    if (c == null || cam == null) return;
+    if (c == null || cam == null || _intro) return;
     widget.controller._setPitched(false);
     final p = app.location.position;
     final target = widget.controller.follow && p != null ? _ll(p) : cam.target;
@@ -1194,10 +1552,12 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   void _zoomBy(double delta) {
     final c = _map;
     if (c == null) return;
+    if (_intro) _endIntro(aborted: true);
     c.animateCamera(ml.CameraUpdate.zoomBy(delta), duration: const Duration(milliseconds: 260));
   }
 
   void _togglePitch() {
+    if (_intro) return;
     final next = !widget.controller.pitched;
     widget.controller._setPitched(next);
     final c = _map;
@@ -1223,6 +1583,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     final demo = app.location.demo;
     if (demo == null) return;
     HapticFeedback.mediumImpact();
+    if (_intro) _endIntro();
     widget.controller._setFollow(true);
     demo.teleport(_core(ll));
   }
@@ -1252,7 +1613,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   Future<void> _maybePlace({bool force = false}) async {
     final c = _map;
     final cam = _cam;
-    if (c == null || !_styleReady || _placing || cam == null || cam.zoom < 14) return;
+    if (c == null || !_styleReady || _placing || _intro || cam == null || cam.zoom < 14) return;
     final now = _now;
     final minGap = _emptyQueries >= 3 ? 10000 : 1500;
     if (!force && now - _lastPlaceAt < minGap) return;
@@ -1282,6 +1643,11 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       _placement = data;
       _placementCenter = around;
       app.world.applyPlacement(data, inView: inView);
+      // Nombres de calle para los avisos ambientales (solo Android/iOS).
+      if (!kIsWeb) {
+        final streets = await queryStreetNames(c, around);
+        if (mounted && streets.isNotEmpty) _streets = streets;
+      }
     } on PlacementNotReady {
       // Tiles todavía cargando: reintentar en un momento.
       _lastPlaceAt = 0;

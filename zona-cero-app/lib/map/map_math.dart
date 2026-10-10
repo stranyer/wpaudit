@@ -42,6 +42,53 @@ ScaleBarSpec scaleBarFor({required double lat, required double zoom, double maxP
   return ScaleBarSpec(meters, meters / mpp, ['0', fmt(meters / 2), '${fmt(meters)} ${km ? 'km' : 'm'}']);
 }
 
+/// Barra de escala táctica: tramo total con una marca intermedia a un tercio
+/// ("0  100  300 m"), como en las cartas militares.
+class TacticalScale {
+  const TacticalScale(this.meters, this.px, this.ticks, this.labels);
+
+  /// Largo total en metros y en píxeles.
+  final double meters;
+  final double px;
+
+  /// Posición de las marcas (0..1).
+  final List<double> ticks;
+  final List<String> labels;
+}
+
+const _tacticalSteps = [30.0, 75.0, 150.0, 300.0, 750.0, 1500.0, 3000.0, 7500.0, 15000.0];
+
+/// Elige el mayor tramo (múltiplo de 3 de un número redondo) que entra en `maxPx`.
+TacticalScale tacticalScaleFor({required double lat, required double zoom, double maxPx = 96}) {
+  final mpp = metersPerPixel(lat, zoom);
+  var meters = _tacticalSteps.first;
+  for (final s in _tacticalSteps) {
+    if (s / mpp <= maxPx) meters = s;
+  }
+  final km = meters >= 1500;
+  String fmt(double m) {
+    final v = km ? m / 1000 : m;
+    return v == v.roundToDouble() ? v.round().toString() : v.toStringAsFixed(1).replaceFirst('.', ',');
+  }
+
+  return TacticalScale(meters, meters / mpp, const [0, 1 / 3, 1], ['0', fmt(meters / 3), '${fmt(meters)} ${km ? 'km' : 'm'}']);
+}
+
+// ---------------------------------------------------------------------------
+// Día de supervivencia
+// ---------------------------------------------------------------------------
+
+/// "DÍA 7": días de calendario (hora local) desde que se creó el jugador,
+/// contando el primero como día 1.
+int survivalDay(int createdAtMs, int nowMs) {
+  final a = DateTime.fromMillisecondsSinceEpoch(createdAtMs);
+  final b = DateTime.fromMillisecondsSinceEpoch(nowMs);
+  // Fechas UTC sin hora: evita errores con los cambios de horario.
+  final da = DateTime.utc(a.year, a.month, a.day);
+  final db = DateTime.utc(b.year, b.month, b.day);
+  return math.max(1, db.difference(da).inDays + 1);
+}
+
 // ---------------------------------------------------------------------------
 // Región (rótulos de ciudad)
 // ---------------------------------------------------------------------------
@@ -68,9 +115,41 @@ bool inBox(LatLng p, GeoBox b) => p.lat >= b.s && p.lat <= b.n && p.lng >= b.w &
   return (city: city, region: city);
 }
 
+/// Pie del mapa junto al emblema: tres líneas ("CIUDAD AUTÓNOMA", "DE BUENOS
+/// AIRES", "ARG.").
+List<String> regionCaption(LatLng? p, {String? placeName}) {
+  if (p != null && inBox(p, cabaBox)) return const ['CIUDAD AUTÓNOMA', 'DE BUENOS AIRES', 'ARG.'];
+  if (p != null && inBox(p, ambaBox)) return const ['GRAN BUENOS AIRES', 'PROV. DE BUENOS AIRES', 'ARG.'];
+  final name = placeName?.trim();
+  if (p == null) return const ['ZONA DESCONOCIDA', 'SIN POSICIÓN', 'VITA-7'];
+  return [if (name == null || name.isEmpty) 'ZONA DESCONOCIDA' else name.toUpperCase(), 'SECTOR SIN CATALOGAR', 'VITA-7'];
+}
+
+// ---------------------------------------------------------------------------
+// Rumbo
+// ---------------------------------------------------------------------------
+
+const _compass = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+
+/// Punto cardinal (8 rumbos, en castellano: "O" = oeste) de un rumbo en grados.
+String compassLabel(double bearingDeg) {
+  final i = (((bearingDeg % 360) + 360) % 360 / 45).round() % 8;
+  return _compass[i];
+}
+
 // ---------------------------------------------------------------------------
 // Etiquetas de marcadores
 // ---------------------------------------------------------------------------
+
+/// Título de un marcador en una o dos líneas centradas ("ZONA / INFECTADA",
+/// "SEÑAL / DE AUXILIO"). Corta en el primer espacio si el texto pasa de
+/// `maxChars`.
+List<String> markTitleLines(String title, {int maxChars = 10}) {
+  final t = title.trim().toUpperCase();
+  if (t.length <= maxChars || !t.contains(' ')) return [t];
+  final i = t.indexOf(' ');
+  return [t.substring(0, i), t.substring(i + 1)];
+}
 
 /// Candidato a llevar etiqueta (título + distancia) en el mapa.
 class LabelCandidate {
@@ -88,9 +167,10 @@ class LabelCandidate {
 
 /// Elige qué marcadores llevan etiqueta: el seleccionado siempre, después los
 /// más cercanos, salteando los que pisarían una etiqueta ya elegida en
-/// pantalla. Las etiquetas crecen hacia arriba y a la derecha del punto, con un
-/// tamaño de `width` (o `boxW`) x `boxH` píxeles. `bearingDeg` es el rumbo de
-/// la cámara.
+/// pantalla. Cada marcador ocupa una caja centrada en x de `width` (o `boxW`)
+/// píxeles que va desde `boxAbove` px por encima del punto (el ícono) hasta
+/// `boxH - boxAbove` px por debajo (título y distancia). `bearingDeg` es el
+/// rumbo de la cámara.
 /// Los que ya tenían etiqueta (`previous`) tienen una pequeña ventaja para que
 /// no parpadeen al moverse.
 Set<String> pickLabelled(
@@ -100,8 +180,9 @@ Set<String> pickLabelled(
   int max = 5,
   String? selectedId,
   Set<String> previous = const {},
-  double boxW = 112,
-  double boxH = 60,
+  double boxW = 96,
+  double boxH = 64,
+  double boxAbove = 16,
 }) {
   if (candidates.isEmpty || max <= 0) return {};
   double score(LabelCandidate c) => c.distanceM * c.weight * (previous.contains(c.id) ? 0.8 : 1);
@@ -123,21 +204,23 @@ Set<String> pickLabelled(
   }
 
   final out = <String>{};
-  final boxes = <(double, double, double)>[];
+  // Cajas: (izquierda, derecha, arriba, abajo) con y hacia arriba.
+  final boxes = <(double, double, double, double)>[];
   for (final c in sorted) {
     if (out.length >= max && c.id != selectedId) break;
     final (x, y) = screen(c.position);
     final w = c.width ?? boxW;
+    final box = (x - w / 2, x + w / 2, y + boxAbove, y + boxAbove - boxH);
     var clash = false;
-    for (final (bx, by, bw) in boxes) {
-      if (x < bx + bw && bx < x + w && (y - by).abs() < boxH) {
+    for (final (l, r, t, b) in boxes) {
+      if (box.$1 < r && l < box.$2 && box.$4 < t && b < box.$3) {
         clash = true;
         break;
       }
     }
     if (clash && c.id != selectedId) continue;
     out.add(c.id);
-    boxes.add((x, y, w));
+    boxes.add(box);
   }
   return out;
 }
@@ -165,13 +248,21 @@ String distanceLabel(double m) {
 /// Agrupa las celdas infestadas contiguas (8 vecinos) y devuelve un punto por
 /// grupo: el centro de la celda más cercana al centroide del grupo (así el
 /// marcador siempre cae dentro de la zona).
-List<LatLng> infestedClusterCenters(List<Zone> zones) {
+List<LatLng> infestedClusterCenters(List<Zone> zones) => [for (final c in infestedClusters(zones)) c.center];
+
+/// Zona infestada para el mapa: centro (dentro del grupo) y radio del área roja
+/// (cubre las celdas del grupo, con un mínimo de [minZoneRadiusM]).
+typedef InfestedCluster = ({LatLng center, double radiusM, int cells});
+
+const minZoneRadiusM = 95.0;
+
+List<InfestedCluster> infestedClusters(List<Zone> zones) {
   final cells = <String, CellCoord>{
     for (final z in zones)
       if (z.threat == ZoneThreat.infested) z.cellId: parseCellId(z.cellId),
   };
   final seen = <String>{};
-  final out = <LatLng>[];
+  final out = <InfestedCluster>[];
   final ids = cells.keys.toList()..sort();
   for (final start in ids) {
     if (!seen.add(start)) continue;
@@ -206,7 +297,13 @@ List<LatLng> infestedClusterCenters(List<Zone> zones) {
         best = p;
       }
     }
-    out.add(best);
+    var r = 0.0;
+    for (final c in group) {
+      r = math.max(r, haversineM(best, cellCenter(c)));
+    }
+    // Media celda (~100 m) alrededor de la celda más lejana, achicada para que
+    // el área no tape media pantalla.
+    out.add((center: best, radiusM: math.max(minZoneRadiusM, r * 0.8 + 70), cells: group.length));
   }
   return out;
 }

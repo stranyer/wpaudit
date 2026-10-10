@@ -10,10 +10,10 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../core/types.dart';
+import 'creature_view.dart' show ZombieAnim;
 import 'cutout_rig.dart';
 
-/// Animaciones que la escena sabe reproducir.
-enum ZombieAnim { idle, attack, hit, death, chargePrepare, charge, scream }
+export 'creature_view.dart' show ZombieAnim;
 
 double _clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
 
@@ -132,6 +132,7 @@ class PuppetPose {
   double squash = 0; // aplastamiento del golpe
   double dent = 0, dentX = 0, dentY = 0, dentR = 1;
   double pulse = 0, pulsePhase = 0; // distorsión radial alrededor de la cabeza
+  double yaw = 0; // giro del torso (rad): ilusión 3D, comprime el lado que se aleja
   // Globales.
   double scale = 1;
   double persp = 0; // las filas altas crecen más (se inclina hacia la cámara)
@@ -146,7 +147,7 @@ class PuppetPose {
   void reset() {
     breath = sway = headAngle = headStretch = headDx = headDy = 0;
     armL = armR = armLy = armRy = 0;
-    crouch = buckle = squash = dent = pulse = pulsePhase = 0;
+    crouch = buckle = squash = dent = pulse = pulsePhase = yaw = 0;
     kneeDir = 1;
     dentX = dentY = 0;
     dentR = 1;
@@ -200,6 +201,18 @@ class PuppetDeformer {
     if (p.crouch != 0) {
       y *= 1 - 0.085 * p.crouch;
       x = cx + (x - cx) * (1 + 0.07 * p.crouch * smooth(0.15, 0.75, hc));
+    }
+    // Giro del torso: el cuerpo como un cilindro que rota sobre su eje; el
+    // lado que se aleja se comprime y el que se acerca se ensancha. Los pies
+    // quedan plantados (el giro crece con la altura).
+    if (p.yaw != 0) {
+      final w = smooth(0.08, 0.55, hc);
+      if (w > 0) {
+        final s = ((x - cx) / halfW).clamp(-0.985, 0.985);
+        final th = math.asin(s);
+        final a = (th + p.yaw * w).clamp(-1.5, 1.5);
+        x = cx + halfW * math.sin(a);
+      }
     }
     // Respiración (torso) y hombros que suben.
     if (p.breath != 0) {
@@ -314,6 +327,7 @@ class PuppetStyle {
     this.attackScale = 1.45,
     this.chargeScale = 1.62,
     this.tremble = 0,
+    this.yawAmp = 0.11,
   });
 
   final double breathPeriod;
@@ -330,6 +344,9 @@ class PuppetStyle {
 
   /// Temblor nervioso permanente (Corredor).
   final double tremble;
+
+  /// Giro máximo del torso en reposo (rad).
+  final double yawAmp;
 }
 
 const Map<ZombieTypeId, PuppetStyle> puppetStyles = {
@@ -515,6 +532,8 @@ class PuppetAnimator {
     p.breath = s.breathAmp * br * idleW;
     p.sway = s.swayAmp * (math.sin(ck * 2 * math.pi * s.swayFreq) + 0.35 * math.sin(ck * 2 * math.pi * s.swayFreq * 2.3 + 1.3)) * idleW;
     p.headAngle = s.headAmp * math.sin(ck * 1.1 + 0.6) * idleW;
+    // Giro lento del torso, en fase con el balanceo (lee como volumen).
+    p.yaw = s.yawAmp * math.sin(ck * 2 * math.pi * s.swayFreq * 0.8 + 0.9) * idleW;
     p.headDy = 0.004 * math.sin(2 * math.pi * ck / s.breathPeriod + 0.8) * idleW;
     p.armL = s.armAmp * math.sin(ck * 1.3) * idleW;
     p.armR = s.armAmp * math.sin(ck * 1.3 + 2.1) * idleW;
@@ -562,6 +581,7 @@ class PuppetAnimator {
         p.armRy += -0.035 * w;
         p.ty = (charge ? 0.14 : 0.10) * env;
         p.rot = (charge ? 0.035 : 0.05) * env * (_hitDir > 0 ? -1 : 1);
+        p.yaw += -0.12 * w * _hitDir;
       case ZombieAnim.hit:
         final k = bump(tt, 0, 0.06, durationOf(ZombieAnim.hit));
         p.scale = 1 - 0.05 * k;
@@ -569,6 +589,7 @@ class PuppetAnimator {
         p.squash = 0.035 * k;
         p.rot = -0.03 * k * _hitDir;
         p.sway += -0.03 * k * _hitDir;
+        p.yaw += 0.16 * k * _hitDir;
       case ZombieAnim.scream:
         final k = bump(tt, 0, 0.24, durationOf(ZombieAnim.scream));
         p.headStretch = 0.13 * k;

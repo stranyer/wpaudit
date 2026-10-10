@@ -1,5 +1,6 @@
-// Pantalla de encuentro: escenario Flame (criatura HD animada como títere de
-// malla) + HUD de campo + minijuego de puntería.
+// Pantalla de encuentro: escenario Flame (criatura detrás de `CreatureView`,
+// mano en primera persona con el arma activa) + HUD de campo como la
+// referencia + minijuego de puntería + sonido.
 //
 // La abre el shell como ruta a pantalla completa después de que
 // `app.engage(spawn)` devolvió true (así `app.combat` y `app.combatSpawn` ya
@@ -12,16 +13,19 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../audio/sfx.dart';
 import '../../combat/aim.dart';
+import '../../combat/combat_art.dart' show plateForSpawn;
 import '../../combat/combat_game.dart';
 import '../../combat/combat_hud.dart';
-import '../../combat/puppet.dart' show ZombieAnim;
+import '../../combat/creature_view.dart' show ZombieAnim;
+import '../../combat/fp_hand.dart' show handFor, HandKind;
 import '../../combat/turn_plan.dart';
 import '../../core/core.dart';
 import '../../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/chamfer_button.dart';
-import '../widgets/weapon_panel.dart';
+import '../widgets/grit.dart' show ZcLogo;
 
 class EncounterScreen extends StatefulWidget {
   const EncounterScreen({super.key});
@@ -31,11 +35,12 @@ class EncounterScreen extends StatefulWidget {
 }
 
 class _CallOutSpec {
-  const _CallOutSpec(this.id, this.text, this.color, this.sub);
+  const _CallOutSpec(this.id, this.text, this.color, this.sub, [this.icon = CallIcon.warning]);
   final int id;
   final String text;
   final Color color;
   final String? sub;
+  final CallIcon icon;
 }
 
 class _EncounterScreenState extends State<EncounterScreen> {
@@ -45,6 +50,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
   final TurnSequencer _seq = TurnSequencer();
   final List<Timer> _timers = [];
   final math.Random _rnd = math.Random();
+  Timer? _heartbeat;
 
   bool _ready = false;
   bool _busy = false;
@@ -98,7 +104,8 @@ class _EncounterScreenState extends State<EncounterScreen> {
       _stunned = s.zombie.stunned;
       // Con arma de fuego y munición se arranca apuntando con ella (como el HUD del mapa).
       if (canShoot(s)) _mode = WeaponMode.firearm;
-      _addLog('El ${s.zombie.name} te detectó.', Sutura.textHi);
+      _addLog('Hostil detectado.', Sutura.textHi);
+      _addLog('El ${s.zombie.name} se aproxima.', Sutura.textHi);
       final ability = zombieDefs[s.zombie.typeId]!.ability;
       switch (ability) {
         case ZombieAbility.toxicBurst:
@@ -114,7 +121,24 @@ class _EncounterScreenState extends State<EncounterScreen> {
       }
     }
     _later(4800, () => setState(() => _hostile = false));
+    // Sonido: ambiente de combate mientras dure la pantalla, gruñido de entrada
+    // (el Corredor además gruñe con los dientes) y latido con la salud baja.
+    Sfx.ambience(Ambience.combat);
+    if (s != null) {
+      Sfx.play(SfxId.zombieGroan, rate: _rate());
+      if (_zombieType == ZombieTypeId.runner) _later(450, () => Sfx.play(SfxId.runnerSnarl, rate: _rate()));
+    }
+    _heartbeat = Timer.periodic(const Duration(milliseconds: 1000), (_) {
+      final st = _state;
+      if (!mounted || st == null || _ended || _exiting || st.player.maxHealth <= 0) return;
+      if (_hp / st.player.maxHealth < 0.3) Sfx.play(SfxId.heartbeat, volume: 0.85, rate: 0.97 + _rnd.nextDouble() * 0.06);
+    });
   }
+
+  /// Variación leve de tono para que los sonidos repetidos no suenen clonados.
+  double _rate() => 0.9 + _rnd.nextDouble() * 0.2;
+
+  HandKind get _handKind => handFor(_mode, firearm: _firearmId, melee: _meleeId);
 
   @override
   void didChangeDependencies() {
@@ -126,6 +150,9 @@ class _EncounterScreenState extends State<EncounterScreen> {
     _game = CombatStageGame(
       zombieType: _zombieType,
       bundle: DefaultAssetBundle.of(context),
+      // Placa fija por aparición (Colón / Obelisco).
+      plate: plateForSpawn(app.combatSpawn?.id ?? _state?.spawnId ?? ''),
+      hand: _handKind,
       onAimSignal: _onAimSignal,
       onReady: () {
         if (mounted) setState(() => _ready = true);
@@ -137,9 +164,11 @@ class _EncounterScreenState extends State<EncounterScreen> {
   @override
   void dispose() {
     _seq.cancel();
+    _heartbeat?.cancel();
     for (final t in _timers) {
       t.cancel();
     }
+    Sfx.ambience(Ambience.map);
     super.dispose();
   }
 
@@ -168,8 +197,8 @@ class _EncounterScreenState extends State<EncounterScreen> {
     _later(1350, () => setState(() => _floats.remove(f)));
   }
 
-  void _call(String text, Color color, {String? sub}) {
-    final c = _CallOutSpec(_ids++, text, color, sub);
+  void _call(String text, Color color, {String? sub, CallIcon icon = CallIcon.warning}) {
+    final c = _CallOutSpec(_ids++, text, color, sub, icon);
     _callout = c;
     _later(1400, () {
       if (_callout == c) setState(() => _callout = null);
@@ -259,19 +288,24 @@ class _EncounterScreenState extends State<EncounterScreen> {
       }
       action = CombatAction.shoot(precision: shot.precision);
       _game.muzzle(_game.impactPointFor(shot.point));
+      Sfx.play(_firearmId == ItemId.shotgun ? SfxId.shotgunShot : SfxId.pistolShot, rate: _rate());
     } else {
       action = shot.charged ? CombatAction.heavy(precision: shot.precision) : CombatAction.attack(precision: shot.precision);
       _game.slash(shot.zone == AimZone.off ? shot.point : _game.impactPointFor(shot.point), heavy: shot.charged);
+      Sfx.play(SfxId.meleeSwing, volume: shot.charged ? 1 : 0.85, rate: shot.charged ? 0.88 : _rate());
     }
     HapticFeedback.mediumImpact();
     _resolve(action, shot: shot);
   }
 
   void _noAmmo() {
+    _game.dryFire();
+    Sfx.play(SfxId.emptyClick, rate: _rate());
     setState(() {
       _mode = WeaponMode.melee;
-      _call('SIN MUNICIÓN', hudRed, sub: 'CAMBIO A CUERPO A CUERPO');
+      _call('SIN MUNICIÓN', hudRed, sub: 'Cambio a cuerpo a cuerpo');
     });
+    _game.setHand(_handKind);
     HapticFeedback.selectionClick();
   }
 
@@ -284,6 +318,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
     }
     HapticFeedback.selectionClick();
     setState(() => _mode = _mode == WeaponMode.melee ? WeaponMode.firearm : WeaponMode.melee);
+    _game.setHand(_handKind);
   }
 
   // ---------------------------------------------------------------------------
@@ -333,9 +368,15 @@ class _EncounterScreenState extends State<EncounterScreen> {
     switch (e) {
       case PlayerHit():
         final at = shot != null ? _game.impactPointFor(shot.point) : _game.chestPoint;
-        if (!kill) _game.playZombie(ZombieAnim.hit);
-        _game.impact(at, crit: e.crit, heavy: action is Heavy, ranged: e.ranged, headshot: e.headshot);
+        _game.impact(at, crit: e.crit, heavy: action is Heavy, ranged: e.ranged, headshot: e.headshot, lethal: kill);
         _zHp = math.max(0, _zHp - e.damage);
+        if (e.ranged) {
+          Sfx.play(SfxId.zombieHurt, rate: _rate());
+        } else {
+          Sfx.play(SfxId.meleeImpact, rate: _rate());
+          Sfx.play(SfxId.zombieHurt, volume: 0.7, rate: _rate());
+        }
+        if (e.crit || e.headshot) Sfx.play(SfxId.headshot, rate: _rate());
         _float(
           e.crit ? FloatKind.crit : FloatKind.damage,
           '−${e.damage}',
@@ -343,9 +384,9 @@ class _EncounterScreenState extends State<EncounterScreen> {
           sub: e.headshot ? 'CABEZA' : (e.crit ? 'CRÍTICO' : null),
         );
         if (e.headshot && e.ranged) {
-          _call('DISPARO A LA CABEZA', Sutura.amber, sub: 'IMPACTO CRÍTICO ×1,75');
+          _call('DISPARO A LA CABEZA', Sutura.amber, sub: 'Impacto crítico ×1,75', icon: CallIcon.crosshair);
         } else if (e.crit) {
-          _call('GOLPE CRÍTICO', Sutura.amber, sub: e.stunBonus ? 'OBJETIVO ATURDIDO' : (e.headshot ? 'A LA CABEZA' : null));
+          _call('GOLPE CRÍTICO', Sutura.amber, sub: e.stunBonus ? 'Objetivo aturdido' : (e.headshot ? 'A la cabeza' : null), icon: CallIcon.crosshair);
         }
       case PlayerMiss():
         final at = shot?.point ?? _game.chestPoint;
@@ -356,12 +397,16 @@ class _EncounterScreenState extends State<EncounterScreen> {
       case NoAmmo():
         _noAmmo();
       case DefendEvent():
-        _game.shieldUp();
+        _game
+          ..shieldUp()
+          ..guard = true;
+        Sfx.play(SfxId.defend, rate: _rate());
         _sta = math.min(st.player.maxStamina.toDouble(), _sta + e.stamina);
         final gained = e.stamina.round();
         _float(FloatKind.blocked, gained > 0 ? '+$gained RES' : 'CUBIERTO', _playerAnchor, sub: gained > 0 ? 'CUBIERTO' : null);
       case Heal():
         _game.healPulse();
+        Sfx.play(SfxId.heal, rate: _rate());
         _hp = math.min(st.player.maxHealth.toDouble(), _hp + e.health);
         _sta = math.min(st.player.maxStamina.toDouble(), _sta + e.stamina);
         if (e.health > 0) _float(FloatKind.heal, '+${e.health.round()}', _playerAnchor, sub: itemDefs[e.itemId]!.name.toUpperCase());
@@ -370,32 +415,40 @@ class _EncounterScreenState extends State<EncounterScreen> {
         _game
           ..ended = true
           ..fleeOut();
+        Sfx.play(SfxId.flee);
       case FleeFail():
         _game.shake(0.3);
-        _call('¡TE CORTA EL PASO!', hudRed);
+        Sfx.play(SfxId.flee, volume: 0.6, rate: _rate());
+        _call('¡TE CORTA EL PASO!', hudRed, sub: 'No pudiste escapar');
       case ZombieKilled():
         _game
           ..ended = true
           ..playZombie(ZombieAnim.death);
         _charging = false;
+        Sfx.play(SfxId.zombieDeath, rate: _rate());
+        if (_zombieType == ZombieTypeId.bloater) Sfx.play(SfxId.bloaterBurst);
         HapticFeedback.mediumImpact();
       case ToxicBurst():
         _game.toxicCloud();
+        Sfx.play(SfxId.playerHurt, rate: _rate());
         _hp = math.max(0, _hp - e.damage);
         _float(FloatKind.hurt, '−${e.damage.round()}', _playerAnchor, sub: 'TÓXICO');
         HapticFeedback.heavyImpact();
       case ZombieHit():
         _game.playZombie(_attackAnim(e));
+        Sfx.play(SfxId.zombieAttack, rate: _rate());
         log = false;
       case ZombieMiss():
         _game.playZombie(_attackAnim(e));
+        Sfx.play(SfxId.zombieAttack, rate: _rate());
         log = false;
       case ZombieChargePrepare():
         _game.playZombie(ZombieAnim.chargePrepare);
         _charging = true;
-        _addLog('Se prepara para embestir...', Sutura.caution);
-        _addLog('¡CUBRITE!', hudRed);
+        _addLog('Prepara una embestida.', Sutura.caution);
+        _addLog('¡Cubrite!', hudRed);
         log = false;
+        Sfx.play(SfxId.bruteRoar, rate: _rate());
         HapticFeedback.mediumImpact();
       case ZombieStunned():
         _stunned = st.zombie.stunned;
@@ -405,6 +458,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
         }
       case ZombieScream():
         _game.playZombie(ZombieAnim.scream);
+        Sfx.play(SfxId.screamerScream, rate: _rate());
         _later((_game.zombieKeyTime(ZombieAnim.scream) * 1000).round(), () {
           _game.screamWave();
           setState(() => _shake++);
@@ -413,7 +467,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
         _zHp = math.min(st.zombie.maxHealth, _zHp + e.healed);
         _screamed = true;
         _float(FloatKind.heal, '+${e.healed}', _game.headPoint.translate(0, -10), sub: 'REFUERZOS');
-        _call('¡GRITO!', Sutura.caution2, sub: 'LLEGAN REFUERZOS');
+        _call('¡GRITO!', Sutura.caution2, sub: 'Llegan refuerzos');
       case PlayerDown():
         _game
           ..ended = true
@@ -430,12 +484,13 @@ class _EncounterScreenState extends State<EncounterScreen> {
     switch (e) {
       case ZombieHit():
         _game.hurt(charged: e.charged);
+        Sfx.play(SfxId.playerHurt, rate: _rate());
         _hp = math.max(0, _hp - e.damage);
         _float(FloatKind.hurt, '−${e.damage}', _playerAnchor, blocked: e.blocked, sub: e.charged ? 'EMBESTIDA' : null);
         if (e.charged) {
           _charging = false;
           _shake++;
-          _call('¡EMBESTIDA!', hudRed);
+          _call('¡EMBESTIDA!', hudRed, sub: 'Te llevó por delante');
         }
         HapticFeedback.heavyImpact();
       case ZombieMiss():
@@ -444,7 +499,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
           _charging = false;
           _game.dodge();
           _float(FloatKind.info, '¡ESQUIVADA!', _playerAnchor);
-          _call('¡ESQUIVADA!', Sutura.signal, sub: 'QUEDA ATURDIDO');
+          _call('¡ESQUIVADA!', Sutura.signal, sub: 'Queda aturdido', icon: CallIcon.shield);
         } else {
           _float(FloatKind.miss, 'ESQUIVÁS', _playerAnchor);
         }
@@ -458,6 +513,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
 
   void _onTurnEnd(CombatState st) {
     if (!mounted) return;
+    _game.guard = false;
     setState(() {
       _busy = false;
       _hp = st.player.health;
@@ -468,7 +524,8 @@ class _EncounterScreenState extends State<EncounterScreen> {
       _screamed = st.lastEvents.any((e) => e is ZombieScream);
       if (st.status == CombatStatus.ongoing && _mode == WeaponMode.firearm && !canShoot(st)) {
         _mode = WeaponMode.melee;
-        _call('SIN MUNICIÓN', hudRed, sub: 'CAMBIO A CUERPO A CUERPO');
+        _call('SIN MUNICIÓN', hudRed, sub: 'Cambio a cuerpo a cuerpo');
+        _game.setHand(_handKind);
       }
     });
     _syncGameFlags();
@@ -479,7 +536,18 @@ class _EncounterScreenState extends State<EncounterScreen> {
         CombatStatus.lost => 1100,
         _ => 650,
       };
-      _later(delay, () => setState(() => _showResult = true));
+      _later(delay, () {
+        setState(() => _showResult = true);
+        _game.lowerHand();
+        switch (st.status) {
+          case CombatStatus.won:
+            Sfx.play(SfxId.victory);
+          case CombatStatus.lost:
+            Sfx.play(SfxId.defeat);
+          default:
+            break;
+        }
+      });
     }
   }
 
@@ -502,7 +570,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
     }
     setState(() {
       _fleeNudge++;
-      _call('NO HAY SALIDA FÁCIL', Sutura.caution, sub: 'USÁ HUIR PARA RETIRARTE');
+      _call('NO HAY SALIDA FÁCIL', Sutura.caution, sub: 'Usá HUIR para retirarte');
     });
   }
 
@@ -545,33 +613,44 @@ class _EncounterScreenState extends State<EncounterScreen> {
   Widget _stage(BuildContext context, CombatState s) {
     final size = MediaQuery.sizeOf(context);
     final pad = MediaQuery.paddingOf(context);
-    const footerH = 14.0;
-    const buttonsH = 58.0;
-    const weaponH = 104.0;
-    const logH = 78.0;
-    final footerBottom = pad.bottom + 8;
-    final buttonsBottom = footerBottom + footerH + 8;
+    final w = size.width;
+    final compact = size.height < 720;
+    // Abajo: botonera, y encima registro (izq.) + arma (der., sobre la mano).
+    final buttonsH = compact ? 52.0 : 58.0;
+    final panelH = compact ? 58.0 : 66.0;
+    final buttonsBottom = pad.bottom + 10;
     final rowBottom = buttonsBottom + buttonsH + 10;
-    final bottomBlock = rowBottom + weaponH;
-    _playerAnchor = Offset(size.width * 0.26, pad.top + 124);
-    _game.hudTop = size.height - bottomBlock;
+    final bottomBlock = rowBottom + panelH;
+    // Arriba: logo + signos vitales (izq.), objetivo (der.).
+    final logoSize = compact ? 22.0 : 25.0;
+    final topY = pad.top + 10;
+    final leftW = math.min(196.0, (w - 24) * 0.52);
+    final rightW = math.min(190.0, w - 24 - leftW - 8);
+    final logoH = logoSize * 1.62;
+    final vitalsTop = topY + logoH + 6;
+    final vitalsH = compact ? 88.0 : 92.0;
+    final hudBottom = vitalsTop + vitalsH;
+    _playerAnchor = Offset(w * 0.26, hudBottom + 20);
+    _game
+      ..hudTop = size.height - bottomBlock
+      ..handBase = size.height - buttonsBottom - buttonsH;
     final player = app.player;
     final threat = threatRating(zombieDefs[s.zombie.typeId]!, player?.level ?? 1);
     final items = usableItems(s);
     final controls = _canAct && !_aiming;
-    final weaponW = math.min(176.0, size.width * 0.45);
+    final weaponW = math.min(164.0, w * 0.42);
     final firearm = _mode == WeaponMode.firearm;
-    final callout = _callout ?? (_charging && !_ended ? const _CallOutSpec(0, '¡CUBRITE!', hudRed, 'PREPARA UNA EMBESTIDA') : null);
+    final callout = _callout ?? (_charging && !_ended ? const _CallOutSpec(0, '¡CUBRITE!', hudRed, 'Prepara una embestida') : null);
     // El chip de carga repite al aviso fijo: solo se ve si otro aviso lo tapa.
     final chargeChip = _charging && _callout != null;
-    final hostile = _hostile && !_ended;
+    final hostile = _hostile && !_ended && callout == null;
     final chips = chargeChip || _stunned || _screamed;
-    final calloutTop = pad.top + 115 + (hostile ? 31 : 0) + (chips ? 29 : 0);
+    final calloutTop = hudBottom + (compact ? 4 : 10);
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Escenario.
+        // Escenario (con la mano en primera persona).
         Positioned.fill(
           child: GameWidget<CombatStageGame>(
             game: _game,
@@ -596,11 +675,16 @@ class _EncounterScreenState extends State<EncounterScreen> {
           top: 0,
           left: 0,
           right: 0,
-          height: pad.top + 140,
+          height: hudBottom + 50,
           child: const IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xB3030507), Color(0x00030507)]),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xC0030507), Color(0x66030507), Color(0x00030507)],
+                  stops: [0, 0.6, 1],
+                ),
               ),
             ),
           ),
@@ -609,15 +693,15 @@ class _EncounterScreenState extends State<EncounterScreen> {
           left: 0,
           right: 0,
           bottom: 0,
-          height: bottomBlock + 40,
+          height: bottomBlock + 30,
           child: const IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x00030507), Color(0x99030507), Color(0xF0030507)],
-                  stops: [0, 0.4, 1],
+                  colors: [Color(0x00030507), Color(0x66030507), Color(0xD0030507)],
+                  stops: [0, 0.45, 1],
                 ),
               ),
             ),
@@ -639,8 +723,8 @@ class _EncounterScreenState extends State<EncounterScreen> {
         // Aviso central.
         if (callout != null && !_showResult)
           Positioned(
-            left: 12,
-            right: 12,
+            left: 8,
+            right: 8,
             top: calloutTop,
             child: IgnorePointer(
               child: Center(
@@ -649,6 +733,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
                   text: callout.text,
                   color: callout.color,
                   sub: callout.sub,
+                  icon: callout.icon,
                   sticky: callout.id == 0,
                 ),
               ),
@@ -659,7 +744,7 @@ class _EncounterScreenState extends State<EncounterScreen> {
           Positioned(
             left: 16,
             right: 16,
-            bottom: bottomBlock + 14,
+            bottom: bottomBlock + 12,
             child: IgnorePointer(
               child: Center(
                 child: PulsingHint(text: firearm ? 'MANTENÉ PARA APUNTAR · SOLTÁ PARA DISPARAR' : 'MANTENÉ PARA APUNTAR · SOLTÁ PARA ATACAR'),
@@ -668,101 +753,107 @@ class _EncounterScreenState extends State<EncounterScreen> {
           ),
         if (_busy && !_ended)
           Positioned(
-            right: 14,
-            bottom: bottomBlock + 12,
+            left: 14,
+            bottom: bottomBlock + 8,
             child: IgnorePointer(child: Text('TOCÁ PARA ACELERAR', style: SuturaText.label.copyWith(fontSize: 10, color: Sutura.textLow))),
           ),
-        // HUD superior.
-        if (!_showResult)
+        // HUD superior: logo + signos vitales | objetivo; etiquetas debajo.
+        if (!_showResult) ...[
           Positioned(
-            top: pad.top + 10,
+            top: topY,
             left: 12,
-            right: 12,
+            width: leftW,
             child: HudShake(
               trigger: _shake,
               // Aísla el ECG (repinta cada cuadro) del resto del HUD.
               child: RepaintBoundary(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: VitalsPanel(
-                              health: _hp,
-                              maxHealth: s.player.maxHealth,
-                              stamina: _sta,
-                              maxStamina: s.player.maxStamina,
-                              defending: _busy && s.player.defending,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TargetPanel(name: s.zombie.name, level: s.zombie.level, threat: threat, health: _zHp, maxHealth: s.zombie.maxHealth),
-                          ),
-                        ],
+                    SizedBox(
+                      height: logoH,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: ZcLogo(size: logoSize),
                       ),
                     ),
-                    const SizedBox(height: 7),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 450),
-                            child: hostile ? const HostileTag(key: ValueKey('hostil')) : const SizedBox.shrink(),
-                          ),
-                          if (chips) ...[
-                            if (hostile) const SizedBox(height: 5),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              alignment: WrapAlignment.end,
-                              children: [
-                                if (chargeChip) const StatusChip('CARGANDO EMBESTIDA…', color: hudRed, blink: true, icon: Icons.warning_rounded),
-                                if (_stunned) const StatusChip('ATURDIDO', color: Sutura.signal, icon: Icons.blur_on),
-                                if (_screamed) const StatusChip('GRITO', color: Sutura.caution2, icon: Icons.campaign_outlined),
-                              ],
-                            ),
-                          ],
-                        ],
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: vitalsH,
+                      child: VitalsPanel(
+                        health: _hp,
+                        maxHealth: s.player.maxHealth,
+                        stamina: _sta,
+                        maxStamina: s.player.maxStamina,
+                        defending: _busy && s.player.defending,
                       ),
+                    ),
+                    const SizedBox(height: 10),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 380),
+                      child: hostile ? const HostileTag(key: ValueKey('hostil')) : const SizedBox.shrink(),
                     ),
                   ],
                 ),
               ),
             ),
           ),
-        // HUD inferior: registro + arma.
+          Positioned(
+            top: topY + 4,
+            right: 12,
+            width: rightW,
+            child: HudShake(
+              trigger: _shake,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  TargetPanel(name: s.zombie.name, level: s.zombie.level, threat: threat, health: _zHp, maxHealth: s.zombie.maxHealth, type: s.zombie.typeId),
+                  if (chips) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        if (chargeChip) const StatusChip('CARGANDO EMBESTIDA…', color: hudRed, blink: true, icon: Icons.warning_rounded),
+                        if (_stunned) const StatusChip('ATURDIDO', color: Sutura.signal, icon: Icons.blur_on),
+                        if (_screamed) const StatusChip('GRITO', color: Sutura.caution2, icon: Icons.campaign_outlined),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+        // HUD inferior: registro + arma (el panel del arma pisa la mano).
         if (!_showResult)
           Positioned(
             left: 12,
             right: 12,
             bottom: rowBottom,
+            height: panelH,
             child: HudShake(
               trigger: _shake,
               amplitude: 4,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: SizedBox(height: logH, child: CombatLog(lines: _log)),
-                  ),
+                  Expanded(child: CombatLog(lines: _log)),
                   const SizedBox(width: 10),
                   SizedBox(
                     width: weaponW,
                     child: _WeaponSwitch(
-                      mode: _mode,
                       hasFirearm: _firearmId != null,
                       onTap: controls ? _toggleMode : null,
-                      child: WeaponPanel(
+                      mode: _mode,
+                      child: CombatWeaponPanel(
                         weapon: firearm ? _firearmId : _meleeId,
                         ammo: remainingInCombat(s, ItemId.ammo),
-                        height: weaponH,
-                        title: firearm ? 'ARMA EQUIPADA' : 'CUERPO A CUERPO',
+                        height: panelH,
+                        swapLabel: _firearmId == null ? null : (firearm ? 'C/C' : 'FUEGO'),
+                        swapColor: firearm ? Sutura.signal : Sutura.amber,
                       ),
                     ),
                   ),
@@ -777,54 +868,38 @@ class _EncounterScreenState extends State<EncounterScreen> {
             right: 12,
             bottom: buttonsBottom,
             height: buttonsH,
-            child: Row(
-              children: [
-                Expanded(
-                  child: ActionButton(
-                    icon: Icons.shield_outlined,
-                    label: 'Cubrirse',
-                    sub: '−60% daño',
-                    highlight: _charging,
-                    height: buttonsH,
-                    onTap: controls ? () => _resolve(const CombatAction.defend()) : null,
-                  ),
+            child: ActionBar(
+              height: buttonsH,
+              cover: ActionButton(
+                icon: CrouchGlyph(size: compact ? 24 : 27, color: Sutura.textHi),
+                label: 'Cubrirse',
+                sub: '−60% daño',
+                framed: true,
+                highlight: _charging,
+                height: buttonsH,
+                onTap: controls ? () => _resolve(const CombatAction.defend()) : null,
+              ),
+              items: ActionButton(
+                icon: const Icon(Icons.backpack_outlined),
+                label: 'Objetos',
+                sub: items.isEmpty ? 'Sin objetos' : '${items.length} disp.',
+                active: _itemsOpen,
+                height: buttonsH,
+                onTap: controls && items.isNotEmpty ? () => setState(() => _itemsOpen = !_itemsOpen) : null,
+              ),
+              flee: _Nudge(
+                key: ValueKey('flee-$_fleeNudge'),
+                active: _fleeNudge > 0,
+                child: ActionButton(
+                  icon: const Icon(Icons.directions_run),
+                  label: 'Huir',
+                  sub: '${(_fleeChance(s) * 100).round()} %',
+                  highlight: _fleeNudge > 0,
+                  height: buttonsH,
+                  onTap: controls ? () => _resolve(const CombatAction.flee()) : null,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ActionButton(
-                    icon: Icons.medical_services_outlined,
-                    label: 'Objetos',
-                    sub: items.isEmpty ? 'Sin objetos' : '${items.length} disp.',
-                    active: _itemsOpen,
-                    height: buttonsH,
-                    onTap: controls && items.isNotEmpty ? () => setState(() => _itemsOpen = !_itemsOpen) : null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _Nudge(
-                    key: ValueKey('flee-$_fleeNudge'),
-                    active: _fleeNudge > 0,
-                    child: ActionButton(
-                      icon: Icons.directions_run,
-                      label: 'Huir',
-                      sub: '${(_fleeChance(s) * 100).round()} %',
-                      highlight: _fleeNudge > 0,
-                      height: buttonsH,
-                      onTap: controls ? () => _resolve(const CombatAction.flee()) : null,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        if (!_showResult)
-          Positioned(
-            left: 14,
-            right: 14,
-            bottom: footerBottom,
-            height: footerH,
-            child: const IgnorePointer(child: NarrowFooter()),
           ),
         // Menú de objetos.
         if (_itemsOpen) ...[
@@ -882,36 +957,11 @@ class _WeaponSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasFirearm) return IgnorePointer(child: child);
-    final other = mode == WeaponMode.melee ? 'FUEGO' : 'C/C';
-    final color = mode == WeaponMode.melee ? Sutura.amber : Sutura.signal;
+    final other = mode == WeaponMode.melee ? 'arma de fuego' : 'cuerpo a cuerpo';
     return Semantics(
       button: true,
       label: 'Cambiar a $other',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Stack(
-          children: [
-            child,
-            Positioned(
-              top: 7,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(4, 1, 5, 1),
-                decoration: BoxDecoration(border: Border.all(color: color.withValues(alpha: 0.6)), color: const Color(0xCC0C0E10)),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.swap_horiz, size: 12, color: color),
-                    const SizedBox(width: 3),
-                    Text(other, style: SuturaText.label.copyWith(fontSize: 9.5, color: color, letterSpacing: 1.4)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child),
     );
   }
 }

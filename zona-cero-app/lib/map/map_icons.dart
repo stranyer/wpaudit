@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
+import '../core/core.dart';
 import '../ui/theme/tokens.dart';
+import 'map_math.dart';
 
 /// Estado visual de un marcador.
 enum MarkerState { on, echo, sel }
@@ -13,47 +15,59 @@ enum MarkerState { on, echo, sel }
 /// Tipo de marcador del mapa.
 enum MarkKind { supply, zombie, zone, signal, node }
 
-/// Descripción de una imagen de marcador: insignia (hexágono/círculo con
-/// glifo), mástil fino hasta un punto en el suelo y, si lleva etiqueta, el
-/// título en mayúsculas espaciadas (y el nombre del nodo) sobre una franja
-/// oscura. La distancia la dibuja MapLibre debajo (cambia al caminar).
+/// Descripción de una imagen de marcador (como en la referencia, sin mástil):
+/// insignia arriba (rombo, hexágono, antena o retrato de la criatura) y, si
+/// lleva etiqueta, el título centrado debajo en mayúsculas espaciadas (una o
+/// dos líneas). La distancia la dibuja MapLibre debajo del título (cambia al
+/// caminar), del color del tipo.
 @immutable
 class MarkSpec {
   const MarkSpec(
     this.kind,
     this.state, {
     required this.title,
-    this.subtitle,
     this.labelled = false,
     this.own = false,
     this.mortal = false,
+    this.avatar,
   });
 
   final MarkKind kind;
   final MarkerState state;
   final String title;
-  final String? subtitle;
   final bool labelled;
 
-  /// Nodo propio (ámbar en vez de azul acero).
+  /// Nodo propio (ámbar en vez de verde refugio).
   final bool own;
 
   /// Amenaza mortal para el grado del jugador (doble anillo).
   final bool mortal;
 
-  /// Líneas de texto horneadas en la imagen (título y nombre).
-  int get bakedLines => !labelled ? 0 : (subtitle == null ? 1 : 2);
+  /// Infectado: criatura cuyo retrato va en la insignia.
+  final ZombieTypeId? avatar;
 
-  Color get color => switch (kind) {
-        MarkKind.supply || MarkKind.signal => Sutura.amber,
-        MarkKind.zombie || MarkKind.zone => MapIcons.hostile,
-        MarkKind.node => own ? Sutura.amber : Sutura.signal,
-      };
+  /// Líneas del título horneadas en la imagen.
+  List<String> get lines => labelled ? markTitleLines(title) : const [];
+
+  Color get color => markColor(kind, own: own);
 
   String get name {
-    final h = Object.hash(title, subtitle, own, mortal) & 0x7fffffff;
+    final h = Object.hash(title, own, mortal, avatar) & 0x7fffffff;
     return 'zc-m-${kind.name}-${state.name}-${labelled ? 'l' : 'c'}-$h';
   }
+}
+
+/// Color de un tipo de marcador (insignia y distancia).
+Color markColor(MarkKind kind, {bool own = false}) => switch (kind) {
+      MarkKind.supply || MarkKind.signal => Sutura.amber,
+      MarkKind.zombie || MarkKind.zone => MapIcons.hostile,
+      MarkKind.node => own ? Sutura.amber : Sutura.refuge,
+    };
+
+/// "#RRGGBB" para las expresiones de MapLibre.
+String hexColor(Color c) {
+  final v = c.toARGB32() & 0xFFFFFF;
+  return '#${v.toRadixString(16).padLeft(6, '0').toUpperCase()}';
 }
 
 /// Íconos de mapa dibujados en tiempo de ejecución con `dart:ui` y
@@ -63,46 +77,65 @@ class MarkSpec {
 /// maplibre-native Android usa la densidad del Bitmap (≈ devicePixelRatio).
 /// Por eso se dibujan a `renderScale` y se corrige con `icon-size` ([baseSize]).
 abstract final class MapIcons {
-  static const hostile = Color(0xFFD7392F);
+  static const hostile = Color(0xFFE0453A);
 
   static const player = 'zc-player';
   static const playerIdle = 'zc-player-idle';
+  static const metro = 'zc-metro';
 
   // Geometría de los marcadores (px lógicos, origen arriba a la izquierda).
-  static const badge = 28.0;
-  static const stemX = 4.5;
-  static const _badgeCx = stemX + 10.5;
-  static const _badgeCy = 5.0 + badge / 2;
-  static const _labelTop = _badgeCy + badge / 2 + 3;
-  static const _lineH = 12.5;
-  static const _textX = stemX + 7;
-  static const _dotPad = 4.0;
-  static const distanceSize = 10.5;
+  /// Margen para el resplandor alrededor de la insignia.
+  static const _pad = 9.0;
 
-  static const playerSize = 140.0;
+  /// Caja más grande de una insignia (retrato de la criatura).
+  static const _maxBox = 34.0;
+
+  /// Centro vertical de la insignia: igual para todos los tipos, así el
+  /// `icon-offset` es constante y la insignia cae sobre la coordenada.
+  static const badgeCy = _pad + _maxBox / 2;
+  static const _lineH = 12.5;
+  static const _titleSize = 11.5;
+  static const distanceSize = 10.5;
+  static const minWidth = 2 * _pad + _maxBox;
+
+  static const playerSize = 132.0;
 
   static double renderScale(double dpr) => dpr.clamp(2.0, 3.5);
 
   /// `icon-size` que muestra el ícono en su tamaño lógico.
   static double baseSize(double dpr) => kIsWeb ? 1 / renderScale(dpr) : dpr / renderScale(dpr);
 
-  /// `icon-offset` (en unidades de `icon-size`) para que el punto en el suelo
-  /// del marcador caiga exactamente sobre la coordenada con `icon-anchor:
-  /// bottom-left`.
-  static List<double> iconOffset(double base) => [-stemX / base, _dotPad / base];
+  /// `icon-offset` (en unidades de `icon-size`) para que, con `icon-anchor:
+  /// top`, el centro de la insignia caiga exactamente sobre la coordenada.
+  static List<double> iconOffset(double base) => [0, -badgeCy / base];
 
-  /// `text-offset` (em) de la distancia: a la derecha del mástil, debajo de las
-  /// líneas horneadas.
-  static List<double> distanceOffset(int bakedLines) {
-    final h = _labeledHeight(bakedLines);
-    final dotY = h - _dotPad;
-    final baseline = _labelTop + 4 + _lineH * bakedLines + 9.5;
-    // Con anchor "bottom" MapLibre deja ~0,3 em entre la línea base y el borde.
-    final dy = (baseline - dotY) / distanceSize + 0.32;
-    return [(_textX - stemX) / distanceSize, dy];
+  /// Caja (lado) de la insignia de cada tipo.
+  static double boxOf(MarkKind kind) => switch (kind) {
+        MarkKind.zombie => _maxBox,
+        MarkKind.zone => 30,
+        MarkKind.signal => 30,
+        MarkKind.supply || MarkKind.node => 28,
+      };
+
+  static double _labelTop(MarkKind kind) => badgeCy + boxOf(kind) / 2 + 4;
+
+  /// `text-offset` (em) de la distancia: centrada, debajo de las líneas
+  /// horneadas del título (con `text-anchor: top`).
+  static List<double> distanceOffset(MarkKind kind, int lines) {
+    final bottom = _labelTop(kind) + lines * _lineH;
+    // Con anchor "top" MapLibre deja ~0,2 em entre el borde y la tinta.
+    return [0, (bottom - badgeCy + 1) / distanceSize - 0.12];
   }
 
-  static double _labeledHeight(int bakedLines) => _labelTop + 4 + (bakedLines + 1) * _lineH + 3 + _dotPad + 1;
+  /// Ancho aproximado (px) de la etiqueta de un marcador (título y distancia),
+  /// para evitar choques entre etiquetas.
+  static double labelWidth(String title) {
+    var w = 46.0;
+    for (final l in markTitleLines(title)) {
+      w = math.max(w, l.length * 7.4 + 8);
+    }
+    return w;
+  }
 
   // -------------------------------------------------------------------------
   // Render
@@ -129,23 +162,24 @@ abstract final class MapIcons {
       _render(playerSize, playerSize, s, (c) => _player(c, heading: false)),
       _render(22, 22, s, _metro),
     ]);
-    return {player: out[0], playerIdle: out[1], 'zc-metro': out[2]};
+    return {player: out[0], playerIdle: out[1], metro: out[2]};
   }
 
-  /// Dibuja un marcador.
-  static Future<Uint8List> renderMark(MarkSpec spec, double dpr) {
-    final lines = _textLines(spec);
-    var w = _badgeCx + badge / 2 + 7;
-    if (spec.labelled) {
-      var tw = 0.0;
-      for (final l in lines) {
-        tw = math.max(tw, l.width);
-      }
-      w = math.max(w, math.max(_textX + tw + 16, 86));
+  /// Dibuja un marcador (con el retrato de la criatura si corresponde).
+  static Future<Uint8List> renderMark(MarkSpec spec, double dpr) async {
+    final face = spec.avatar == null ? null : await avatar(spec.avatar!);
+    final lines = [for (final l in spec.lines) _para(l, size: _titleSize, weight: FontWeight.w600, color: _titleColor(spec), spacing: 1.7)];
+    var w = minWidth;
+    for (final p in lines) {
+      w = math.max(w, p.longestLine + 10);
     }
-    final h = spec.labelled ? _labeledHeight(spec.bakedLines) : _badgeCy + badge / 2 + 16 + _dotPad + 1;
-    return _render(w, h, renderScale(dpr), (c) => _mark(c, spec, w, h, lines));
+    w = w.ceilToDouble();
+    final h = (lines.isEmpty ? badgeCy + _maxBox / 2 + _pad : _labelTop(spec.kind) + lines.length * _lineH + 4).ceilToDouble();
+    return _render(w, h, renderScale(dpr), (c) => _mark(c, spec, w, lines, face));
   }
+
+  static Color _titleColor(MarkSpec s) =>
+      s.state == MarkerState.echo ? const Color(0xFFB7B4AE) : const Color(0xFFECE9E2);
 
   /// Patrón de relleno (techos, copas) escalado a `tileDp` px lógicos.
   static Future<Uint8List> pattern(String asset, double dpr, {double tileDp = 256}) async {
@@ -174,6 +208,26 @@ abstract final class MapIcons {
     src.dispose();
     return out!.buffer.asUint8List();
   }
+
+  // -------------------------------------------------------------------------
+  // Retratos de las criaturas
+  // -------------------------------------------------------------------------
+
+  static String avatarAsset(ZombieTypeId t) => 'assets/art/avatars/${t.key}.webp';
+
+  static final Map<ZombieTypeId, Future<ui.Image?>> _avatars = {};
+
+  /// Retrato (256×256) decodificado a 128 px. null si el asset no está.
+  static Future<ui.Image?> avatar(ZombieTypeId t) => _avatars[t] ??= () async {
+        try {
+          final data = await rootBundle.load(avatarAsset(t));
+          final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: 128, targetHeight: 128);
+          return (await codec.getNextFrame()).image;
+        } catch (e) {
+          debugPrint('[Zona Cero] Retrato ${t.key} no disponible: $e');
+          return null;
+        }
+      }();
 
   // -------------------------------------------------------------------------
   // Piezas comunes
@@ -221,6 +275,13 @@ abstract final class MapIcons {
     return p..close();
   }
 
+  static Path _diamond(Offset o, double r) => Path()
+    ..moveTo(o.dx, o.dy - r)
+    ..lineTo(o.dx + r, o.dy)
+    ..lineTo(o.dx, o.dy + r)
+    ..lineTo(o.dx - r, o.dy)
+    ..close();
+
   static ui.Paragraph _para(String text, {required double size, required FontWeight weight, required Color color, double spacing = 0}) {
     final b = ui.ParagraphBuilder(ui.ParagraphStyle(maxLines: 1, ellipsis: '…'))
       ..pushStyle(ui.TextStyle(
@@ -229,100 +290,60 @@ abstract final class MapIcons {
         fontSize: size,
         fontWeight: weight,
         letterSpacing: spacing,
-        shadows: const [ui.Shadow(color: Color(0xE6000000), blurRadius: 2.5)],
+        shadows: const [
+          ui.Shadow(color: Color(0xF0000000), blurRadius: 3),
+          ui.Shadow(color: Color(0xC0000000), blurRadius: 1, offset: Offset(0, 1)),
+        ],
       ))
       ..addText(text);
-    final p = b.build()..layout(const ui.ParagraphConstraints(width: 190));
-    return p;
-  }
-
-  static List<({ui.Paragraph p, double width})> _textLines(MarkSpec s) {
-    if (!s.labelled) return const [];
-    final echo = s.state == MarkerState.echo;
-    final title = _para(
-      s.title.toUpperCase(),
-      size: 12.5,
-      weight: FontWeight.w600,
-      color: echo ? s.color.withValues(alpha: 0.7) : s.color,
-      spacing: 1.7,
-    );
-    final out = [(p: title, width: title.longestLine)];
-    final sub = s.subtitle;
-    if (sub != null) {
-      final p = _para(sub, size: 12.5, weight: FontWeight.w500, color: Sutura.textHi, spacing: 0.7);
-      out.add((p: p, width: p.longestLine));
-    }
-    return out;
+    return b.build()..layout(const ui.ParagraphConstraints(width: 200));
   }
 
   // -------------------------------------------------------------------------
-  // Marcador: insignia + mástil + punto + etiqueta
+  // Marcador: insignia + título centrado
   // -------------------------------------------------------------------------
 
-  static void _mark(Canvas c, MarkSpec s, double w, double h, List<({ui.Paragraph p, double width})> lines) {
+  static void _mark(Canvas c, MarkSpec s, double w, List<ui.Paragraph> lines, ui.Image? face) {
     final color = s.color;
     final echo = s.state == MarkerState.echo;
     final sel = s.state == MarkerState.sel;
-    final dot = Offset(stemX, h - _dotPad);
-    const center = Offset(_badgeCx, _badgeCy);
+    final center = Offset(w / 2, badgeCy);
+    final box = boxOf(s.kind);
 
-    // Franja oscura detrás de la etiqueta.
-    if (s.labelled) {
-      final r = Rect.fromLTRB(stemX, _labelTop, w, dot.dy + 1.5);
-      c.drawRect(
-        r,
-        Paint()
-          ..shader = ui.Gradient.linear(r.centerLeft, r.centerRight, [
-            const Color(0xB0090A0B),
-            const Color(0x80090A0B),
-            const Color(0x00090A0B),
-          ], [0, 0.6, 1]),
-      );
-    }
-
-    // Mástil: desde el borde inferior izquierdo de la insignia hasta el suelo.
-    final stem = _stroke(color.withValues(alpha: echo ? 0.55 : 0.9), 1.3);
-    final top = _badgeCy + badge / 2 - 4;
-    if (echo) {
-      _dashed(c, Path()..moveTo(stemX, top)..lineTo(stemX, dot.dy - 2), stem, on: 2.5, off: 2.5);
-    } else {
-      c.drawLine(Offset(stemX, top), Offset(stemX, dot.dy - 2), stem);
-    }
-    // Punto en el suelo.
-    c.drawCircle(dot, 3.6, _fill(const Color(0x99000000)));
-    c.drawCircle(dot, 2.6, _fill(color.withValues(alpha: echo ? 0.6 : 1)));
-
-    // Insignia.
     switch (s.kind) {
       case MarkKind.supply:
-        _hexBadge(c, center, color, echo: echo, sel: sel, glyph: _cube);
+        _hexBadge(c, center, box / 2, color, echo: echo, sel: sel, glyph: _crate);
       case MarkKind.node:
-        _hexBadge(c, center, color, echo: echo, sel: sel, glyph: _house);
-      case MarkKind.zombie:
-        _circleBadge(c, center, color, echo: echo, sel: sel, glyph: _biohazard, outer: s.mortal ? 'solid' : null);
+        _hexBadge(c, center, box / 2, color, echo: echo, sel: sel, glyph: _house);
       case MarkKind.zone:
-        _circleBadge(c, center, color, echo: echo, sel: sel, glyph: _biohazard, outer: 'dashed');
+        _diamondBadge(c, center, box / 2, color, echo: echo, sel: sel);
       case MarkKind.signal:
-        _circleBadge(c, center, color, echo: echo, sel: sel, glyph: _antenna);
+        _tower(c, center, color, echo: echo, sel: sel);
+      case MarkKind.zombie:
+        if (face != null) {
+          _avatarBadge(c, center, box / 2, color, face, echo: echo, sel: sel, mortal: s.mortal);
+        } else {
+          _circleBadge(c, center, box / 2 - 2, color, echo: echo, sel: sel, mortal: s.mortal);
+        }
     }
-    if (sel) _brackets(c, center);
+    if (sel) _brackets(c, center, box / 2 + 4);
 
-    // Texto horneado.
-    var y = _labelTop + 4;
-    for (final l in lines) {
+    // Título horneado, centrado.
+    var y = _labelTop(s.kind);
+    for (final p in lines) {
       final baseline = y + 9.5;
-      c.drawParagraph(l.p, Offset(_textX, baseline - l.p.alphabeticBaseline));
+      c.drawParagraph(p, Offset((w - p.longestLine) / 2, baseline - p.alphabeticBaseline));
       y += _lineH;
     }
   }
 
-  static void _hexBadge(Canvas c, Offset center, Color color,
+  static void _hexBadge(Canvas c, Offset center, double r, Color color,
       {required bool echo, required bool sel, required void Function(Canvas, Offset, Color) glyph}) {
-    final hex = _hex(center, badge / 2 + 0.5);
-    if (!echo) _glow(c, hex, color, sel ? 7 : 5, sel ? 0.55 : 0.32);
-    c.drawPath(hex, _fill(const Color(0xE60E0F10)));
-    c.drawPath(hex, _fill(color.withValues(alpha: echo ? 0.05 : 0.12)));
-    final line = _stroke(color.withValues(alpha: echo ? 0.7 : 1), sel ? 2.2 : 1.8);
+    final hex = _hex(center, r);
+    if (!echo) _glow(c, hex, color, sel ? 7 : 5, sel ? 0.55 : 0.34);
+    c.drawPath(hex, _fill(const Color(0xE00C0D0E)));
+    c.drawPath(hex, _fill(color.withValues(alpha: echo ? 0.04 : 0.1)));
+    final line = _stroke(color.withValues(alpha: echo ? 0.65 : 1), sel ? 2 : 1.6);
     if (echo) {
       _dashed(c, hex, line);
     } else {
@@ -331,34 +352,83 @@ abstract final class MapIcons {
     glyph(c, center, echo ? color.withValues(alpha: 0.55) : color);
   }
 
-  static void _circleBadge(Canvas c, Offset center, Color color,
-      {required bool echo, required bool sel, required void Function(Canvas, Offset, Color) glyph, String? outer}) {
-    const r = badge / 2 - 0.5;
+  static void _diamondBadge(Canvas c, Offset center, double r, Color color, {required bool echo, required bool sel}) {
+    final d = _diamond(center, r);
+    if (!echo) _glow(c, d, color, sel ? 7 : 5, sel ? 0.55 : 0.38);
+    c.drawPath(d, _fill(const Color(0xE00C0D0E)));
+    c.drawPath(d, _fill(color.withValues(alpha: echo ? 0.04 : 0.12)));
+    final line = _stroke(color.withValues(alpha: echo ? 0.65 : 1), sel ? 2 : 1.6);
+    if (echo) {
+      _dashed(c, d, line);
+    } else {
+      c.drawPath(d, line);
+    }
+    _biohazard(c, center, echo ? color.withValues(alpha: 0.55) : color, r: r * 0.6);
+  }
+
+  static void _circleBadge(Canvas c, Offset center, double r, Color color,
+      {required bool echo, required bool sel, required bool mortal}) {
     final circle = Path()..addOval(Rect.fromCircle(center: center, radius: r));
-    if (!echo) _glow(c, circle, color, sel ? 7 : 5, sel ? 0.6 : 0.35);
-    c.drawPath(circle, _fill(const Color(0xE60E0F10)));
+    if (!echo) _glow(c, circle, color, sel ? 7 : 5, sel ? 0.6 : 0.38);
+    c.drawPath(circle, _fill(const Color(0xE00C0D0E)));
     c.drawPath(circle, _fill(color.withValues(alpha: echo ? 0.05 : 0.14)));
-    final line = _stroke(color.withValues(alpha: echo ? 0.7 : 1), sel ? 2.2 : 1.8);
+    final line = _stroke(color.withValues(alpha: echo ? 0.65 : 1), sel ? 2 : 1.6);
     if (echo) {
       _dashed(c, circle, line);
     } else {
       c.drawPath(circle, line);
     }
-    if (outer != null && !echo) {
-      final ring = Path()..addOval(Rect.fromCircle(center: center, radius: r + 3.2));
-      final p = _stroke(color.withValues(alpha: 0.6), 1);
-      if (outer == 'dashed') {
-        _dashed(c, ring, p, on: 2.2, off: 2.2);
-      } else {
-        c.drawPath(ring, p);
-      }
+    if (mortal && !echo) c.drawCircle(center, r + 3.2, _stroke(color.withValues(alpha: 0.6), 1));
+    _biohazard(c, center, echo ? color.withValues(alpha: 0.55) : color, r: r * 0.62);
+  }
+
+  /// Retrato circular de la criatura con anillo rojo y resplandor.
+  static void _avatarBadge(Canvas c, Offset center, double r, Color color, ui.Image face,
+      {required bool echo, required bool sel, required bool mortal}) {
+    final ring = Rect.fromCircle(center: center, radius: r);
+    if (!echo) {
+      c.drawCircle(center, r + 1, Paint()
+        ..color = color.withValues(alpha: sel ? 0.75 : 0.5)
+        ..maskFilter = MaskFilter.blur(BlurStyle.outer, sel ? 7 : 5));
     }
-    glyph(c, center, echo ? color.withValues(alpha: 0.55) : color);
+    c.drawCircle(center, r, _fill(const Color(0xFF0C0D0E)));
+    c.save();
+    c.clipPath(Path()..addOval(ring.deflate(1.4)));
+    final src = Rect.fromLTWH(0, 0, face.width.toDouble(), face.height.toDouble());
+    final paint = Paint()
+      ..filterQuality = FilterQuality.medium
+      ..isAntiAlias = true;
+    if (echo) {
+      // Eco: último contacto conocido, en gris y apagado.
+      paint.colorFilter = const ColorFilter.matrix([
+        0.22, 0.42, 0.08, 0, 0, //
+        0.22, 0.42, 0.08, 0, 0,
+        0.22, 0.42, 0.08, 0, 0,
+        0, 0, 0, 0.6, 0,
+      ]);
+    }
+    // Un poco de zoom sobre la cara.
+    c.drawImageRect(face, src, ring.inflate(r * 0.08), paint);
+    // Viñeta interior: el retrato se funde con el anillo.
+    c.drawCircle(
+      center,
+      r,
+      Paint()
+        ..shader = ui.Gradient.radial(center, r, [const Color(0x00000000), const Color(0x00000000), const Color(0x99140404)], [0, 0.62, 1]),
+    );
+    c.restore();
+    final line = _stroke(color.withValues(alpha: echo ? 0.6 : 1), sel ? 2.2 : 1.8);
+    final circle = Path()..addOval(ring);
+    if (echo) {
+      _dashed(c, circle, line, on: 3.2, off: 2.6);
+    } else {
+      c.drawPath(circle, line);
+    }
+    if (mortal && !echo) c.drawCircle(center, r + 3.4, _stroke(color.withValues(alpha: 0.65), 1));
   }
 
   /// Corchetes de "objetivo fijado" alrededor de la insignia.
-  static void _brackets(Canvas c, Offset center) {
-    const e = badge / 2 + 4;
+  static void _brackets(Canvas c, Offset center, double e) {
     const k = 5.5;
     final l = center.dx - e, t = center.dy - e, r = center.dx + e, b = center.dy + e;
     final p = _stroke(Sutura.textHi, 1.5)..strokeCap = StrokeCap.square;
@@ -384,57 +454,43 @@ abstract final class MapIcons {
   // Glifos
   // -------------------------------------------------------------------------
 
-  /// Caja isométrica (botín).
-  static void _cube(Canvas c, Offset o, Color color) {
-    const s = 7.0;
-    final h = s * math.sin(math.pi / 6);
-    final w = s * math.cos(math.pi / 6);
-    final top = o + Offset(0, -s * 0.95);
-    final mid = o + Offset(0, -s * 0.95 + 2 * h);
-    final left = Path()
-      ..moveTo(o.dx - w, top.dy + h)
-      ..lineTo(mid.dx, mid.dy)
-      ..lineTo(mid.dx, mid.dy + s)
-      ..lineTo(o.dx - w, top.dy + h + s)
-      ..close();
-    final right = Path()
-      ..moveTo(o.dx + w, top.dy + h)
-      ..lineTo(mid.dx, mid.dy)
-      ..lineTo(mid.dx, mid.dy + s)
-      ..lineTo(o.dx + w, top.dy + h + s)
-      ..close();
-    final lid = Path()
-      ..moveTo(top.dx, top.dy)
-      ..lineTo(o.dx + w, top.dy + h)
-      ..lineTo(mid.dx, mid.dy)
-      ..lineTo(o.dx - w, top.dy + h)
-      ..close();
-    c.drawPath(left, _fill(color));
-    c.drawPath(right, _fill(Color.lerp(color, const Color(0xFF000000), 0.35)!));
-    c.drawPath(lid, _fill(Color.lerp(color, const Color(0xFFFFFFFF), 0.28)!));
-    // Cinta.
-    c.drawLine(Offset(o.dx - w * 0.5, top.dy + h * 0.5), Offset(o.dx + w * 0.5, top.dy + h * 1.5),
-        _stroke(Color.lerp(color, const Color(0xFF000000), 0.45)!, 1));
+  /// Caja de suministros con tapa y cierre (saqueo).
+  static void _crate(Canvas c, Offset o, Color color) {
+    final body = Rect.fromCenter(center: o + const Offset(0, 1.2), width: 13, height: 9.5);
+    final st = _stroke(color, 1.4)..strokeJoin = StrokeJoin.round;
+    c.drawRRect(RRect.fromRectAndRadius(body, const Radius.circular(1.2)), st);
+    // Tapa.
+    c.drawLine(Offset(body.left, body.top + 3.2), Offset(body.right, body.top + 3.2), st);
+    // Asa.
+    c.drawPath(
+      Path()
+        ..moveTo(o.dx - 3, body.top)
+        ..lineTo(o.dx - 3, body.top - 2.2)
+        ..lineTo(o.dx + 3, body.top - 2.2)
+        ..lineTo(o.dx + 3, body.top),
+      st,
+    );
+    // Cierre.
+    c.drawRect(Rect.fromCenter(center: Offset(o.dx, body.top + 3.6), width: 3.2, height: 2.6), _fill(color));
   }
 
-  /// Casa (refugio).
+  /// Casa (refugio): pentágono lleno con puerta oscura.
   static void _house(Canvas c, Offset o, Color color) {
     final p = Path()
-      ..moveTo(o.dx, o.dy - 7.5)
-      ..lineTo(o.dx + 7.5, o.dy - 1)
-      ..lineTo(o.dx + 5.6, o.dy - 1)
-      ..lineTo(o.dx + 5.6, o.dy + 6.5)
-      ..lineTo(o.dx - 5.6, o.dy + 6.5)
-      ..lineTo(o.dx - 5.6, o.dy - 1)
-      ..lineTo(o.dx - 7.5, o.dy - 1)
+      ..moveTo(o.dx, o.dy - 7.2)
+      ..lineTo(o.dx + 7.4, o.dy - 0.6)
+      ..lineTo(o.dx + 5.4, o.dy - 0.6)
+      ..lineTo(o.dx + 5.4, o.dy + 6.4)
+      ..lineTo(o.dx - 5.4, o.dy + 6.4)
+      ..lineTo(o.dx - 5.4, o.dy - 0.6)
+      ..lineTo(o.dx - 7.4, o.dy - 0.6)
       ..close();
     c.drawPath(p, _fill(color));
-    c.drawRect(Rect.fromLTRB(o.dx - 1.9, o.dy + 1.2, o.dx + 1.9, o.dy + 6.5), _fill(const Color(0xFF0E0F10)));
+    c.drawRect(Rect.fromLTRB(o.dx - 1.8, o.dy + 1.6, o.dx + 1.8, o.dy + 6.4), _fill(const Color(0xFF0E0F10)));
   }
 
-  /// Símbolo de riesgo biológico.
-  static void _biohazard(Canvas c, Offset o, Color color) {
-    const r = 9.0;
+  /// Símbolo de riesgo biológico de radio `r`.
+  static void _biohazard(Canvas c, Offset o, Color color, {double r = 9}) {
     var shape = Path();
     for (var i = 0; i < 3; i++) {
       final a = -math.pi / 2 + i * 2 * math.pi / 3;
@@ -447,61 +503,104 @@ abstract final class MapIcons {
     final hole = Path()..addOval(Rect.fromCircle(center: o, radius: r * 0.15));
     shape = Path.combine(PathOperation.difference, shape, hole);
     c.drawPath(shape, _fill(color));
-    // Anillo central interrumpido.
-    final ring = _stroke(color, 1.3);
+    final ring = _stroke(color, r * 0.14);
     for (var i = 0; i < 3; i++) {
       final a = -math.pi / 2 + math.pi / 3 + i * 2 * math.pi / 3;
       c.drawArc(Rect.fromCircle(center: o, radius: r * 0.42), a - 0.55, 1.1, false, ring);
     }
   }
 
-  /// Antena con ondas de radio (señal de auxilio).
-  static void _antenna(Canvas c, Offset o, Color color) {
-    final head = o + const Offset(0, -2.6);
-    c.drawCircle(head, 2.1, _fill(color));
-    final st = _stroke(color, 1.4)..strokeCap = StrokeCap.round;
-    for (final r in [5.0, 8.2]) {
+  /// Torre de radio con ondas (señal de auxilio), sin marco.
+  static void _tower(Canvas c, Offset o, Color color, {required bool echo, required bool sel}) {
+    final col = echo ? color.withValues(alpha: 0.55) : color;
+    final head = o + const Offset(0, -7.5);
+    final base = o.dy + 12;
+    final path = Path()
+      // Patas.
+      ..moveTo(head.dx, head.dy + 2)
+      ..lineTo(head.dx - 6, base)
+      ..moveTo(head.dx, head.dy + 2)
+      ..lineTo(head.dx + 6, base)
+      // Riostras en X.
+      ..moveTo(head.dx - 2.4, o.dy - 0.5)
+      ..lineTo(head.dx + 3.9, o.dy + 5.5)
+      ..moveTo(head.dx + 2.4, o.dy - 0.5)
+      ..lineTo(head.dx - 3.9, o.dy + 5.5)
+      ..moveTo(head.dx - 2.4, o.dy - 0.5)
+      ..lineTo(head.dx + 2.4, o.dy - 0.5)
+      ..moveTo(head.dx - 3.9, o.dy + 5.5)
+      ..lineTo(head.dx + 3.9, o.dy + 5.5);
+    final arcs = Path();
+    for (final r in [5.2, 9.0, 12.8]) {
       final rect = Rect.fromCircle(center: head, radius: r);
-      c.drawArc(rect, -math.pi * 0.22, math.pi * 0.44, false, st);
-      c.drawArc(rect, math.pi * 0.78, math.pi * 0.44, false, st);
+      arcs
+        ..addArc(rect, -math.pi * 0.2, math.pi * 0.4)
+        ..addArc(rect, math.pi * 0.8, math.pi * 0.4);
     }
-    // Mástil con patas.
-    c.drawLine(head, o + const Offset(0, 8), st);
-    c.drawLine(o + const Offset(0, 2.5), o + const Offset(-3.2, 8), st);
-    c.drawLine(o + const Offset(0, 2.5), o + const Offset(3.2, 8), st);
+    if (!echo) {
+      final glow = Paint()
+        ..color = color.withValues(alpha: sel ? 0.7 : 0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, sel ? 5 : 3.5);
+      c.drawPath(path, glow);
+      c.drawPath(arcs, glow);
+    }
+    final st = _stroke(col, 1.5)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    c.drawPath(path, st);
+    c.drawPath(arcs, _stroke(col, 1.5)..strokeCap = StrokeCap.round);
+    c.drawCircle(head, 2.2, _fill(col));
   }
 
   // -------------------------------------------------------------------------
-  // Jugador: anillo blanco con punto y cono de visión azul acero
+  // Jugador: flecha blanca de navegación en un anillo, con cono de visión
   // -------------------------------------------------------------------------
 
   static void _player(Canvas c, {required bool heading}) {
     const center = Offset(playerSize / 2, playerSize / 2);
+    const ring = 12.5;
     if (heading) {
-      const len = 64.0;
-      const half = 0.4;
+      const len = 60.0;
+      const half = 0.34;
       final cone = Path()
-        ..moveTo(center.dx, center.dy)
-        ..arcTo(Rect.fromCircle(center: center, radius: len), -math.pi / 2 - half, half * 2, false)
+        ..moveTo(center.dx + math.sin(half) * (ring - 1), center.dy - math.cos(half) * (ring - 1))
+        ..lineTo(center.dx + math.sin(half) * len, center.dy - math.cos(half) * len)
+        ..arcToPoint(Offset(center.dx - math.sin(half) * len, center.dy - math.cos(half) * len),
+            radius: const Radius.circular(len), clockwise: false)
+        ..lineTo(center.dx - math.sin(half) * (ring - 1), center.dy - math.cos(half) * (ring - 1))
         ..close();
       c.drawPath(
         cone,
         Paint()
-          ..shader = ui.Gradient.radial(center, len, [
-            const Color(0xF2E4EEF4),
-            Sutura.signal.withValues(alpha: 0.72),
-            Sutura.signal.withValues(alpha: 0.26),
-            Sutura.signal.withValues(alpha: 0),
-          ], [0.14, 0.34, 0.68, 1]),
+          ..shader = ui.Gradient.linear(
+            center + const Offset(0, -ring),
+            center + const Offset(0, -len),
+            [const Color(0x8CF4F6F7), const Color(0x52E9EDEF), const Color(0x14E9EDEF)],
+            [0, 0.55, 1],
+          )
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8),
       );
     }
     // Sombra para despegarlo del mapa.
-    c.drawCircle(center, 13, Paint()
-      ..color = const Color(0x99000000)
+    c.drawCircle(center, ring + 3, Paint()
+      ..color = const Color(0x8C000000)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
-    c.drawCircle(center, 10.5, _fill(const Color(0xE0121517)));
-    c.drawCircle(center, 10.5, _stroke(const Color(0xFFF2F4F5), 2.4));
-    c.drawCircle(center, 4.2, _fill(const Color(0xFFF2F4F5)));
+    c.drawCircle(center, ring, _fill(const Color(0x66101214)));
+    c.drawCircle(center, ring, _stroke(const Color(0xFFF2F4F5), 1.8));
+    // Flecha de navegación con muesca.
+    final arrow = Path()
+      ..moveTo(center.dx, center.dy - 7.4)
+      ..lineTo(center.dx + 5.4, center.dy + 6)
+      ..lineTo(center.dx, center.dy + 2.8)
+      ..lineTo(center.dx - 5.4, center.dy + 6)
+      ..close();
+    c.drawPath(arrow, Paint()
+      ..color = const Color(0x99000000)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5));
+    c.drawPath(arrow, _fill(const Color(0xFFF4F6F7)));
   }
 
   /// Estación de subte: "M" en un círculo.

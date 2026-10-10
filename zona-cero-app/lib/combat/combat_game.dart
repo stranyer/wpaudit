@@ -1,11 +1,11 @@
-// Escenario Flame del combate: placa de calle bajo la lluvia, la criatura HD
-// animada como títere de malla, lluvia en dos profundidades, niebla baja,
-// reflejo en el asfalto mojado, luz de emergencia, efectos, gradación de
-// pantalla (viñeta fría, grano) y la retícula de puntería con su marco.
+// Escenario Flame del combate: placa de calle bajo la lluvia (con desenfoque
+// de fondo), la criatura (detrás de [CreatureView]: hoy un títere de malla),
+// lluvia en tres profundidades, niebla baja, efectos, la mano en primera
+// persona con su arma, gradación de pantalla (viñeta, grano) y la retícula.
 //
 // Todo se dibuja en coordenadas de pantalla (dp). Las capas "de mundo" van
 // dentro de un `_CameraRig` que aplica respiración, temblor y zoom; las de
-// pantalla (luz, viñeta, grano, retícula) no se mueven con la cámara.
+// pantalla (mano, luz, viñeta, grano, retícula) no se mueven con la cámara.
 
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -21,23 +21,41 @@ import '../core/types.dart';
 import '../ui/theme/tokens.dart';
 import 'aim.dart';
 import 'combat_art.dart';
+import 'creature_view.dart';
+import 'fp_hand.dart';
 import 'fx_pool.dart';
-import 'puppet.dart';
+import 'hand_layer.dart';
+import 'puppet.dart' show PuppetAnimator;
+import 'puppet_view.dart';
 import 'stage_layout.dart';
 
 /// Estilo de la retícula según el arma activa.
 enum AimStyle { melee, firearm }
+
+/// Crea el renderizador de la criatura a partir del arte cargado.
+typedef CreatureViewFactory = CreatureView Function(CombatArt art);
 
 /// Verde tóxico de las ampollas del Hinchado.
 const _toxic = Color(0xFF9BE04A);
 
 final Float64List _identity = Float64List.fromList(const [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
-class CombatStageGame extends FlameGame {
-  CombatStageGame({required this.zombieType, this.bundle, this.onAimSignal, this.onReady})
-    : puppet = PuppetAnimator(puppetStyles[zombieType] ?? const PuppetStyle(), seed: zombieType.index * 7 + 3);
+class CombatStageGame extends FlameGame implements CreatureStage, HandStage {
+  CombatStageGame({
+    required this.zombieType,
+    this.bundle,
+    this.onAimSignal,
+    this.onReady,
+    this.plate = CombatPlate.colon,
+    HandKind hand = HandKind.pistol,
+    CreatureViewFactory? creatureFactory,
+  }) : _initialHand = hand,
+       _factory = creatureFactory ?? ((art) => PuppetCreatureView(art));
 
   final ZombieTypeId zombieType;
+
+  /// Placa pedida (si falta se usa la otra; ver [CombatArt.plateKind]).
+  final CombatPlate plate;
 
   /// Bundle de assets (por defecto `rootBundle`; los tests pasan uno propio).
   final AssetBundle? bundle;
@@ -46,19 +64,31 @@ class CombatStageGame extends FlameGame {
   final void Function(AimSignal signal)? onAimSignal;
   final VoidCallback? onReady;
 
-  /// Animador del títere (reloj, animación en curso, impulsos).
-  final PuppetAnimator puppet;
+  final CreatureViewFactory _factory;
+  final HandKind _initialHand;
 
   CombatArt? _art;
   CombatArt? get art => _art;
   bool get artReady => _art != null;
 
+  CreatureView? _view;
+
+  /// Renderizador de la criatura (null hasta cargar el arte).
+  CreatureView? get creature => _view;
+
+  HandLayer? _hand;
+
+  /// Capa de la mano en primera persona (null hasta cargar).
+  HandLayer? get hand => _hand;
+
   StageLayout? _layout;
+  @override
   StageLayout? get layout => _layout;
   int _layoutVersion = 0;
   Offset _pivot = Offset.zero;
 
   // Reloj y cámara.
+  @override
   double time = 0;
   double _trauma = 0;
   double _kick = 0;
@@ -67,6 +97,7 @@ class CombatStageGame extends FlameGame {
 
   // Estado de escena que fija la UI.
   bool stunned = false;
+  @override
   bool charging = false;
   double healthRatio = 1;
 
@@ -75,12 +106,19 @@ class CombatStageGame extends FlameGame {
 
   /// Desde dónde (y, pantalla) el HUD inferior tapa la escena: el reflejo y la
   /// sombra de contacto no se dibujan si quedan enteros detrás.
+  @override
   double hudTop = double.infinity;
+
+  /// y del borde superior de la botonera (la mano entra por debajo).
+  @override
+  double handBase = double.infinity;
+
+  /// Guardia levantada (CUBRIRSE) mientras se reproduce el turno.
+  set guard(bool v) => _hand?.rig.guard = v;
 
   final AimState aim = AimState();
   AimStyle aimStyle = AimStyle.melee;
 
-  late final _CreatureLayer _creature;
   late final _FxLayer _fx;
   late final _ScreenLayer _screen;
   double _vaporIn = 0;
@@ -88,26 +126,44 @@ class CombatStageGame extends FlameGame {
   final math.Random _rnd = math.Random();
 
   @override
+  PlateLook get look => _art?.look ?? const PlateLook();
+
+  @override
+  double get beacon => _ScreenLayer.beacon(time, charging);
+
+  @override
+  Size get viewSize => _layout?.view ?? Size(size.x, size.y);
+
+  @override
+  ui.Image? get fxAtlas => _art?.fxAtlas;
+
+  @override
   Color backgroundColor() => Sutura.void_;
 
   @override
   Future<void> onLoad() async {
-    final art = await CombatArt.load(zombieType, bundle: bundle);
+    final art = await CombatArt.load(zombieType, bundle: bundle, plate: plate);
     _art = art;
-    _creature = _CreatureLayer(art, puppet, puppetStyles[zombieType] ?? const PuppetStyle());
+    final view = _factory(art);
+    _view = view;
     _fx = _FxLayer(art.fxAtlas);
     _screen = _ScreenLayer(art);
+    final hand = HandLayer(this, initial: _initialHand, bundle: bundle);
+    _hand = hand;
     final rig = _CameraRig();
     await rig.addAll([
       _Backdrop(art),
-      _Rain(front: false, count: 150, seed: 2),
+      _Rain(mode: _RainMode.back, count: 150, seed: 2),
       _Fog(front: false, atlas: art.fxAtlas),
-      _creature,
+      _CreatureHost(view),
+      _Rain(mode: _RainMode.body, count: 44, seed: 5),
       _fx,
       _Fog(front: true, atlas: art.fxAtlas),
-      _Rain(front: true, count: 64, seed: 9),
     ]);
     await add(rig);
+    await add(_ScreenUnder(_screen));
+    await add(hand);
+    await add(_Rain(mode: _RainMode.front, count: 70, seed: 9));
     await add(_screen);
     await add(_ReticleLayer());
     _relayout();
@@ -122,7 +178,8 @@ class CombatStageGame extends FlameGame {
 
   @override
   void onDispose() {
-    _creature.disposeShader();
+    _view?.dispose();
+    _view = null;
     _art?.dispose();
     _art = null;
     super.onDispose();
@@ -138,6 +195,8 @@ class CombatStageGame extends FlameGame {
       rig: art.rig,
       profile: placementProfiles[zombieType] ?? const PlacementProfile(),
       plateHorizon: art.plateHorizon,
+      plateCover: art.plateCover,
+      plateFocusX: art.plateFocusX,
     );
     _layout = l;
     _layoutVersion++;
@@ -154,21 +213,22 @@ class CombatStageGame extends FlameGame {
     _kick = math.max(0, _kick - d * 3.5);
     if (_fleeT >= 0) _fleeT = math.min(1, _fleeT + d / 0.8);
     if (_downT >= 0) _downT = math.min(1, _downT + d / 1.1);
-    puppet.crouchHold = charging && !puppet.dead;
-    puppet.update(d);
+    final v = _view;
+    if (v != null) v.holdCrouch = charging && !v.dead;
     if (aim.active) {
       final s = aim.advance(dt.clamp(0.0, 0.25) * 1000);
       if (s != AimSignal.none) onAimSignal?.call(s);
     }
+    _hand?.rig.aiming = aim.active;
     if (_art != null && _layout != null) _emitAmbient(d);
     super.update(d);
   }
 
   /// Vapor tóxico del Hinchado y ceniza de la disolución.
   void _emitAmbient(double dt) {
-    final c = _creature;
-    if (!c.hasPose) return;
-    if (zombieType == ZombieTypeId.bloater && !puppet.dead) {
+    final c = _view;
+    if (c == null || !c.hasPose) return;
+    if (zombieType == ZombieTypeId.bloater && !c.dead) {
       _vaporIn -= dt;
       if (_vaporIn <= 0) {
         _vaporIn = 0.07 + _rnd.nextDouble() * 0.06;
@@ -176,9 +236,9 @@ class CombatStageGame extends FlameGame {
         if (p != null) _fx.vapor(p);
       }
     }
-    if (puppet.dead) {
-      final pose = c.pose;
-      if (pose.dissolve > 0.02 && pose.dissolve < 0.97) {
+    if (c.dead) {
+      final d = c.dissolve;
+      if (d > 0.02 && d < 0.97) {
         _ashIn -= dt;
         while (_ashIn <= 0) {
           _ashIn += 0.018;
@@ -216,9 +276,11 @@ class CombatStageGame extends FlameGame {
 
   /// Zona de la cabeza en pantalla (sigue la pose actual: agacharse, balanceo).
   Rect get headRect {
-    if (_layout == null) return Rect.zero;
-    if (puppet.dead) return Rect.zero;
-    return rectToView(_creature.hasPose ? _creature.headWorld : _layout!.head);
+    final l = _layout;
+    final v = _view;
+    if (l == null || v == null || v.dead) return Rect.zero;
+    final h = v.hasPose ? v.headWorld : l.head;
+    return rectToView(h.isEmpty ? l.head : h);
   }
 
   /// Puntos de anclaje para números flotantes.
@@ -265,13 +327,39 @@ class CombatStageGame extends FlameGame {
   void aimCancel() => aim.cancel();
 
   // ---------------------------------------------------------------------------
+  // Mano y arma
+  // ---------------------------------------------------------------------------
+
+  /// Cambia la mano que se ve (con la animación de bajar y subir).
+  void setHand(HandKind kind) => _hand?.request(kind);
+
+  /// Gatillo en seco.
+  void dryFire() => _hand?.rig.click();
+
+  /// Baja la mano (fin del combate).
+  void lowerHand() => _hand?.rig.lowered = true;
+
+  // ---------------------------------------------------------------------------
   // Reacciones (las llama la pantalla al reproducir los eventos)
   // ---------------------------------------------------------------------------
 
   /// Reproduce una animación de la criatura; devuelve su duración en segundos.
   double playZombie(ZombieAnim a) {
-    if (_art == null) return 0;
-    final d = puppet.play(a);
+    final v = _view;
+    if (_art == null || v == null) return 0;
+    final d = switch (a) {
+      ZombieAnim.idle => () {
+        v.idle();
+        return 0.0;
+      }(),
+      ZombieAnim.attack => v.attack(),
+      ZombieAnim.charge => v.charge(),
+      ZombieAnim.chargePrepare => v.chargePrepare(),
+      ZombieAnim.scream => v.scream(),
+      ZombieAnim.death => v.die(),
+      // El retroceso lo dispara [impact] (necesita el punto).
+      ZombieAnim.hit => v.duration(ZombieAnim.hit),
+    };
     final l = _layout;
     if (l != null && a == ZombieAnim.chargePrepare) {
       _fx.dust(Offset(l.feet.dx, l.floorY), l.body.width);
@@ -284,20 +372,21 @@ class CombatStageGame extends FlameGame {
   }
 
   /// Segundos hasta el impacto/pico de una animación.
-  double zombieKeyTime(ZombieAnim a) => PuppetAnimator.keyTimeOf(a);
+  double zombieKeyTime(ZombieAnim a) => _view?.keyTime(a) ?? PuppetAnimator.keyTimeOf(a);
 
-  double zombieDuration(ZombieAnim a) => PuppetAnimator.durationOf(a);
+  double zombieDuration(ZombieAnim a) => _view?.duration(a) ?? PuppetAnimator.durationOf(a);
 
   void shake(double amount) => _trauma = math.min(1, _trauma + amount);
 
   void punch(double k) => _kick = math.max(_kick, k);
 
-  void impact(Offset at, {bool crit = false, bool heavy = false, bool ranged = false, bool headshot = false}) {
+  /// Impacto sobre la criatura en `at` (pantalla). `lethal`: la mata (sin retroceso).
+  void impact(Offset at, {bool crit = false, bool heavy = false, bool ranged = false, bool headshot = false, bool lethal = false}) {
     final l = _layout;
-    if (_art == null || l == null) return;
+    final v = _view;
+    if (_art == null || l == null || v == null) return;
     _fx.impact(at, crit: crit, heavy: heavy, ranged: ranged);
-    final local = l.toLocal(toWorld(at));
-    puppet.hitAt(local.dx, local.dy, l.body.height / l.scale * 0.07, crit: crit, headshot: headshot, strength: heavy || crit ? 1.2 : 1);
+    v.hit(toWorld(at), strong: heavy, crit: crit, headshot: headshot, lethal: lethal);
     shake(crit ? 0.32 : (heavy ? 0.28 : 0.16));
   }
 
@@ -306,15 +395,19 @@ class CombatStageGame extends FlameGame {
     _fx.puff(at, ranged: ranged);
   }
 
+  /// Disparo: retroceso de la mano, fogonazo en la boca del cañón y trazo.
   void muzzle(Offset target) {
     if (_art == null) return;
-    _screen.muzzle(target);
+    _hand?.shoot(target);
+    _screen.muzzle();
     punch(0.35);
     shake(0.12);
   }
 
+  /// Golpe cuerpo a cuerpo: la mano barre (o el puño sale) y el tajo cruza.
   void slash(Offset target, {bool heavy = false}) {
     if (_art == null) return;
+    _hand?.swing(target, heavy: heavy);
     _fx.slash(target, heavy: heavy);
     punch(heavy ? 0.5 : 0.25);
   }
@@ -323,6 +416,7 @@ class CombatStageGame extends FlameGame {
   void hurt({bool charged = false, bool toxic = false}) {
     if (_art == null) return;
     _screen.hurt(toxic: toxic, strong: charged);
+    _hand?.rig.dip();
     shake(charged ? 0.95 : 0.55);
     punch(charged ? 0.9 : 0.4);
   }
@@ -330,6 +424,7 @@ class CombatStageGame extends FlameGame {
   /// El ataque falló o se cubrió: impacto suave contra la guardia.
   void blockedHit() {
     if (_art == null) return;
+    _hand?.rig.dip();
     shake(0.3);
     punch(0.3);
   }
@@ -351,6 +446,7 @@ class CombatStageGame extends FlameGame {
     if (_art == null) return;
     _fx.toxic(chestPoint, big: false);
     _screen.hurt(toxic: true, strong: false);
+    _hand?.rig.dip();
   }
 
   void screamWave() {
@@ -364,10 +460,15 @@ class CombatStageGame extends FlameGame {
     shake(0.5);
   }
 
-  void fleeOut() => _fleeT = 0;
+  void fleeOut() {
+    _fleeT = 0;
+    _view?.flee();
+    lowerHand();
+  }
 
   void playerDown() {
     _downT = 0;
+    lowerHand();
     shake(0.6);
   }
 
@@ -410,16 +511,17 @@ class _Backdrop extends Component with HasGameReference<CombatStageGame> {
   _Backdrop(this.art)
     : _src = Rect.fromLTWH(0, 0, art.plate.width.toDouble(), art.plate.height.toDouble()),
       _skySrc = Rect.fromLTWH(0, 0, art.plate.width.toDouble(), 2),
-      _groundSrc = Rect.fromLTWH(0, art.plate.height - 2.0, art.plate.width.toDouble(), 2),
       _leftSrc = Rect.fromLTWH(0, 0, 2, art.plate.height.toDouble()),
       _rightSrc = Rect.fromLTWH(art.plate.width - 2.0, 0, 2, art.plate.height.toDouble());
 
   final CombatArt art;
-  final Rect _src, _skySrc, _groundSrc, _leftSrc, _rightSrc;
-  // Un punto más oscura y fría que el arte original (clave baja, como la referencia).
+  final Rect _src, _skySrc, _leftSrc, _rightSrc;
+  Rect _groundSrc = Rect.zero;
+  // Un punto más oscura que el arte original (clave baja, como la referencia).
   final Paint _paint = Paint()
     ..filterQuality = FilterQuality.medium
-    ..colorFilter = const ColorFilter.mode(Color(0xFFBCC2C8), BlendMode.modulate);
+    ..colorFilter = const ColorFilter.mode(Color(0xFFB0B4B8), BlendMode.modulate);
+  final Paint _groundShade = Paint();
   int _ver = -1;
   Rect _dst = Rect.zero, _sky = Rect.zero, _ground = Rect.zero, _left = Rect.zero, _right = Rect.zero;
 
@@ -430,9 +532,19 @@ class _Backdrop extends Component with HasGameReference<CombatStageGame> {
     _dst = l.plateRect;
     // Extensiones para que el temblor/zoom nunca muestre el vacío.
     _sky = Rect.fromLTRB(_dst.left, _dst.top - 300, _dst.right, _dst.top + 1);
-    _ground = Rect.fromLTRB(_dst.left, _dst.bottom - 1, _dst.right, _dst.bottom + 300);
     _left = Rect.fromLTRB(_dst.left - 300, _dst.top - 300, _dst.left + 1, _dst.bottom + 300);
     _right = Rect.fromLTRB(_dst.right - 1, _dst.top - 300, _dst.right + 300, _dst.bottom + 300);
+    // Piso: la franja de abajo de la placa, espejada (asfalto mojado que sigue).
+    final ext = math.max(0.0, l.view.height - _dst.bottom) + 300;
+    final k = _src.height / _dst.height;
+    final srcH = math.min(_src.height * 0.45, ext * k);
+    _groundSrc = Rect.fromLTWH(0, _src.height - srcH, _src.width, srcH);
+    _ground = Rect.fromLTWH(_dst.left, _dst.bottom - 0.5, _dst.width, srcH / k);
+    _groundShade.shader = ui.Gradient.linear(
+      _ground.topCenter,
+      _ground.topCenter.translate(0, math.min(_ground.height, l.view.height * 0.3)),
+      const [Color(0x40000000), Color(0xB0000000)],
+    );
   }
 
   @override
@@ -443,17 +555,34 @@ class _Backdrop extends Component with HasGameReference<CombatStageGame> {
     canvas.drawImageRect(img, _leftSrc, _left, _paint);
     canvas.drawImageRect(img, _rightSrc, _right, _paint);
     canvas.drawImageRect(img, _skySrc, _sky, _paint);
-    canvas.drawImageRect(img, _groundSrc, _ground, _paint);
+    // Piso espejado (sin costura: arranca en el borde inferior de la placa).
+    canvas.save();
+    canvas.translate(0, _ground.top);
+    canvas.scale(1, -1);
+    canvas.drawImageRect(img, _groundSrc, Rect.fromLTWH(_ground.left, -_ground.height, _ground.width, _ground.height), _paint);
+    canvas.restore();
+    canvas.drawRect(_ground, _groundShade);
     canvas.drawImageRect(img, _src, _dst, _paint);
   }
 }
 
 // -----------------------------------------------------------------------------
-// Lluvia (dos profundidades) y salpicaduras en el piso
+// Lluvia (tres profundidades) y salpicaduras en el piso
 // -----------------------------------------------------------------------------
 
+enum _RainMode {
+  /// Fina y lenta, detrás de la criatura.
+  back,
+
+  /// Gotas que cruzan delante del cuerpo, encendidas por la linterna.
+  body,
+
+  /// Gruesas y rápidas, delante de todo (también de la mano).
+  front,
+}
+
 class _Rain extends Component with HasGameReference<CombatStageGame> {
-  _Rain({required this.front, required this.count, required int seed})
+  _Rain({required this.mode, required this.count, required int seed})
     : _rnd = math.Random(seed),
       _x = Float32List(count),
       _y = Float32List(count),
@@ -469,7 +598,7 @@ class _Rain extends Component with HasGameReference<CombatStageGame> {
     }
   }
 
-  final bool front;
+  final _RainMode mode;
   final int count;
   final math.Random _rnd;
   final Float32List _x, _y, _v, _len, _pts;
@@ -479,21 +608,40 @@ class _Rain extends Component with HasGameReference<CombatStageGame> {
   double _splashIn = 0;
   static const double _wind = 0.11;
   Size _view = Size.zero;
+  Rect _zone = Rect.zero;
+
+  bool get _front => mode == _RainMode.front;
 
   late final Paint _paint = Paint()
-    ..strokeWidth = front ? 1.35 : 0.9
+    ..strokeWidth = switch (mode) {
+      _RainMode.front => 1.4,
+      _RainMode.body => 1.15,
+      _RainMode.back => 0.9,
+    }
     ..strokeCap = StrokeCap.round
-    ..color = front ? const Color(0x33D6E2EC) : const Color(0x24B4C6D4);
+    ..color = switch (mode) {
+      _RainMode.front => const Color(0x30D6E2EC),
+      _RainMode.body => const Color(0x4CE4ECF2),
+      _RainMode.back => const Color(0x24B4C6D4),
+    };
   final Paint _splash = Paint()
     ..strokeWidth = 1
     ..color = const Color(0x40C8D6E0);
 
   void _seed(int i, {required bool initial}) {
     final w = _view.width, h = _view.height;
+    if (mode == _RainMode.body) {
+      final z = _zone;
+      _x[i] = z.left + _rnd.nextDouble() * z.width;
+      _y[i] = initial ? z.top + _rnd.nextDouble() * z.height : z.top - _rnd.nextDouble() * z.height * 0.3;
+      _v[i] = 1050 + _rnd.nextDouble() * 400;
+      _len[i] = 16 + _rnd.nextDouble() * 16;
+      return;
+    }
     _x[i] = -w * 0.15 + _rnd.nextDouble() * w * 1.3;
     _y[i] = initial ? _rnd.nextDouble() * h : -_rnd.nextDouble() * h * 0.25;
-    _v[i] = front ? 1500 + _rnd.nextDouble() * 600 : 720 + _rnd.nextDouble() * 280;
-    _len[i] = front ? 26 + _rnd.nextDouble() * 26 : 9 + _rnd.nextDouble() * 12;
+    _v[i] = _front ? 1500 + _rnd.nextDouble() * 600 : 720 + _rnd.nextDouble() * 280;
+    _len[i] = _front ? 26 + _rnd.nextDouble() * 26 : 9 + _rnd.nextDouble() * 12;
   }
 
   @override
@@ -502,17 +650,18 @@ class _Rain extends Component with HasGameReference<CombatStageGame> {
     if (l == null) return;
     if (_view != l.view) {
       _view = l.view;
+      _zone = Rect.fromLTRB(l.body.left - l.body.width * 0.1, l.body.top - l.body.height * 0.15, l.body.right + l.body.width * 0.1, l.floorY);
       for (var i = 0; i < count; i++) {
         _seed(i, initial: true);
       }
     }
-    final h = _view.height;
+    final bottom = mode == _RainMode.body ? _zone.bottom : _view.height + 20;
     for (var i = 0; i < count; i++) {
       _y[i] += _v[i] * dt;
       _x[i] += _v[i] * _wind * dt;
-      if (_y[i] - _len[i] > h + 20) _seed(i, initial: false);
+      if (_y[i] - _len[i] > bottom) _seed(i, initial: false);
     }
-    if (front) {
+    if (_front) {
       _splashIn -= dt;
       while (_splashIn <= 0) {
         _splashIn += 0.035;
@@ -521,7 +670,8 @@ class _Rain extends Component with HasGameReference<CombatStageGame> {
         _sAge[i] = 0;
         _sx[i] = _rnd.nextDouble() * _view.width;
         final g = math.pow(_rnd.nextDouble(), 0.7).toDouble();
-        _sy[i] = l.plateRect.top + l.plateRect.height * (0.48 + 0.52 * g);
+        final hz = l.plateRect.top + l.plateRect.height * ((game.art?.plateHorizon ?? 0.44) + 0.05);
+        _sy[i] = hz + (l.view.height - hz) * g;
       }
       for (var i = 0; i < _splashes; i++) {
         if (_sAge[i] < 1) _sAge[i] += dt;
@@ -532,6 +682,12 @@ class _Rain extends Component with HasGameReference<CombatStageGame> {
   @override
   void render(Canvas canvas) {
     if (_view.isEmpty) return;
+    if (mode == _RainMode.body) {
+      // Más visibles donde pega la linterna (sigue la luz que barre el cuerpo).
+      final t = game.time;
+      final k = 0.55 + 0.45 * (0.5 + 0.5 * math.sin(t * 0.41 + 1.2));
+      _paint.color = Color.fromARGB((0x4C * k).round(), 0xE4, 0xEC, 0xF2);
+    }
     for (var i = 0; i < count; i++) {
       final o = i * 4;
       final len = _len[i];
@@ -541,7 +697,7 @@ class _Rain extends Component with HasGameReference<CombatStageGame> {
       _pts[o + 3] = _y[i] - len;
     }
     canvas.drawRawPoints(ui.PointMode.lines, _pts, _paint);
-    if (!front) return;
+    if (!_front) return;
     // Salpicaduras: dos rayitas que se abren y se apagan (las apagadas quedan
     // como segmentos nulos fuera de pantalla: un solo dibujo, sin copias).
     var n = 0;
@@ -578,7 +734,7 @@ class _Rain extends Component with HasGameReference<CombatStageGame> {
 // -----------------------------------------------------------------------------
 
 class _Fog extends Component with HasGameReference<CombatStageGame> {
-  _Fog({required this.front, required this.atlas}) : _pool = FxPool(front ? 8 : 6), _rnd = math.Random(front ? 4 : 8);
+  _Fog({required this.front, required this.atlas}) : _pool = FxPool(front ? 12 : 6), _rnd = math.Random(front ? 4 : 8);
 
   final bool front;
   final ui.Image atlas;
@@ -596,17 +752,18 @@ class _Fog extends Component with HasGameReference<CombatStageGame> {
     _ver = game._layoutVersion;
     final v = l.view;
     if (front) {
-      // Neblina pegada al piso: tapa los pies y se aclara hacia abajo.
-      final top = l.floorY - l.body.height * 0.16;
+      // Neblina pegada al piso: se espesa justo en los pies (los "planta" en
+      // la calle) y se aclara hacia abajo.
+      final top = l.floorY - l.body.height * 0.2;
       _bandRect = Rect.fromLTRB(-200, top, v.width + 200, v.height + 200);
       _band.shader = ui.Gradient.linear(
         Offset(0, top),
         Offset(0, v.height + 40),
-        const [Color(0x00202A31), Color(0x4A26313A), Color(0x3A1A2228), Color(0x22101519)],
-        const [0, 0.42, 0.7, 1],
+        const [Color(0x00262B30), Color(0x44303840), Color(0x62343C44), Color(0x3A1A2228), Color(0x22101519)],
+        _stops((l.body.height * 0.2) / (v.height + 40 - top)),
       );
     } else {
-      final y = l.plateRect.top + l.plateRect.height * 0.42;
+      final y = l.plateRect.top + l.plateRect.height * ((game.art?.plateHorizon ?? 0.42) + 0.02);
       _bandRect = Rect.fromLTRB(-200, y - v.height * 0.16, v.width + 200, y + v.height * 0.12);
       _band.shader = ui.Gradient.linear(
         _bandRect.topCenter,
@@ -617,14 +774,23 @@ class _Fog extends Component with HasGameReference<CombatStageGame> {
     }
   }
 
+  static List<double> _stops(double feet) {
+    final f = feet.clamp(0.1, 0.6);
+    return [0, f * 0.7, f, math.min(0.9, f + 0.3), 1];
+  }
+
   void _spawn({required bool initial}) {
     final l = game.layout;
     if (l == null) return;
     final v = l.view;
     final size = v.width * (0.6 + _rnd.nextDouble() * 0.6);
-    final y = front ? l.floorY + v.height * (-0.06 + _rnd.nextDouble() * 0.16) : v.height * (0.34 + _rnd.nextDouble() * 0.26);
+    final y = front ? l.floorY + v.height * (-0.05 + _rnd.nextDouble() * 0.12) : v.height * (0.34 + _rnd.nextDouble() * 0.26);
     final dir = _rnd.nextBool() ? 1.0 : -1.0;
-    final x = initial ? _rnd.nextDouble() * v.width : (dir > 0 ? -size * 0.4 : v.width + size * 0.4);
+    // La mitad de los bancos de adelante nacen sobre los pies.
+    final feet = front && _rnd.nextBool();
+    final x = feet
+        ? l.feet.dx + (_rnd.nextDouble() - 0.5) * l.body.width
+        : (initial ? _rnd.nextDouble() * v.width : (dir > 0 ? -size * 0.4 : v.width + size * 0.4));
     _pool.spawn(
       x: x,
       y: y,
@@ -633,7 +799,7 @@ class _Fog extends Component with HasGameReference<CombatStageGame> {
       life: 18 + _rnd.nextDouble() * 10,
       size: size,
       src: FxAtlas.blob,
-      color: front ? Color.fromARGB(40 + _rnd.nextInt(18), 146, 164, 176) : Color.fromARGB(24 + _rnd.nextInt(12), 136, 152, 164),
+      color: front ? Color.fromARGB(46 + _rnd.nextInt(22), 150, 160, 168) : Color.fromARGB(24 + _rnd.nextInt(12), 136, 152, 164),
       grow: 0.01,
       rot: _rnd.nextDouble() * math.pi,
       spin: (_rnd.nextDouble() - 0.5) * 0.03,
@@ -652,7 +818,7 @@ class _Fog extends Component with HasGameReference<CombatStageGame> {
     }
     _spawnIn -= dt;
     if (_spawnIn <= 0) {
-      _spawnIn = front ? 2.6 : 3.4;
+      _spawnIn = front ? 1.9 : 3.4;
       _spawn(initial: false);
     }
     _pool.update(dt);
@@ -668,261 +834,19 @@ class _Fog extends Component with HasGameReference<CombatStageGame> {
 }
 
 // -----------------------------------------------------------------------------
-// Criatura: títere de malla con reflejo, sombra, fantasmas, luz y destellos
+// Criatura: delega en el [CreatureView] (hoy, el títere de malla)
 // -----------------------------------------------------------------------------
 
-class _CreatureLayer extends Component with HasGameReference<CombatStageGame> {
-  _CreatureLayer(this.art, this.anim, PuppetStyle style)
-    : mesh = PuppetMesh.grid(art.rig),
-      deformer = PuppetDeformer(art.rig, armInner: style.armInner) {
-    final n = mesh.vertexCount;
-    _pos = Float32List(n * 2);
-    _ghost = Float32List(n * 2);
-    _refl = Float32List(n * 2);
-    _cMain = Int32List(n);
-    _cAux = Int32List(n);
-    _shader = ImageShader(art.cutout, TileMode.clamp, TileMode.clamp, _identity, filterQuality: FilterQuality.medium);
-    _main = Paint()..shader = _shader;
-    _rim = Paint()
-      ..shader = _shader
-      ..blendMode = BlendMode.plus;
-    _white = Paint()
-      ..shader = _shader
-      ..colorFilter = const ColorFilter.mode(Color(0xFFF4F1EA), BlendMode.srcIn);
-    _red = Paint()
-      ..shader = _shader
-      ..colorFilter = const ColorFilter.mode(Color(0xFFE2362C), BlendMode.srcIn);
-    _glow = Paint()
-      ..shader = _shader
-      ..colorFilter = const ColorFilter.mode(Color(0xFFFF2A1E), BlendMode.srcIn);
-  }
+class _CreatureHost extends Component with HasGameReference<CombatStageGame> {
+  _CreatureHost(this.view);
 
-  final CombatArt art;
-  final PuppetAnimator anim;
-  final PuppetMesh mesh;
-  final PuppetDeformer deformer;
-  final PuppetPose pose = PuppetPose();
-  final PuppetPose _ghostPose = PuppetPose();
-
-  late final Float32List _pos, _ghost, _refl;
-  late final Int32List _cMain, _cAux;
-  late final ImageShader _shader;
-  late final Paint _main, _rim, _white, _red, _glow;
-  final Paint _blurLayer = Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: 2.2, sigmaY: 4.5);
-  final Paint _glowLayer = Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14);
-  final Paint _shadow = Paint()
-    ..shader = ui.Gradient.radial(Offset.zero, 1, const [Color(0xC8000000), Color(0x66000000), Color(0x00000000)], const [0, 0.5, 1]);
-
-  bool hasPose = false;
-  double _ox = 0, _oy = 0, _scale = 1;
-
-  void disposeShader() => _shader.dispose();
+  final CreatureView view;
 
   @override
-  void update(double dt) {
-    final l = game.layout;
-    if (l == null) return;
-    _ox = l.feet.dx;
-    _oy = l.feet.dy;
-    _scale = l.scale;
-    anim.evaluate(pose);
-    deformer.deformMesh(pose, mesh, _pos, _ox, _oy, _scale);
-    // Caja actual (para el desenfoque y los emisores).
-    var minX = double.infinity, minY = double.infinity, maxX = -double.infinity, maxY = -double.infinity;
-    for (var i = 0; i < mesh.vertexCount; i++) {
-      final x = _pos[i * 2], y = _pos[i * 2 + 1];
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-    _bx0 = minX;
-    _by0 = minY;
-    _bx1 = maxX;
-    _by1 = maxY;
-    // Cabeza en la pose actual (sus 4 esquinas por el mismo deformador).
-    final h = art.rig.head;
-    final fx = art.rig.feet.dx, fy = art.rig.feet.dy;
-    _hx0 = _hy0 = double.infinity;
-    _hx1 = _hy1 = -double.infinity;
-    _headCorner(h.left - fx, h.top - fy);
-    _headCorner(h.right - fx, h.top - fy);
-    _headCorner(h.left - fx, h.bottom - fy);
-    _headCorner(h.right - fx, h.bottom - fy);
-    hasPose = true;
-  }
-
-  double _bx0 = 0, _by0 = 0, _bx1 = 0, _by1 = 0;
-  double _hx0 = 0, _hy0 = 0, _hx1 = 0, _hy1 = 0;
-
-  void _headCorner(double x, double y) {
-    deformer.apply(pose, x, y);
-    final sx = _ox + deformer.outX * _scale, sy = _oy + deformer.outY * _scale;
-    if (sx < _hx0) _hx0 = sx;
-    if (sx > _hx1) _hx1 = sx;
-    if (sy < _hy0) _hy0 = sy;
-    if (sy > _hy1) _hy1 = sy;
-  }
-
-  /// Caja de la cabeza en la pose actual (mundo).
-  Rect get headWorld => Rect.fromLTRB(_hx0, _hy0, _hx1, _hy1);
-
-  /// Punto (mundo) de un vértice al azar dentro de la franja pedida y aún visible.
-  Offset? randomPoint(math.Random rnd, {required double minH, required double maxH, required double maxSide}) {
-    for (var k = 0; k < 6; k++) {
-      final i = rnd.nextInt(mesh.vertexCount);
-      final h = mesh.h[i];
-      if (h < minH || h > maxH || mesh.side[i].abs() > maxSide) continue;
-      if (pose.dissolve > 0 && _vertexAlpha(i) < 0.15) continue;
-      return Offset(_pos[i * 2], _pos[i * 2 + 1]);
-    }
-    return null;
-  }
-
-  double _vertexAlpha(int i) {
-    var a = pose.alpha;
-    final d = pose.dissolve;
-    if (d > 0) {
-      final hc = mesh.h[i].clamp(0.0, 1.0);
-      final v = 0.6 * mesh.noise[i] + 0.4 * hc;
-      final c = 1.12 - 1.24 * d;
-      a *= 1 - smooth(c - 0.12, c + 0.12, v);
-    }
-    return a;
-  }
-
-  static int _argb(double a, double r, double g, double b) =>
-      ((a.clamp(0.0, 1.0) * 255).round() << 24) | ((r.clamp(0.0, 1.0) * 255).round() << 16) | ((g.clamp(0.0, 1.0) * 255).round() << 8) | (b.clamp(0.0, 1.0) * 255).round();
-
-  ui.Vertices _vertices(Float32List pos, Int32List colors) =>
-      ui.Vertices.raw(ui.VertexMode.triangles, pos, textureCoordinates: mesh.uv, colors: colors, indices: mesh.indices);
-
-  void _draw(Canvas canvas, Float32List pos, Int32List colors, Paint paint) {
-    final v = _vertices(pos, colors);
-    canvas.drawVertices(v, BlendMode.modulate, paint);
-    v.dispose();
-  }
+  void update(double dt) => view.update(dt, game);
 
   @override
-  void render(Canvas canvas) {
-    if (!hasPose) return;
-    final g = game;
-    final l = g.layout!;
-    final n = mesh.vertexCount;
-    final env = PuppetAnimator.lungeEnvelope(anim.anim, anim.t);
-    final fall = anim.dead ? smooth(0.2, 0.9, anim.t) : 0.0;
-    final floor = l.floorY;
-    final bodyH = l.body.height;
-    final hidden = floor > g.hudTop + 6;
-
-    // 1. Sombra de contacto.
-    final shadowA = (1 - env * 0.7) * (1 - fall);
-    if (shadowA > 0.02 && !hidden) {
-      canvas.save();
-      canvas.translate(_ox + pose.tx * bodyH * 0.2, floor + 2);
-      canvas.scale(l.body.width * 0.48 * (1 + 0.25 * pose.crouch), bodyH * 0.035);
-      _shadow.color = Color.fromARGB((shadowA * 255).round(), 255, 255, 255);
-      canvas.drawCircle(Offset.zero, 1, _shadow);
-      canvas.restore();
-    }
-
-    // Colores base por vértice: gradación fría, piernas en sombra, disolución.
-    final dark = 1 - pose.dark;
-    for (var i = 0; i < n; i++) {
-      final hc = mesh.h[i].clamp(0.0, 1.0);
-      final k = smooth(0.0, 0.5, hc);
-      final r = (0.48 + 0.31 * k) * dark;
-      final gg = (0.52 + 0.3 * k) * dark;
-      final b = (0.6 + 0.28 * k) * dark;
-      _cMain[i] = _argb(_vertexAlpha(i), r, gg, b);
-    }
-
-    // 2. Reflejo en el asfalto mojado (invertido, comprimido, ondulado, borroso).
-    final reflA = 0.34 * (1 - env) * (1 - fall) * pose.alpha;
-    if (reflA > 0.02 && !hidden) {
-      var minX = double.infinity, maxX = -double.infinity, maxY = floor;
-      final t = g.time;
-      for (var i = 0; i < n; i++) {
-        final y = _pos[i * 2 + 1];
-        final d = math.max(0.0, floor - y) * 0.36;
-        final ry = floor + d;
-        final x = _pos[i * 2] + math.sin(ry * 0.11 + t * 2.7) * (1.2 + d * 0.035);
-        _refl[i * 2] = x;
-        _refl[i * 2 + 1] = ry;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (ry > maxY) maxY = ry;
-        final hc = mesh.h[i].clamp(0.0, 1.0);
-        final a = reflA * (1 - smooth(0.0, 0.75, hc)) * _vertexAlpha(i);
-        _cAux[i] = _argb(a, 0.52, 0.6, 0.72);
-      }
-      canvas.saveLayer(Rect.fromLTRB(minX - 20, floor - 6, maxX + 20, maxY + 20), _blurLayer);
-      _draw(canvas, _refl, _cAux, _main);
-      canvas.restore();
-    }
-
-    // 3. Resplandor rojo al preparar la embestida (silueta difusa detrás).
-    final glow = g.charging && !anim.dead ? 0.5 + 0.5 * math.sin(g.time * 9) : 0.0;
-    if (glow > 0.01) {
-      final c = _argb(0.16 + 0.24 * glow, 1, 1, 1);
-      for (var i = 0; i < n; i++) {
-        _cAux[i] = c;
-      }
-      canvas.saveLayer(Rect.fromLTRB(_bx0 - 40, _by0 - 40, _bx1 + 40, _by1 + 40), _glowLayer);
-      _draw(canvas, _pos, _cAux, _glow);
-      canvas.restore();
-    }
-
-    // 4. Cuerpo.
-    _draw(canvas, _pos, _cMain, _main);
-
-    // 5. Fantasmas del desenfoque de movimiento (embestida): poses anteriores
-    //    encima del cuerpo, como una exposición larga (zoom hacia la cámara).
-    final blur = anim.motionBlur;
-    if (blur > 0.02) {
-      const alphas = [0.3, 0.2, 0.12];
-      for (var k = 0; k < alphas.length; k++) {
-        anim.evaluate(_ghostPose, back: 0.026 * (k + 1));
-        deformer.deformMesh(_ghostPose, mesh, _ghost, _ox, _oy, _scale);
-        final a = blur * alphas[k];
-        for (var i = 0; i < n; i++) {
-          _cAux[i] = (_cMain[i] & 0x00FFFFFF) | ((a * 255).round() << 24);
-        }
-        _draw(canvas, _ghost, _cAux, _main);
-      }
-    }
-
-    // 6. Luz de emergencia roja desde la derecha (aditiva, late con la baliza).
-    final beacon = _ScreenLayer.beacon(g.time, g.charging);
-    final rimK = (0.22 + 0.55 * beacon) * dark * pose.alpha;
-    if (rimK > 0.02) {
-      for (var i = 0; i < n; i++) {
-        final hc = mesh.h[i].clamp(0.0, 1.0);
-        final k = rimK * smooth(-0.15, 1.0, mesh.side[i]) * (0.35 + 0.65 * hc) * (_vertexAlpha(i) > 0.5 ? 1 : 0);
-        _cAux[i] = _argb(1, k, k * 0.2, k * 0.14);
-      }
-      _draw(canvas, _pos, _cAux, _rim);
-    }
-
-    // 7. Destello del impacto: blanco → rojo.
-    final f = anim.flash;
-    if (f > 0.01) {
-      final w = smooth(0.5, 0.95, f) * 0.8;
-      final r = bump(f, 0.0, 0.5, 0.85) * (anim.flashCrit ? 0.75 : 0.55);
-      if (w > 0.01) {
-        for (var i = 0; i < n; i++) {
-          _cAux[i] = _argb(w * _vertexAlpha(i), 1, 1, 1);
-        }
-        _draw(canvas, _pos, _cAux, _white);
-      }
-      if (r > 0.01) {
-        for (var i = 0; i < n; i++) {
-          _cAux[i] = _argb(r * _vertexAlpha(i), 1, 1, 1);
-        }
-        _draw(canvas, _pos, _cAux, _red);
-      }
-    }
-  }
+  void render(Canvas canvas) => view.render(canvas, game);
 }
 
 // -----------------------------------------------------------------------------
@@ -1272,8 +1196,9 @@ class _FxLayer extends Component with HasGameReference<CombatStageGame> {
       canvas.drawCircle(Offset(_rx[i], _ry[i]), r, _ringPaint);
     }
     final g = game;
-    if (g.stunned && !g.puppet.dead) {
-      final h = g._creature.hasPose ? g._creature.headWorld : Rect.zero;
+    final cv = g.creature;
+    if (g.stunned && cv != null && !cv.dead) {
+      final h = cv.hasPose ? cv.headWorld : Rect.zero;
       final c = h.isEmpty ? Offset.zero : h.topCenter.translate(0, -10);
       if (c != Offset.zero) {
         for (var i = 0; i < 3; i++) {
@@ -1306,10 +1231,6 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
   final Paint _edge = Paint();
   final Paint _flat = Paint();
   final Paint _grain = Paint();
-  final Paint _muzzle = Paint()..blendMode = BlendMode.plus;
-  final Paint _tracer = Paint()
-    ..strokeCap = StrokeCap.round
-    ..blendMode = BlendMode.plus;
   final Paint _distort = Paint()
     ..style = PaintingStyle.stroke
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
@@ -1326,8 +1247,6 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
   double _hitFlash = 0;
   bool _hurtToxic = false;
   double _muzzleT = 1;
-  Offset _muzzleFrom = Offset.zero;
-  Offset _muzzleTo = Offset.zero;
   double _shieldT = 1;
   double _healT = 1;
   double _dodgeT = 1;
@@ -1401,11 +1320,9 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
     _hurtToxic = toxic;
   }
 
-  void muzzle(Offset target) {
-    _muzzleT = 0;
-    _muzzleFrom = Offset(_size.width * 0.74, _size.height * 0.80);
-    _muzzleTo = target;
-  }
+  /// Fogonazo: destello cálido de toda la pantalla (el de la boca del cañón
+  /// lo dibuja la mano).
+  void muzzle() => _muzzleT = 0;
 
   void shield() => _shieldT = 0;
   void heal() => _healT = 0;
@@ -1433,18 +1350,27 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
     }
   }
 
+  /// Debajo de la mano: luz de emergencia y viñeta.
+  void renderUnder(Canvas canvas) {
+    if (_ver != game._layoutVersion) _sync();
+    if (_size.isEmpty) return;
+    final g = game;
+    if (g.look.emergency) {
+      final b = beacon(g.time, g.charging);
+      final em = ((g.charging ? 0.07 : 0.04) + b * (g.charging ? 0.2 : 0.12)).clamp(0.0, 1.0);
+      _emergency.color = Color.fromARGB((em * 255).round(), 255, 255, 255);
+      canvas.drawRect(_full, _emergency);
+    }
+    canvas.drawRect(_full, _vignette);
+  }
+
+  /// Encima de la mano: grano, golpes, curas, fogonazo y fundidos.
   @override
   void render(Canvas canvas) {
     if (_ver != game._layoutVersion) _sync();
     if (_size.isEmpty) return;
     final g = game;
     final t = g.time;
-
-    // Luz de emergencia desde la derecha.
-    final b = beacon(t, g.charging);
-    final em = ((g.charging ? 0.07 : 0.04) + b * (g.charging ? 0.2 : 0.12)).clamp(0.0, 1.0);
-    _emergency.color = Color.fromARGB((em * 255).round(), 255, 255, 255);
-    canvas.drawRect(_full, _emergency);
 
     // Onda del grito: anillo de "refracción" (oscuro difuso + filo brillante).
     if (_distortT < 1) {
@@ -1461,8 +1387,7 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
       canvas.drawCircle(_distortAt, r - 10, _distortHi);
     }
 
-    // Viñeta fría y grano.
-    canvas.drawRect(_full, _vignette);
+    // Grano.
     canvas.save();
     canvas.translate(-_gx, -_gy);
     _grain.color = const Color(0x22FFFFFF);
@@ -1510,20 +1435,11 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
       canvas.restore();
     }
 
-    // Fogonazo del arma.
+    // Fogonazo del arma: la escena se enciende un instante.
     if (_muzzleT < 1) {
       final a = 1 - _muzzleT;
-      _flat.color = Color.fromARGB((a * 40).round(), 255, 226, 170);
+      _flat.color = Color.fromARGB((a * 34).round(), 255, 226, 170);
       canvas.drawRect(_full, _flat);
-      _tracer
-        ..strokeWidth = 3 * a + 0.5
-        ..color = Color.fromARGB((a * 200).round(), 255, 232, 190);
-      canvas.drawLine(_muzzleFrom, Offset.lerp(_muzzleFrom, _muzzleTo, math.min(1, _muzzleT * 3 + 0.3))!, _tracer);
-      _muzzle.color = Color.fromARGB((a * 255).round(), 255, 255, 255);
-      _muzzle.colorFilter = const ColorFilter.mode(Color(0xFFFFD9A0), BlendMode.modulate);
-      final r = 90 + 60 * _muzzleT;
-      canvas.drawImageRect(art.fxAtlas, FxAtlas.blob, Rect.fromCircle(center: _muzzleFrom, radius: r), _muzzle);
-      canvas.drawImageRect(art.fxAtlas, FxAtlas.dot, Rect.fromCircle(center: _muzzleFrom, radius: r * 0.35), _muzzle);
     }
 
     // Huida y caída: fundido.
@@ -1538,6 +1454,15 @@ class _ScreenLayer extends Component with HasGameReference<CombatStageGame> {
       canvas.drawRect(_full, _flat);
     }
   }
+}
+
+/// Pinta la parte de [_ScreenLayer] que va debajo de la mano.
+class _ScreenUnder extends Component {
+  _ScreenUnder(this.screen);
+  final _ScreenLayer screen;
+
+  @override
+  void render(Canvas canvas) => screen.renderUnder(canvas);
 }
 
 // -----------------------------------------------------------------------------
@@ -1604,7 +1529,7 @@ class _ReticleLayer extends Component with HasGameReference<CombatStageGame> {
   @override
   void update(double dt) {
     final g = game;
-    final show = !g.ended && !g.puppet.dead && g.fleeProgress <= 0;
+    final show = !g.ended && !(g.creature?.dead ?? false) && g.fleeProgress <= 0;
     _frameA += ((show ? 1.0 : 0.0) - _frameA) * math.min(1, dt * 6);
     final target = g.aim.active ? g.aim.tightness : 0.0;
     _tight += (target - _tight) * math.min(1, dt * 10);

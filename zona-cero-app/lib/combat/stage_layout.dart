@@ -44,7 +44,10 @@ class StageLayout {
   });
 
   /// Calcula el encuadre. `plateHorizon` = altura del punto de fuga en la placa
-  /// (fracción); `horizonAt` = dónde se lo quiere en pantalla.
+  /// (fracción); `horizonAt` = dónde se lo quiere en pantalla. `plateCover` =
+  /// fracción de la altura de la vista que la placa cubre como mínimo (con
+  /// menos de 1 se ve más ancho de la placa; el hueco de abajo se completa con
+  /// el piso espejado). `plateFocusX` = punto de la placa que se intenta centrar.
   factory StageLayout.compute({
     required Size view,
     required Size plate,
@@ -52,17 +55,20 @@ class StageLayout {
     PlacementProfile profile = const PlacementProfile(),
     double plateHorizon = 0.39,
     double horizonAt = 0.40,
+    double plateCover = 1,
+    double plateFocusX = 0.5,
   }) {
     if (view.isEmpty || plate.isEmpty || rig.body.isEmpty) {
       return StageLayout(view: view, plateRect: Offset.zero & view, scale: 1, feet: Offset.zero, rigFeet: rig.feet, body: Rect.zero, head: Rect.zero);
     }
-    // Placa: "cover" y el horizonte lo más cerca posible de `horizonAt` sin
-    // dejar bordes vacíos.
-    final s = math.max(view.width / plate.width, view.height / plate.height);
+    // Placa: cubre el ancho y `plateCover` de la altura; el horizonte lo más
+    // cerca posible de `horizonAt` sin dejar huecos arriba ni a los costados.
+    final s = math.max(view.width / plate.width, view.height * plateCover.clamp(0.3, 1.0) / plate.height);
     final pw = plate.width * s;
     final ph = plate.height * s;
-    final top = (view.height * horizonAt - plateHorizon * ph).clamp(view.height - ph, 0.0);
-    final plateRect = Rect.fromLTWH((view.width - pw) / 2, top, pw, ph);
+    final double top = (view.height * horizonAt - plateHorizon * ph).clamp(math.min(0.0, view.height - ph), 0.0).toDouble();
+    final left = (view.width / 2 - plateFocusX * pw).clamp(view.width - pw, 0.0);
+    final plateRect = Rect.fromLTWH(left, top, pw, ph);
 
     // Criatura: alto pedido, con tope de ancho; centrada por su centro de masa.
     var k = profile.heightFrac * view.height / rig.body.height;

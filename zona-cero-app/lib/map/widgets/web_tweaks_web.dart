@@ -6,14 +6,14 @@ bool _installed = false;
 JSObject get _document => globalContext['document']! as JSObject;
 
 /// Agrega (una vez) una hoja de estilo que reubica la atribución del mapa.
-void installMapWebTweaks(double bottom) {
+void installMapWebTweaks(double top, double right) {
   if (_installed) return;
   _installed = true;
   try {
     final style = _document.callMethod<JSObject>('createElement'.toJS, 'style'.toJS);
     style['textContent'] = [
       for (final corner in ['top-right', 'bottom-right'])
-        '.maplibregl-ctrl-$corner{top:auto!important;bottom:${bottom.round()}px!important;right:10px!important}',
+        '.maplibregl-ctrl-$corner{bottom:auto!important;top:${top.round()}px!important;right:${right.round()}px!important}',
     ].join('\n').toJS;
     final head = _document['head']! as JSObject;
     head.callMethod<JSAny?>('appendChild'.toJS, style);

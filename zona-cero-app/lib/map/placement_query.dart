@@ -171,3 +171,62 @@ Future<String?> queryNearestPlace(ml.MapLibreMapController map, LatLng around) a
   }
   return best;
 }
+
+/// Tramo de calle con nombre (para los avisos ambientales: "Humo en Av. Corrientes").
+typedef NamedSegment = ({String name, LatLng a, LatLng b});
+
+/// Calles con nombre de los tiles cargados, cerca de `around`. En web suele
+/// devolver una lista vacía (los avisos usan entonces solo el rumbo).
+Future<List<NamedSegment>> queryStreetNames(ml.MapLibreMapController map, LatLng around, {double radiusM = 900}) async {
+  final List feats;
+  try {
+    feats = await map.querySourceFeatures(SuturaMapStyle.source, 'transportation_name', null);
+  } catch (_) {
+    return const [];
+  }
+  final near = _Near(around, radiusM);
+  final out = <NamedSegment>[];
+  final seen = <int>{};
+  for (final f in feats) {
+    final p = _props(f);
+    final name = (p['name:es'] ?? p['name'])?.toString().trim();
+    if (name == null || name.isEmpty) continue;
+    final g = _geometry(f);
+    if (g == null) continue;
+    final lines = switch (g.type) {
+      'LineString' => [g.coords],
+      'MultiLineString' => g.coords as List,
+      _ => const [],
+    };
+    for (final line in lines) {
+      final pts = _points(line);
+      for (var i = 1; i < pts.length; i++) {
+        final a = pts[i - 1];
+        final b = pts[i];
+        if (!near.test(a) && !near.test(b)) continue;
+        final k = Object.hash(name, (a.lat * 1e6).round(), (a.lng * 1e6).round());
+        if (!seen.add(k)) continue;
+        out.add((name: name, a: a, b: b));
+        if (out.length > 4000) return out;
+      }
+    }
+  }
+  return out;
+}
+
+/// Nombre de la calle más cercana a `p` (a menos de `maxM`), o null.
+String? nearestStreetName(List<NamedSegment> streets, LatLng p, {double maxM = 60}) {
+  String? best;
+  var bestD = maxM;
+  for (final s in streets) {
+    final pa = toLocalXY(p, s.a);
+    final pb = toLocalXY(p, s.b);
+    final q = nearestPointOnSegment(const XY(0, 0), pa, pb);
+    final d = math.sqrt(q.x * q.x + q.y * q.y);
+    if (d < bestD) {
+      bestD = d;
+      best = s.name;
+    }
+  }
+  return best;
+}

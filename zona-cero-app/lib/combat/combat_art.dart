@@ -13,8 +13,64 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
 import '../core/types.dart';
+import 'creature_view.dart' show PlateLook;
 import 'cutout_rig.dart';
 import 'procedural_zombie.dart';
+
+/// Placas de fondo del combate. Cada una trae su encuadre (punto de fuga,
+/// cuánto de la altura cubre, foco horizontal) y su luz para la criatura.
+enum CombatPlate {
+  /// Teatro Colón bajo la lluvia: fachada con pancartas a la izquierda,
+  /// grafiti "¿AÚN SOMOS HUMANOS?" a la derecha, faroles de sodio.
+  colon(
+    'assets/art/bg/combat_colon.webp',
+    horizon: 0.525,
+    cover: 0.8,
+    focusX: 0.53,
+    look: PlateLook(
+      shadowTint: Color(0xFF6E6A6C),
+      lightTint: Color(0xFFC4BCB4),
+      rim: Color(0xFFFF4A30),
+      rimSide: 1,
+      rimBase: 0.1,
+      rimBeacon: 0.34,
+      fill: Color(0xFFFFA650),
+      fillSide: -1,
+      fillAmount: 0.16,
+    ),
+  ),
+
+  /// Avenida con el Obelisco al fondo y luz de emergencia roja.
+  obelisco('assets/art/bg/combat_street.webp', horizon: 0.39, cover: 1, focusX: 0.5, look: PlateLook());
+
+  const CombatPlate(this.asset, {required this.horizon, required this.cover, required this.focusX, required this.look});
+
+  final String asset;
+
+  /// Altura del punto de fuga en la placa (fracción).
+  final double horizon;
+
+  /// Fracción de la altura de la vista que la placa cubre como mínimo (el
+  /// resto, abajo, se completa con el piso espejado y queda bajo el HUD).
+  final double cover;
+
+  /// Punto de la placa (fracción del ancho) que se intenta centrar.
+  final double focusX;
+  final PlateLook look;
+}
+
+/// Hash FNV-1a de 32 bits (determinístico entre plataformas).
+int _fnv1a(String s) {
+  var h = 0x811C9DC5;
+  for (final c in s.codeUnits) {
+    h ^= c;
+    h = (h * 0x01000193) & 0xFFFFFFFF;
+  }
+  return h;
+}
+
+/// Placa del encuentro, fija por aparición: ~60 % Colón, ~40 % Obelisco.
+CombatPlate plateForSpawn(String spawnId) => _fnv1a(spawnId) % 100 < 60 ? CombatPlate.colon : CombatPlate.obelisco;
 
 /// Regiones del atlas de partículas.
 abstract final class FxAtlas {
@@ -29,8 +85,12 @@ class CombatArt {
   CombatArt._({
     required this.type,
     required this.plate,
+    required this.plateKind,
     required this.proceduralPlate,
     required this.plateHorizon,
+    required this.plateCover,
+    required this.plateFocusX,
+    required this.look,
     required this.cutout,
     required this.fallbackCutout,
     required this.rig,
@@ -40,12 +100,22 @@ class CombatArt {
 
   final ZombieTypeId type;
 
-  /// Placa de fondo (calle bajo la lluvia).
+  /// Placa de fondo (calle bajo la lluvia), ya con el desenfoque de fondo.
   final ui.Image plate;
+
+  /// Qué placa se cargó (la pedida o, si faltaba, la otra).
+  final CombatPlate plateKind;
   final bool proceduralPlate;
 
   /// Altura del punto de fuga en la placa (fracción).
   final double plateHorizon;
+
+  /// Ver [CombatPlate.cover] y [CombatPlate.focusX].
+  final double plateCover;
+  final double plateFocusX;
+
+  /// Luz de la placa para la criatura y la mano.
+  final PlateLook look;
 
   /// Recorte de la criatura (RGBA, fondo transparente).
   final ui.Image cutout;
@@ -65,15 +135,22 @@ class CombatArt {
     grain.dispose();
   }
 
-  static const plateAsset = 'assets/art/bg/combat_street.webp';
+  /// Placa por defecto.
+  static final plateAsset = CombatPlate.colon.asset;
   static String cutoutAsset(ZombieTypeId type) => 'assets/art/zombies/${type.key}.webp';
 
-  /// Carga todo lo necesario para pelear contra `type`.
-  static Future<CombatArt> load(ZombieTypeId type, {AssetBundle? bundle}) async {
+  /// Carga todo lo necesario para pelear contra `type` sobre `plate` (si falta
+  /// se prueba la otra placa y, si tampoco está, un fondo procedural).
+  static Future<CombatArt> load(ZombieTypeId type, {AssetBundle? bundle, CombatPlate plate = CombatPlate.colon}) async {
     final b = bundle ?? rootBundle;
-    final plateF = _image(b, plateAsset);
+    final plateF = _image(b, plate.asset);
     final cutF = _image(b, cutoutAsset(type));
-    final plate = await plateF;
+    var kind = plate;
+    var plateImg = await plateF;
+    if (plateImg == null) {
+      kind = plate == CombatPlate.colon ? CombatPlate.obelisco : CombatPlate.colon;
+      plateImg = await _image(b, kind.asset);
+    }
     final loaded = await cutF;
     final hints = rigHints[type] ?? const RigHints();
     final analyzed = loaded == null ? null : await _analyze(loaded, hints);
@@ -90,11 +167,16 @@ class CombatArt {
       cut = z.toImage();
       rig = z.rig();
     }
+    final procedural = plateImg == null;
     return CombatArt._(
       type: type,
-      plate: plate ?? buildProceduralBackdrop(const Size(720, 1280)),
-      proceduralPlate: plate == null,
-      plateHorizon: plate == null ? 0.42 : 0.39,
+      plate: procedural ? buildProceduralBackdrop(const Size(720, 1280)) : bakeDepthOfField(plateImg),
+      plateKind: procedural ? CombatPlate.obelisco : kind,
+      proceduralPlate: procedural,
+      plateHorizon: procedural ? 0.42 : kind.horizon,
+      plateCover: procedural ? 1 : kind.cover,
+      plateFocusX: procedural ? 0.5 : kind.focusX,
+      look: procedural ? const PlateLook() : kind.look,
       cutout: cut,
       fallbackCutout: !identical(cut, loaded),
       rig: rig,
@@ -126,6 +208,34 @@ class CombatArt {
       return null;
     }
   }
+}
+
+/// Profundidad de campo barata, horneada una sola vez: la calle detrás de la
+/// criatura queda apenas desenfocada (y un punto más oscura) y el piso de
+/// adelante, nítido. Libera `src`.
+ui.Image bakeDepthOfField(ui.Image src, {double sigma = 1.7}) {
+  final w = src.width.toDouble(), h = src.height.toDouble();
+  final rect = Rect.fromLTWH(0, 0, w, h);
+  final rec = ui.PictureRecorder();
+  final c = Canvas(rec, rect);
+  c.saveLayer(rect, Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.clamp));
+  c.drawImage(src, Offset.zero, Paint()..filterQuality = FilterQuality.medium);
+  c.restore();
+  // Piso cercano nítido (fundido desde el 74 % de la altura).
+  c.saveLayer(rect, Paint());
+  c.drawImage(src, Offset.zero, Paint());
+  c.drawRect(
+    rect,
+    Paint()
+      ..blendMode = BlendMode.dstIn
+      ..shader = ui.Gradient.linear(Offset(0, h * 0.74), Offset(0, h * 0.9), const [Color(0x00000000), Color(0xFF000000)]),
+  );
+  c.restore();
+  final pic = rec.endRecording();
+  final out = pic.toImageSync(src.width, src.height);
+  pic.dispose();
+  src.dispose();
+  return out;
 }
 
 /// Mosaico de ruido para el grano de película (gris medio ± ruido, con alfa).

@@ -1,12 +1,18 @@
 import 'dart:convert';
 
-/// Estilo de mapa ZONA CERO: "foto aérea nocturna" sobre los tiles vectoriales
-/// gratuitos de OpenFreeMap (datos de OpenStreetMap).
+/// Estilo de mapa ZONA CERO: imagen satelital oscura y desaturada con los
+/// rótulos de los tiles vectoriales gratuitos de OpenFreeMap (OpenStreetMap).
 ///
-/// Manzanas de techos oscuros (textura `map_roofs`), plazas de copas de árboles
-/// (`map_canopy`), calles como bandas grises con cordón claro y línea central
-/// punteada en avenidas, nombres de calle en mayúsculas espaciadas a lo largo de
-/// la línea, nombres de plazas centrados y estaciones de subte con una "M".
+/// Orden de abajo hacia arriba:
+/// 1. Respaldo vectorial texturado (se ve si la imagen satelital no carga: sin
+///    red, servidor bloqueado o fuera de cobertura): manzanas de techos oscuros
+///    (textura `map_roofs`), plazas de copas de árboles (`map_canopy`), calles
+///    grises con línea central punteada en avenidas.
+/// 2. Imagen satelital ([satelliteTiles], Esri World Imagery por defecto),
+///    desaturada y oscurecida (`raster-saturation`/`raster-brightness-max`).
+///    Donde una tesela no llega, queda a la vista el respaldo.
+/// 3. Cordones finos de las calles, nombres de calle en mayúsculas espaciadas a
+///    lo largo de la línea, plazas y lugares destacados ("TEATRO COLÓN").
 ///
 /// Las capas con `fill-pattern`/íconos se agregan en tiempo de ejecución
 /// (`GameMap._addBaseOverlays`), recién después de registrar las imágenes con
@@ -20,11 +26,26 @@ import 'dart:convert';
 abstract final class SuturaMapStyle {
   static const source = 'openmaptiles';
 
+  static const satelliteSource = 'zc-sat';
+
+  /// Teselas satelitales (`{z}/{y}/{x}`). Vacío = sin imagen satelital (solo el
+  /// estilo vectorial). Se puede cambiar al compilar:
+  /// `--dart-define=SATELLITE_TILES=https://.../{z}/{y}/{x}`.
+  static const satelliteTiles = String.fromEnvironment(
+    'SATELLITE_TILES',
+    defaultValue: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  );
+  static const satelliteAttribution = 'Imagery © Esri, Maxar, Earthstar Geographics';
+
   // Capas base de referencia para insertar overlays.
   static const waterLayer = 'water';
   static const buildingEdgeLayer = 'building-edge';
-  static const roadCasingLayer = 'road-casing';
   static const roadLayer = 'road';
+  static const satelliteLayer = 'satellite';
+
+  /// Cordones: dos líneas finas a los lados de cada calle (`line-gap-width`),
+  /// por encima de la imagen satelital. Las habitaciones escaneadas van debajo.
+  static const roadCasingLayer = 'road-outline';
   static const labelLayer = 'road-label';
 
   // Imágenes registradas en tiempo de ejecución.
@@ -38,15 +59,18 @@ abstract final class SuturaMapStyle {
   static const coast = '#1F2B31';
   static const canopyFallback = '#141B16';
   static const buildingFallback = '#1E2022';
-  static const casing = '#56595B';
   static const roadMinor = '#2F3234';
   static const roadMajor = '#3A3D3F';
   static const centerLine = '#A9ABAC';
   static const path = '#45484A';
   static const rail = '#5C5F61';
-  static const label = '#C4C7C8';
-  static const labelDim = '#9DA2A4';
-  static const halo = '#111213';
+  static const outline = '#B9BDBF';
+  static const label = '#CFD2D3';
+  static const labelDim = '#A9AEB0';
+  static const halo = '#0E0F10';
+
+  /// Clases de `poi` que se rotulan como lugares destacados ("TEATRO COLÓN").
+  static const landmarkClasses = ['theatre', 'museum', 'attraction', 'monument', 'stadium', 'castle'];
 
   static const majorClasses = ['primary', 'secondary', 'trunk', 'motorway'];
   static const roadClasses = ['minor', 'service', 'tertiary', 'primary', 'secondary', 'trunk', 'motorway'];
@@ -125,6 +149,14 @@ abstract final class SuturaMapStyle {
             'url': 'https://tiles.openfreemap.org/planet',
             'attribution': '© OpenStreetMap · OpenFreeMap',
           },
+          if (satelliteTiles.isNotEmpty)
+            satelliteSource: {
+              'type': 'raster',
+              'tiles': [satelliteTiles],
+              'tileSize': 256,
+              'maxzoom': 19,
+              'attribution': satelliteAttribution,
+            },
         },
         'layers': [
           {'id': 'bg', 'type': 'background', 'paint': {'background-color': bg}},
@@ -168,24 +200,6 @@ abstract final class SuturaMapStyle {
             'source-layer': 'building',
             'minzoom': 15,
             'paint': {'line-color': '#34383B', 'line-width': 0.8, 'line-opacity': 0.75},
-          },
-          // Cordón: banda apenas más ancha y clara debajo de la calzada.
-          {
-            'id': roadCasingLayer,
-            'type': 'line',
-            'source': source,
-            'source-layer': 'transportation',
-            'filter': [
-              'all',
-              ['match', ['get', 'class'], roadClasses, true, false],
-              _notTunnel,
-            ],
-            'layout': {'line-cap': 'round', 'line-join': 'round'},
-            'paint': {
-              'line-color': casing,
-              'line-width': _scaled(_w16(), add: 2.2),
-              'line-opacity': ['match', ['get', 'class'], 'service', 0.5, 0.9],
-            },
           },
           {
             'id': roadLayer,
@@ -236,6 +250,39 @@ abstract final class SuturaMapStyle {
               'line-dasharray': [4, 3],
             },
           },
+          // Imagen satelital: tapa el respaldo vectorial donde carga.
+          if (satelliteTiles.isNotEmpty)
+            {
+              'id': satelliteLayer,
+              'type': 'raster',
+              'source': satelliteSource,
+              'paint': {
+                'raster-saturation': -0.85,
+                'raster-brightness-max': 0.45,
+                'raster-contrast': 0.1,
+                'raster-fade-duration': 250,
+              },
+            },
+          // Cordones finos a ambos lados de la calzada (sobre la imagen).
+          {
+            'id': roadCasingLayer,
+            'type': 'line',
+            'source': source,
+            'source-layer': 'transportation',
+            'minzoom': 13,
+            'filter': [
+              'all',
+              ['match', ['get', 'class'], roadClasses, true, false],
+              _notTunnel,
+            ],
+            'layout': {'line-cap': 'butt', 'line-join': 'round'},
+            'paint': {
+              'line-color': outline,
+              'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.5, 17, 1],
+              'line-gap-width': _scaled(_w16()),
+              'line-opacity': ['match', ['get', 'class'], majorClasses, 0.3, 'service', 0.1, 0.2],
+            },
+          },
           {
             'id': labelLayer,
             'type': 'symbol',
@@ -248,38 +295,54 @@ abstract final class SuturaMapStyle {
               'symbol-spacing': 320,
               'text-field': streetName,
               'text-transform': 'uppercase',
-              'text-font': ['Noto Sans Bold'],
-              'text-size': ['interpolate', ['linear'], ['zoom'], 15, 9.5, 18, 12],
-              'text-letter-spacing': 0.28,
+              'text-font': ['Noto Sans Regular'],
+              'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 18, 12.5],
+              'text-letter-spacing': 0.3,
               'text-max-angle': 28,
               'text-padding': 6,
             },
             'paint': {
               'text-color': ['match', ['get', 'class'], majorClasses, label, labelDim],
               'text-halo-color': halo,
-              'text-halo-width': 1.6,
-              'text-halo-blur': 0.5,
+              'text-halo-width': 1.4,
+              'text-halo-blur': 0.6,
             },
           },
-          // Nombres de plazas, centrados (las estaciones de subte van aparte: usan un ícono).
+          // Plazas (centradas) y lugares destacados con un punto debajo
+          // ("TEATRO / COLÓN / •"). Las estaciones de subte van aparte: usan un ícono.
           {
-            'id': 'park-label',
+            'id': 'poi-label',
             'type': 'symbol',
             'source': source,
             'source-layer': 'poi',
             'minzoom': 15,
-            'filter': ['all', ['==', ['get', 'class'], 'park'], ['has', 'name']],
+            'filter': [
+              'all',
+              ['has', 'name'],
+              ['match', ['get', 'class'], ['park', ...landmarkClasses], true, false],
+            ],
             'layout': {
-              'text-field': ['coalesce', ['get', 'name:es'], ['get', 'name'], ''],
+              'text-field': [
+                'let',
+                'n',
+                ['coalesce', ['get', 'name:es'], ['get', 'name'], ''],
+                ['case', ['==', ['get', 'class'], 'park'], ['var', 'n'], ['concat', ['var', 'n'], '\n•']],
+              ],
               'text-transform': 'uppercase',
               'text-font': ['Noto Sans Regular'],
-              'text-size': 10,
+              'text-size': ['match', ['get', 'class'], 'park', 10, 10.5],
               'text-letter-spacing': 0.32,
               'text-max-width': 6.5,
               'text-line-height': 1.35,
-              'text-padding': 6,
+              'text-padding': 8,
+              'symbol-sort-key': ['coalesce', ['get', 'rank'], 99],
             },
-            'paint': {'text-color': '#A7ACAF', 'text-halo-color': halo, 'text-halo-width': 1.5},
+            'paint': {
+              'text-color': ['match', ['get', 'class'], 'park', '#A9AEB1', '#BCC0C2'],
+              'text-halo-color': halo,
+              'text-halo-width': 1.4,
+              'text-halo-blur': 0.6,
+            },
           },
           // Barrios: solo con el mapa alejado.
           {
