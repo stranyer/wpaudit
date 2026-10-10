@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../core/core.dart';
@@ -22,7 +24,7 @@ class WorldController extends ChangeNotifier {
   // ---- Escáner ----
   static const scanRadiusM = 250.0;
   static const nearRadiusM = 70.0;
-  static const revealMs = 120000;
+  static const revealMs = 180000;
   static const scanCooldownMs = 45000;
   static const scanDurationMs = 1400;
 
@@ -40,10 +42,50 @@ class WorldController extends ChangeNotifier {
   final Map<String, LatLng> _placed = {};
   final Set<String> _discarded = {};
 
+  // ---- Deambular: los infectados caminan despacio por la calle ----
+  final Map<String, ({double dx, double dy, double amp, double speed, double phase})> _wander = {};
+
+  /// Posición actual de un spawn. Los infectados deambulan de ida y vuelta a lo
+  /// largo de su calle (determinista: todos los jugadores lo ven igual).
+  LatLng positionAt(Spawn s, int now) {
+    if (s is! ZombieSpawn) return s.position;
+    final w = _wander[s.id] ??= _wanderOf(s);
+    final t = now / 1000.0;
+    final period = 4 * w.amp / w.speed;
+    final k = math.sin(2 * math.pi * (t / period + w.phase));
+    return offsetM(s.position, w.dy * w.amp * k, w.dx * w.amp * k);
+  }
+
+  ({double dx, double dy, double amp, double speed, double phase}) _wanderOf(ZombieSpawn s) {
+    final rng = createRng('wander:${s.id}');
+    final speed = switch (s.zombieType) {
+      ZombieTypeId.runner => rng.range(0.7, 1.1),
+      ZombieTypeId.brute || ZombieTypeId.bloater => rng.range(0.18, 0.3),
+      _ => rng.range(0.25, 0.45),
+    };
+    var angle = rng.range(0, 2 * math.pi);
+    // Si hay calles, camina a lo largo del tramo más cercano.
+    final data = placementSource?.call();
+    if (data != null && data.walkable.isNotEmpty) {
+      double best = double.infinity;
+      for (final (a, b) in data.walkable) {
+        final mid = LatLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2);
+        final d = haversineM(mid, s.position);
+        if (d < best) {
+          best = d;
+          final north = haversineM(LatLng(a.lat, a.lng), LatLng(b.lat, a.lng)) * (b.lat >= a.lat ? 1 : -1);
+          final east = haversineM(LatLng(a.lat, a.lng), LatLng(a.lat, b.lng)) * (b.lng >= a.lng ? 1 : -1);
+          angle = math.atan2(north, east);
+        }
+      }
+    }
+    return (dx: math.cos(angle), dy: math.sin(angle), amp: rng.range(14, 34), speed: speed, phase: rng.range(0, 1));
+  }
+
   int scanCooldownLeft(int now) => (lastScanAt + scanCooldownMs - now).clamp(0, scanCooldownMs);
 
   SpawnVisibility visibilityOf(Spawn s, LatLng? player, int now) {
-    if (player != null && haversineM(player, s.position) <= nearRadiusM) return SpawnVisibility.near;
+    if (player != null && haversineM(player, positionAt(s, now)) <= nearRadiusM) return SpawnVisibility.near;
     final until = _revealedUntil[s.id];
     if (until == null) return SpawnVisibility.hidden;
     return now < until ? SpawnVisibility.revealed : SpawnVisibility.echo;
@@ -53,7 +95,7 @@ class WorldController extends ChangeNotifier {
   int revealDelayOf(Spawn s) {
     final o = lastScanOrigin;
     if (o == null) return 0;
-    final d = haversineM(o, s.position);
+    final d = haversineM(o, positionAt(s, lastScanAt));
     return (d / scanRadiusM * scanDurationMs).round();
   }
 
@@ -63,7 +105,7 @@ class WorldController extends ChangeNotifier {
     lastScanAt = now;
     lastScanOrigin = origin;
     for (final s in spawns) {
-      if (haversineM(origin, s.position) <= scanRadiusM) _revealedUntil[s.id] = now + revealMs;
+      if (haversineM(origin, positionAt(s, now)) <= scanRadiusM) _revealedUntil[s.id] = now + revealMs;
     }
     for (final z in zones) {
       final c = LatLng((z.bounds.sw.lat + z.bounds.ne.lat) / 2, (z.bounds.sw.lng + z.bounds.ne.lng) / 2);
@@ -122,6 +164,7 @@ class WorldController extends ChangeNotifier {
       final pos = placePoint(s.position, data, gameConfig.snapMaxDistanceM);
       if (pos != null) {
         _placed[s.id] = pos;
+        _wander.remove(s.id);
         next.add(s.withPlacement(pos, PlacementState.snapped));
       } else {
         _discarded.add(s.id);

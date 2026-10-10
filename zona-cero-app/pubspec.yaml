@@ -64,6 +64,9 @@ flutter:
     - assets/art/items/
     - assets/art/bg/
     - assets/art/tex/
+    - assets/art/avatars/
+    - assets/art/fp/
+    - assets/audio/
 
   fonts:
     - family: Oswald
@@ -92,6 +95,9 @@ flutter:
         - asset: assets/fonts/CourierPrime-400.ttf
         - asset: assets/fonts/CourierPrime-700.ttf
           weight: 700
+    - family: Handwritten
+      fonts:
+        - asset: assets/fonts/CoveredByYourGrace-400.ttf
     - family: SpecialElite
       fonts:
         - asset: assets/fonts/SpecialElite-400.ttf

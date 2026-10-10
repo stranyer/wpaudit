@@ -458,7 +458,7 @@ class AppState extends ChangeNotifier {
       action: InteractionAction.encounter,
       targetId: spawn.id,
       targetExpiresAt: spawn.expiresAt,
-      targetPosition: spawn.position,
+      targetPosition: world.positionAt(spawn, now),
       playerPosition: f.position,
       accuracyM: f.accuracyM,
       timestamp: now,
@@ -619,6 +619,12 @@ class AppState extends ChangeNotifier {
     final f = _fix;
     return f == null ? null : haversineM(f.position, target);
   }
+
+  /// Distancia actual a un spawn (los infectados deambulan).
+  double? distanceToSpawn(Spawn s) => distanceTo(world.positionAt(s, now));
+
+  /// ¿Está al alcance? (usa la posición actual del spawn).
+  bool isNearSpawn(Spawn s) => isNear(world.positionAt(s, now));
 
   bool isNear(LatLng target) {
     final f = _fix;

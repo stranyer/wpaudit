@@ -30,7 +30,7 @@ class DistressSignal {
 const signalWindowMs = 45 * 60 * 1000;
 
 /// Probabilidad de que una celda emita una señal en la ventana actual.
-const signalCellChance = 0.14;
+const signalCellChance = 0.22;
 
 /// XP por responder una señal.
 const signalXp = 35;

@@ -37,6 +37,9 @@ abstract final class Sutura {
   static const amber = Color(0xFFD9A233);
   static const amberDeep = Color(0xFF4A3510);
 
+  /// Verde refugio: nodos de la red, lugares seguros.
+  static const refuge = Color(0xFF7FC46B);
+
   // Estados (ECG)
   static const fine = Color(0xFF7DCB76);
   static const caution = Color(0xFFE0B83E);
@@ -60,6 +63,9 @@ abstract final class Sutura {
   static const fPaper = 'CourierPrime';
   static const fStamp = 'SpecialElite';
   static const fLogo = 'Oswald';
+
+  /// Notas a mano (marcador sobre papel/pared).
+  static const fHand = 'Handwritten';
 
   // Movimiento
   static const snap = Duration(milliseconds: 90);

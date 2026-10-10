@@ -44,7 +44,11 @@ class GrungeTitle extends StatelessWidget {
     this.maxLines = 2,
     this.textAlign,
     this.wear = 1,
+    this.firstColor,
   });
+
+  /// Color de la primera letra (logo: "Z" roja).
+  final Color? firstColor;
 
   final String text;
   final double size;
@@ -59,8 +63,15 @@ class GrungeTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Text(
-      text.toUpperCase(),
+    final upper = text.toUpperCase();
+    final t = Text.rich(
+      TextSpan(children: [
+        if (firstColor != null && upper.isNotEmpty) ...[
+          TextSpan(text: upper.substring(0, 1), style: TextStyle(color: firstColor)),
+          TextSpan(text: upper.substring(1)),
+        ] else
+          TextSpan(text: upper),
+      ]),
       maxLines: maxLines,
       overflow: TextOverflow.ellipsis,
       textAlign: textAlign,
@@ -536,4 +547,170 @@ Future<void> precacheGrit(BuildContext context) async {
     for (final id in ItemId.values) precacheImage(AssetImage(ItemArt.assetFor(id)), context).catchError((_) {}),
   ];
   await Future.wait(futures);
+}
+
+
+/// Logo de la app: "ZONA CERO" gastado con la Z roja, subtítulo y lema vertical
+/// ("UNA CIUDAD TODAVÍA RESPIRA").
+class ZcLogo extends StatelessWidget {
+  const ZcLogo({super.key, this.subtitle = 'VITA-7  //  PROTOCOLO SUTURA', this.size = 40, this.tagline = true});
+
+  final String subtitle;
+  final double size;
+  final bool tagline;
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GrungeTitle('Zona cero', size: size, maxLines: 1, firstColor: Sutura.accent, letterSpacing: size * 0.05),
+              const SizedBox(height: 2),
+              Text(subtitle, style: SuturaText.label.copyWith(fontSize: size * 0.3, letterSpacing: size * 0.075, color: Sutura.textMid)),
+            ],
+          ),
+          if (tagline) ...[
+            Container(width: 1, margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2), color: Sutura.lineStrong),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final w in const ['UNA', 'CIUDAD', 'TODAVÍA', 'RESPIRA'])
+                  Text(w, style: SuturaText.label.copyWith(fontSize: size * 0.2, letterSpacing: size * 0.05, color: Sutura.textLow, height: 1.35)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Nota escrita a mano (marcador gastado), levemente inclinada.
+class HandNote extends StatelessWidget {
+  const HandNote(this.text, {super.key, this.size = 15, this.angle = -0.12, this.color = const Color(0xFF8F8C86), this.underline});
+
+  final String text;
+  final double size;
+  final double angle;
+  final Color color;
+
+  /// Subrayado a mano (p. ej. rojo).
+  final Color? underline;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Text(
+      text.toUpperCase(),
+      textAlign: TextAlign.left,
+      style: TextStyle(fontFamily: Sutura.fHand, fontSize: size, height: 1.05, letterSpacing: 1.2, color: color),
+    );
+    return Transform.rotate(
+      angle: angle,
+      child: underline == null
+          ? t
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                t,
+                SizedBox(width: size * 3.2, height: size * 0.45, child: CustomPaint(painter: _ScribblePainter(underline!))),
+              ],
+            ),
+    );
+  }
+}
+
+class _ScribblePainter extends CustomPainter {
+  _ScribblePainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    final p = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, s.height * 0.7)
+        ..quadraticBezierTo(s.width * 0.45, s.height * 0.2, s.width, s.height * 0.45),
+      p,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ScribblePainter old) => old.color != color;
+}
+
+/// Pestañas de texto con subrayado rojo (como "OBJETOS / TALLER" en la referencia).
+class LineTabs extends StatelessWidget {
+  const LineTabs({super.key, required this.labels, required this.index, required this.onChanged, this.height = 52});
+
+  final List<String> labels;
+  final int index;
+  final ValueChanged<int> onChanged;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: Stack(
+        children: [
+          const Positioned(left: 0, right: 0, bottom: 0, child: SizedBox(height: 1, child: ColoredBox(color: Sutura.lineHair))),
+          Row(
+            children: [
+              for (final (i, l) in labels.indexed) ...[
+                if (i > 0) Container(width: 1, margin: const EdgeInsets.symmetric(vertical: 12), color: Sutura.lineStrong),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (i != index) HapticFeedback.selectionClick();
+                    onChanged(i);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          l.toUpperCase(),
+                          style: TextStyle(
+                            fontFamily: Sutura.fUi,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 20,
+                            letterSpacing: 3.2,
+                            color: i == index ? Sutura.textHi : Sutura.textLow,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        AnimatedContainer(
+                          duration: Sutura.fast,
+                          width: i == index ? 92 : 0,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: Sutura.accent,
+                            boxShadow: i == index ? const [BoxShadow(color: Color(0x99C8322B), blurRadius: 8)] : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
