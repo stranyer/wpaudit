@@ -52,7 +52,8 @@ class ProfileScreen extends StatelessWidget {
         final kills = p.stats.zombiesKilled.values.fold(0, (a, b) => a + b);
         return TabScreenFrame(
           title: 'Perfil',
-          code: 'CREDENCIAL DE ENLACE // ${app.badge}',
+          code: 'CREDENCIAL  //  ${app.badge}',
+          note: 'Todavía respiramos',
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 28),
             children: [

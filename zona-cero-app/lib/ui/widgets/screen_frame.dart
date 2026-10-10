@@ -3,14 +3,44 @@ import 'package:flutter/material.dart';
 import '../theme/tokens.dart';
 import 'grit.dart';
 
-/// Marco común de las pestañas: encabezado en panel de metal con la esquina
-/// superior derecha cortada (código chico + título gastado + dato a la derecha).
+/// Marco común de las pestañas: el encabezado con el logo (v0.4). El código
+/// de la pestaña va como subtítulo del logo; [title] queda para accesibilidad.
 class TabScreenFrame extends StatelessWidget {
-  const TabScreenFrame({super.key, required this.title, required this.code, this.trailing, required this.child});
+  const TabScreenFrame({super.key, required this.title, required this.code, this.trailing, this.note, required this.child});
 
   final String title;
   final String code;
   final Widget? trailing;
+  final String? note;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: title,
+      container: true,
+      child: LogoScreenFrame(
+        subtitle: code.toUpperCase(),
+        trailing: trailing,
+        note: note,
+        child: Padding(padding: const EdgeInsets.only(top: 10), child: child),
+      ),
+    );
+  }
+}
+
+/// Marco de las pestañas principales (v0.4): logo ZONA CERO arriba a la
+/// izquierda (con el subtítulo de la pestaña), un dato a la derecha y una nota
+/// escrita a mano en un papelito. Fondo abierto, sin panel, como en las
+/// referencias.
+class LogoScreenFrame extends StatelessWidget {
+  const LogoScreenFrame({super.key, this.subtitle = 'VITA-7  //  PROTOCOLO SUTURA', this.trailing, this.note, required this.child});
+
+  final String subtitle;
+  final Widget? trailing;
+
+  /// Nota a mano (p. ej. "MISMAS CALLES OTRA HISTORIA").
+  final String? note;
   final Widget child;
 
   @override
@@ -21,24 +51,21 @@ class TabScreenFrame extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(12, top + 10, 12, 10),
-            child: GritPanel(
-              cuts: const Cuts(topRight: 22),
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            padding: EdgeInsets.fromLTRB(16, top + 12, 10, 0),
+            child: SizedBox(
+              height: 64,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(code.toUpperCase(), maxLines: 1, overflow: TextOverflow.fade, softWrap: false, style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 2.4, color: Sutura.textLow)),
-                        const SizedBox(height: 4),
-                        GrungeTitle(title, size: 36, maxLines: 1),
-                      ],
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: ZcLogo(size: 34, subtitle: subtitle),
                     ),
                   ),
-                  ?trailing,
+                  if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+                  if (note != null) ...[const SizedBox(width: 8), PaperNote(note!)],
                 ],
               ),
             ),
@@ -46,6 +73,77 @@ class TabScreenFrame extends StatelessWidget {
           Expanded(child: child),
         ],
       ),
+    );
+  }
+}
+
+/// Papelito con una nota a mano, inclinado y con borde gastado.
+class PaperNote extends StatelessWidget {
+  const PaperNote(this.text, {super.key, this.maxWidth = 80});
+
+  final String text;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: -0.07,
+      child: Container(
+        constraints: BoxConstraints(minWidth: 48, maxWidth: maxWidth),
+        padding: const EdgeInsets.fromLTRB(5, 4, 5, 5),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0x33FFFFFF), width: 0.7),
+          color: const Color(0x0DFFFFFF),
+        ),
+        child: Text(
+          text.toUpperCase().split(' ').join('\n'),
+          style: const TextStyle(fontFamily: Sutura.fHand, fontSize: 10.5, height: 1.0, letterSpacing: 0.8, color: Color(0xFF8F8C86)),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rótulo de sección con guion ("— EQUIPO ACTUAL"), opcionalmente con un
+/// subtítulo más tenue y un dato a la derecha.
+class DashLabel extends StatelessWidget {
+  const DashLabel(this.text, {super.key, this.sub, this.trailing, this.color = Sutura.textHi});
+
+  final String text;
+  final String? sub;
+  final Widget? trailing;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '—  ${text.toUpperCase()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontFamily: Sutura.fUi, fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: 3, color: color),
+              ),
+              if (sub != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  '—  ${sub!.toUpperCase()}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 2.2, color: Sutura.textLow),
+                ),
+              ],
+            ],
+          ),
+        ),
+        ?trailing,
+      ],
     );
   }
 }

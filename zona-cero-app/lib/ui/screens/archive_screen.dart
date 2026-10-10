@@ -33,7 +33,8 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
         };
         return TabScreenFrame(
           title: 'Archivo',
-          code: 'DESAM // REGISTROS RECUPERADOS',
+          code: 'DESAM  //  ARCHIVO',
+          note: 'Que no se olvide',
           trailing: Text.rich(
             TextSpan(children: [
               TextSpan(text: unlocked.toString().padLeft(2, '0'), style: const TextStyle(color: Sutura.textHi)),

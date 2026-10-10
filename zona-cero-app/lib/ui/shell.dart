@@ -113,11 +113,11 @@ class _NavItem {
 }
 
 const _items = [
-  _NavItem('Mapa', Icons.map_outlined),
+  _NavItem('Mapa', Icons.location_on_outlined),
   _NavItem('Maletín', Icons.work_outline),
   _NavItem('Red', Icons.wifi_tethering),
   _NavItem('Archivo', Icons.description_outlined),
-  _NavItem('Perfil', Icons.person_outline),
+  _NavItem('Perfil', Icons.person),
 ];
 
 /// Altura de la barra de navegación (sin el margen inferior del sistema).
@@ -183,19 +183,17 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? Sutura.textHi : Sutura.textLow;
+    final color = active ? Sutura.textHi : const Color(0xFF8A8781);
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Línea roja superior de la pestaña activa.
+        // Línea blanca corta arriba de la pestaña activa.
         Positioned(
           top: 0,
-          left: 10,
-          right: 10,
           child: AnimatedOpacity(
             duration: Sutura.fast,
             opacity: active ? 1 : 0,
-            child: Container(height: 2, color: Sutura.accent),
+            child: Container(width: 34, height: 2, color: Sutura.textHi),
           ),
         ),
         Column(
@@ -223,9 +221,12 @@ class _NavButton extends StatelessWidget {
             AnimatedContainer(
               duration: Sutura.fast,
               curve: Sutura.easeIn,
-              width: active ? 40 : 0,
+              width: active ? 54 : 0,
               height: 3,
-              color: Sutura.accent,
+              decoration: BoxDecoration(
+                color: Sutura.accent,
+                boxShadow: active ? const [BoxShadow(color: Color(0x99C8322B), blurRadius: 8)] : null,
+              ),
             ),
           ],
         ),

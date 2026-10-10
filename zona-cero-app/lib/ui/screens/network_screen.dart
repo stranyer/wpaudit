@@ -69,7 +69,8 @@ class _NetworkScreenState extends State<NetworkScreen> {
         final shelters = app.world.shelters;
         return TabScreenFrame(
           title: 'Red',
-          code: 'RED DE RELEVO // ${shelters.length} NODOS EN ALCANCE',
+          code: 'RED DE RELEVO  //  ${shelters.length} NODOS',
+          note: 'Nadie se salva solo',
           trailing: SquareIconButton(icon: Icons.sync, size: 36, tooltip: 'Sincronizar', onPressed: () => _load(force: true)),
           child: Column(
             children: [
