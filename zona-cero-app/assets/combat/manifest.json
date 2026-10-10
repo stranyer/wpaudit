@@ -1,0 +1,249 @@
+{
+  "frameWidth": 360,
+  "frameHeight": 480,
+  "fps": 15,
+  "zombies": {
+    "walker": {
+      "idle": {
+        "file": "walker_idle.png",
+        "frames": 12,
+        "loop": true
+      },
+      "attack": {
+        "file": "walker_attack.png",
+        "frames": 10,
+        "loop": false,
+        "impactFrame": 3
+      },
+      "hit": {
+        "file": "walker_hit.png",
+        "frames": 5,
+        "loop": false
+      },
+      "death": {
+        "file": "walker_death.png",
+        "frames": 14,
+        "loop": false,
+        "holdLast": true
+      }
+    },
+    "runner": {
+      "idle": {
+        "file": "runner_idle.png",
+        "frames": 12,
+        "loop": true
+      },
+      "attack": {
+        "file": "runner_attack.png",
+        "frames": 10,
+        "loop": false,
+        "impactFrame": 3
+      },
+      "hit": {
+        "file": "runner_hit.png",
+        "frames": 5,
+        "loop": false
+      },
+      "death": {
+        "file": "runner_death.png",
+        "frames": 14,
+        "loop": false,
+        "holdLast": true
+      }
+    },
+    "bloater": {
+      "idle": {
+        "file": "bloater_idle.png",
+        "frames": 12,
+        "loop": true
+      },
+      "attack": {
+        "file": "bloater_attack.png",
+        "frames": 10,
+        "loop": false,
+        "impactFrame": 3
+      },
+      "hit": {
+        "file": "bloater_hit.png",
+        "frames": 5,
+        "loop": false
+      },
+      "death": {
+        "file": "bloater_death.png",
+        "frames": 14,
+        "loop": false,
+        "holdLast": true
+      }
+    },
+    "screamer": {
+      "idle": {
+        "file": "screamer_idle.png",
+        "frames": 12,
+        "loop": true
+      },
+      "attack": {
+        "file": "screamer_attack.png",
+        "frames": 10,
+        "loop": false,
+        "impactFrame": 3
+      },
+      "hit": {
+        "file": "screamer_hit.png",
+        "frames": 5,
+        "loop": false
+      },
+      "death": {
+        "file": "screamer_death.png",
+        "frames": 14,
+        "loop": false,
+        "holdLast": true
+      },
+      "scream": {
+        "file": "screamer_scream.png",
+        "frames": 10,
+        "loop": false,
+        "peakFrame": 3
+      }
+    },
+    "brute": {
+      "idle": {
+        "file": "brute_idle.png",
+        "frames": 12,
+        "loop": true
+      },
+      "attack": {
+        "file": "brute_attack.png",
+        "frames": 10,
+        "loop": false,
+        "impactFrame": 3
+      },
+      "hit": {
+        "file": "brute_hit.png",
+        "frames": 5,
+        "loop": false
+      },
+      "death": {
+        "file": "brute_death.png",
+        "frames": 14,
+        "loop": false,
+        "holdLast": true
+      },
+      "charge_prepare": {
+        "file": "brute_charge_prepare.png",
+        "frames": 8,
+        "loop": false,
+        "holdLast": true
+      },
+      "charge": {
+        "file": "brute_charge.png",
+        "frames": 10,
+        "loop": false,
+        "impactFrame": 2
+      }
+    }
+  },
+  "background": {
+    "file": "bg_street.jpg",
+    "foreground": "bg_street_fg.png",
+    "width": 720,
+    "height": 1280,
+    "horizonY": 536.3,
+    "camera": {
+      "fovYDeg": 42,
+      "eyeHeightM": 1.6,
+      "focalPx": 1667.26
+    }
+  },
+  "placement": {
+    "walker": {
+      "bgRect": [
+        0,
+        320,
+        720,
+        960
+      ],
+      "scale": 2.0,
+      "distanceM": 4.0,
+      "groundContact": {
+        "x": 360.0,
+        "y": 1203.2
+      },
+      "groundContactInFrame": {
+        "x": 0.5,
+        "y": 0.92
+      }
+    },
+    "runner": {
+      "bgRect": [
+        0,
+        320,
+        720,
+        960
+      ],
+      "scale": 2.0,
+      "distanceM": 4.0,
+      "groundContact": {
+        "x": 360.0,
+        "y": 1203.2
+      },
+      "groundContactInFrame": {
+        "x": 0.5,
+        "y": 0.92
+      }
+    },
+    "bloater": {
+      "bgRect": [
+        0,
+        320,
+        720,
+        960
+      ],
+      "scale": 2.0,
+      "distanceM": 4.0,
+      "groundContact": {
+        "x": 360.0,
+        "y": 1203.2
+      },
+      "groundContactInFrame": {
+        "x": 0.5,
+        "y": 0.92
+      }
+    },
+    "screamer": {
+      "bgRect": [
+        -45,
+        200,
+        810,
+        1080
+      ],
+      "scale": 2.25,
+      "distanceM": 4.0,
+      "groundContact": {
+        "x": 360.0,
+        "y": 1203.2
+      },
+      "groundContactInFrame": {
+        "x": 0.5,
+        "y": 0.9289
+      }
+    },
+    "brute": {
+      "bgRect": [
+        -72,
+        128,
+        864,
+        1152
+      ],
+      "scale": 2.4,
+      "distanceM": 4.8,
+      "groundContact": {
+        "x": 360.0,
+        "y": 1092.0
+      },
+      "groundContactInFrame": {
+        "x": 0.5,
+        "y": 0.8368
+      }
+    }
+  }
+}
