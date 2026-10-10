@@ -25,6 +25,20 @@ npm run dev
 Abrí <http://localhost:5173> y elegí **Modo demo · Buenos Aires** (o "Usar mi ubicación" para GPS real;
 en el navegador el GPS requiere `localhost` o HTTPS).
 
+### Jugar desde el celular por Wi-Fi (red local)
+
+1. Compu y celular conectados a la **misma red Wi-Fi**.
+2. En la compu: `npm run dev:lan`
+3. Vite muestra una línea `Network: https://192.168.x.x:5173/`: abrí **esa dirección** en el celular.
+4. El certificado es autofirmado, así que el navegador avisa "conexión no privada":
+   - Android/Chrome: **Configuración avanzada → Acceder a 192.168.x.x (no seguro)**.
+   - iPhone/Safari: **Mostrar detalles → visitar este sitio web**.
+5. Elegí **Usar mi ubicación** y aceptá el permiso: el GPS real funciona porque la página va por HTTPS.
+
+Si no abre: en Windows, permití Node.js en el firewall para **redes privadas** (lo pregunta la primera
+vez); en macOS, aceptá las conexiones entrantes para `node`. Con `npm run dev` (sin HTTPS) también abre
+por la IP, pero el navegador bloquea el GPS y solo funciona el modo demo.
+
 ### Controles del modo demo
 
 | Acción | Cómo |
@@ -65,6 +79,7 @@ El progreso se guarda solo (localStorage o Supabase).
 | Comando | Qué hace |
 | --- | --- |
 | `npm run dev` | Servidor de desarrollo (Vite) |
+| `npm run dev:lan` | Igual, con HTTPS para abrirlo desde el celular por Wi-Fi con GPS real |
 | `npm run build` | Chequeo de TypeScript + build de producción en `dist/` |
 | `npm run typecheck` | Solo TypeScript |
 | `npm test` | Tests (Vitest) |
