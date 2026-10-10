@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
-import 'caps_title.dart';
-import 'seg_bar.dart';
+import 'grit.dart';
 
-/// Marco común de las pestañas: cabecera de terminal (código + título),
-/// grilla tenue de fondo y contenido.
+/// Marco común de las pestañas: encabezado en panel de metal con la esquina
+/// superior derecha cortada (código chico + título gastado + dato a la derecha).
 class TabScreenFrame extends StatelessWidget {
   const TabScreenFrame({super.key, required this.title, required this.code, this.trailing, required this.child});
 
@@ -17,37 +16,34 @@ class TabScreenFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    return ColoredBox(
-      color: Sutura.void_,
-      child: Stack(
+    return GritBackground(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Positioned.fill(child: RepaintBoundary(child: CustomPaint(painter: FaintGridPainter()))),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(18, top + 14, 18, 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          MicroText(code, color: Sutura.signal),
-                          const SizedBox(height: 4),
-                          CapsTitle(title, size: 22),
-                        ],
-                      ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(12, top + 10, 12, 10),
+            child: GritPanel(
+              cuts: const Cuts(topRight: 22),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(code.toUpperCase(), maxLines: 1, overflow: TextOverflow.fade, softWrap: false, style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 2.4, color: Sutura.textLow)),
+                        const SizedBox(height: 4),
+                        GrungeTitle(title, size: 36, maxLines: 1),
+                      ],
                     ),
-                    ?trailing,
-                  ],
-                ),
+                  ),
+                  ?trailing,
+                ],
               ),
-              const HairDivider(),
-              Expanded(child: child),
-            ],
+            ),
           ),
+          Expanded(child: child),
         ],
       ),
     );
@@ -56,7 +52,7 @@ class TabScreenFrame extends StatelessWidget {
 
 /// Línea fina con un tramo de acento a la izquierda.
 class HairDivider extends StatelessWidget {
-  const HairDivider({super.key, this.accent = Sutura.signal});
+  const HairDivider({super.key, this.accent = Sutura.accent});
 
   final Color accent;
 
@@ -76,7 +72,7 @@ class HairDivider extends StatelessWidget {
 
 /// Rótulo de sección: tick de color + texto mono + línea hasta el borde.
 class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key, this.trailing, this.color = Sutura.signal});
+  const SectionLabel(this.text, {super.key, this.trailing, this.color = Sutura.accent});
 
   final String text;
   final Widget? trailing;
@@ -88,9 +84,9 @@ class SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(top: 22, bottom: 10),
       child: Row(
         children: [
-          Container(width: 3, height: 11, color: color),
-          const SizedBox(width: 8),
-          Text(text.toUpperCase(), style: SuturaText.mono.copyWith(fontSize: 11, letterSpacing: 2.2, color: Sutura.textMid)),
+          Container(width: 4, height: 15, color: color),
+          const SizedBox(width: 10),
+          Text(text.toUpperCase(), style: SuturaText.label.copyWith(fontSize: 14, letterSpacing: 3, color: Sutura.textHi)),
           const SizedBox(width: 10),
           Expanded(child: Container(height: 1, color: Sutura.lineHair)),
           if (trailing != null) ...[const SizedBox(width: 10), trailing!],
@@ -130,7 +126,7 @@ class SegmentTabs extends StatelessWidget {
                   duration: Sutura.fast,
                   padding: scrollable ? const EdgeInsets.symmetric(horizontal: 12) : null,
                   decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: i == index ? Sutura.signal : Sutura.lineHair, width: i == index ? 2 : 1)),
+                    border: Border(bottom: BorderSide(color: i == index ? Sutura.accent : Sutura.lineHair, width: i == index ? 3 : 1)),
                   ),
                   alignment: Alignment.center,
                   child: Row(
@@ -142,7 +138,7 @@ class SegmentTabs extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.fade,
                           softWrap: false,
-                          style: SuturaText.button.copyWith(fontSize: 12.5, letterSpacing: 1.4, color: i == index ? Sutura.signal : Sutura.textLow),
+                          style: SuturaText.button.copyWith(fontSize: 15, letterSpacing: 2.2, color: i == index ? Sutura.textHi : Sutura.textLow),
                         ),
                       ),
                       if ((badges[i] ?? 0) > 0) ...[
@@ -178,7 +174,7 @@ class SegmentTabs extends StatelessWidget {
 
 /// Indicador numérico pequeño (no leídos, pendientes).
 class CountDot extends StatelessWidget {
-  const CountDot(this.count, {super.key, this.color = Sutura.signal});
+  const CountDot(this.count, {super.key, this.color = Sutura.accent});
 
   final int count;
   final Color color;
@@ -191,7 +187,7 @@ class CountDot extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(1)),
       alignment: Alignment.center,
-      child: Text('$count', style: SuturaText.mono.copyWith(fontSize: 10, color: Sutura.void_, height: 1)),
+      child: Text('$count', style: SuturaText.mono.copyWith(fontSize: 10, color: Sutura.textHi, height: 1)),
     );
   }
 }
@@ -208,16 +204,16 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: filled ? color.withValues(alpha: 0.16) : null,
+        color: filled ? color.withValues(alpha: 0.16) : const Color(0x99101214),
         border: Border.all(color: color.withValues(alpha: 0.7)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[Icon(icon, size: 11, color: color), const SizedBox(width: 4)],
-          Text(text.toUpperCase(), style: SuturaText.mono.copyWith(fontSize: 10, letterSpacing: 1.2, color: color, height: 1.1)),
+          Text(text.toUpperCase(), style: SuturaText.label.copyWith(fontSize: 12, letterSpacing: 1.8, color: color, height: 1.1)),
         ],
       ),
     );
@@ -239,11 +235,11 @@ class DataRow2 extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(label.toUpperCase(), style: SuturaText.mono.copyWith(fontSize: 11, color: Sutura.textLow, letterSpacing: 1)),
+          Text(label.toUpperCase(), style: SuturaText.label.copyWith(fontSize: 13, color: Sutura.textMid, letterSpacing: 2)),
           const SizedBox(width: 8),
           const Expanded(child: _Dots()),
           const SizedBox(width: 8),
-          Text(value, style: SuturaText.mono.copyWith(fontSize: 13, color: valueColor)),
+          Text(value, style: SuturaText.number.copyWith(fontSize: 17, color: valueColor)),
         ],
       ),
     );
@@ -311,9 +307,13 @@ class SquareIconButton extends StatelessWidget {
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(color: Sutura.surface1, border: Border.all(color: Sutura.lineStrong)),
+        decoration: BoxDecoration(
+          color: const Color(0xE6141618),
+          border: Border.all(color: Sutura.lineBright),
+          image: const DecorationImage(image: AssetImage(Sutura.texPanel), repeat: ImageRepeat.repeat, scale: 2, opacity: 0.5),
+        ),
         alignment: Alignment.center,
-        child: Icon(icon, size: size * 0.48, color: onPressed == null ? Sutura.textLow : color),
+        child: Icon(icon, size: size * 0.5, color: onPressed == null ? Sutura.textLow : Sutura.textHi),
       ),
     );
     return tooltip == null ? button : Semantics(label: tooltip, button: true, child: button);

@@ -37,44 +37,54 @@ class _ChamferButtonState extends State<ChamferButton> {
 
   (Color fill, Color line, Color text) get _colors {
     final enabled = widget.onPressed != null;
-    if (!enabled) return (Sutura.surface2.withValues(alpha: 0.6), Sutura.lineHair, Sutura.textLow);
+    if (!enabled) return (const Color(0xCC141618), Sutura.lineHair, Sutura.textLow);
     return switch (widget.tone) {
-      ChamferTone.primary => (Sutura.signal.withValues(alpha: 0.14), Sutura.signal, Sutura.signal),
-      ChamferTone.danger => (Sutura.danger.withValues(alpha: 0.16), Sutura.danger, const Color(0xFFFFD9DB)),
-      ChamferTone.amber => (Sutura.amber.withValues(alpha: 0.14), Sutura.amber, Sutura.amber),
-      ChamferTone.ghost => (const Color(0x00000000), Sutura.lineStrong, Sutura.textMid),
-      ChamferTone.neutral => (Sutura.surface2, Sutura.lineStrong, Sutura.textHi),
+      // Rojo de emergencia: acción principal / defensiva destacada.
+      ChamferTone.primary => (const Color(0xFF3A110E), Sutura.accent, const Color(0xFFF2D9D6)),
+      ChamferTone.danger => (const Color(0xFF3A110E), Sutura.danger, const Color(0xFFFFD9DB)),
+      // Ámbar: entregar recursos, recuperar botín.
+      ChamferTone.amber => (const Color(0xFF2E2208), Sutura.amber, Sutura.amber),
+      ChamferTone.ghost => (const Color(0xB0101214), Sutura.lineStrong, Sutura.textMid),
+      ChamferTone.neutral => (const Color(0xE0181A1C), Sutura.lineBright, Sutura.textHi),
     };
   }
 
   @override
   Widget build(BuildContext context) {
     final (fill, line, text) = _colors;
+    final dense = widget.dense;
     final content = Row(
       mainAxisSize: widget.expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (widget.icon != null) ...[
-          Icon(widget.icon, size: widget.dense ? 16 : 18, color: text),
-          SizedBox(width: widget.dense ? 6 : 8),
+          Icon(widget.icon, size: dense ? 18 : 22, color: text),
+          SizedBox(width: dense ? 8 : 12),
         ],
         Flexible(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: widget.icon != null ? CrossAxisAlignment.start : CrossAxisAlignment.center,
             children: [
               Text(
                 widget.label.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: SuturaText.button.copyWith(color: text, fontSize: widget.dense ? 13 : 15),
+                style: SuturaText.button.copyWith(color: text, fontSize: dense ? 14.5 : 18, letterSpacing: dense ? 2.0 : 2.8),
               ),
               if (widget.sublabel != null)
-                Text(widget.sublabel!, style: SuturaText.micro.copyWith(color: text.withValues(alpha: 0.75), fontSize: 9.5)),
+                Text(
+                  widget.sublabel!.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: SuturaText.label.copyWith(color: text.withValues(alpha: 0.7), fontSize: dense ? 10.5 : 12, letterSpacing: 1.6),
+                ),
             ],
           ),
         ),
       ],
     );
+    final glow = widget.onPressed != null && (widget.tone == ChamferTone.primary || widget.tone == ChamferTone.amber);
     return GestureDetector(
       onTapDown: widget.onPressed == null ? null : (_) => setState(() => _down = true),
       onTapCancel: () => setState(() => _down = false),
@@ -90,9 +100,9 @@ class _ChamferButtonState extends State<ChamferButton> {
         transform: Matrix4.translationValues(0, _down ? 1 : 0, 0),
         height: widget.height,
         child: CustomPaint(
-          painter: ChamferPainter(fill: _down ? line.withValues(alpha: 0.28) : fill, line: line),
+          painter: ChamferPainter(fill: _down ? line.withValues(alpha: 0.32) : fill, line: line, glow: glow ? line : null, stroke: 1.4),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: widget.dense ? 12 : 18),
+            padding: EdgeInsets.symmetric(horizontal: dense ? 12 : 18),
             child: Center(child: content),
           ),
         ),
@@ -101,28 +111,35 @@ class _ChamferButtonState extends State<ChamferButton> {
   }
 }
 
-/// Forma con chaflán arriba-izquierda y abajo-derecha.
+/// Forma de botón: rectángulo con la esquina inferior derecha cortada a 45°.
 class ChamferPainter extends CustomPainter {
-  ChamferPainter({required this.fill, required this.line, this.cut = Sutura.chamfer, this.stroke = 1.2});
+  ChamferPainter({required this.fill, required this.line, this.cut = Sutura.chamfer, this.stroke = 1.2, this.glow});
 
   final Color fill;
   final Color line;
   final double cut;
   final double stroke;
+  final Color? glow;
 
   static Path shape(Size s, double c) => Path()
-    ..moveTo(c, 0)
+    ..moveTo(0, 0)
     ..lineTo(s.width, 0)
     ..lineTo(s.width, s.height - c)
     ..lineTo(s.width - c, s.height)
     ..lineTo(0, s.height)
-    ..lineTo(0, c)
     ..close();
 
   @override
   void paint(Canvas canvas, Size size) {
     final path = shape(size, cut);
+    if (glow != null) {
+      canvas.drawPath(path, Paint()
+        ..color = glow!.withValues(alpha: 0.28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 9));
+    }
     canvas.drawPath(path, Paint()..color = fill);
+    // Brillo interior sutil arriba (metal).
+    canvas.drawRect(Rect.fromLTWH(1, 1, size.width - 2, size.height * 0.45), Paint()..color = const Color(0x0DFFFFFF));
     canvas.drawPath(path, Paint()
       ..color = line
       ..style = PaintingStyle.stroke
@@ -130,5 +147,5 @@ class ChamferPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ChamferPainter old) => old.fill != fill || old.line != line || old.cut != cut;
+  bool shouldRepaint(ChamferPainter old) => old.fill != fill || old.line != line || old.cut != cut || old.glow != glow;
 }

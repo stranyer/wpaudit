@@ -139,3 +139,35 @@ class _Near {
 
   bool test(LatLng p) => (p.lat - c.lat).abs() <= _dLat && (p.lng - c.lng).abs() <= _dLng;
 }
+
+/// Nombre del lugar (ciudad, pueblo o barrio) más cercano según los rótulos
+/// `place` de los tiles cargados. Prefiere ciudades/pueblos; si no hay ninguno
+/// en los tiles, el barrio más cercano. En web suele devolver null.
+Future<String?> queryNearestPlace(ml.MapLibreMapController map, LatLng around) async {
+  final List feats;
+  try {
+    feats = await map.querySourceFeatures(SuturaMapStyle.source, 'place', null);
+  } catch (e) {
+    return null;
+  }
+  const towns = {'city', 'town', 'village'};
+  String? best;
+  var bestScore = double.infinity;
+  for (final f in feats) {
+    final p = _props(f);
+    final name = (p['name:es'] ?? p['name'])?.toString();
+    if (name == null || name.isEmpty) continue;
+    final g = _geometry(f);
+    if (g == null || g.type != 'Point') continue;
+    final pts = _points([g.coords]);
+    if (pts.isEmpty) continue;
+    final d = haversineM(around, pts.first);
+    // Una ciudad a 8 km pesa como un barrio a 2 km.
+    final score = towns.contains('${p['class']}') ? d / 4 : d;
+    if (score < bestScore) {
+      bestScore = score;
+      best = name;
+    }
+  }
+  return best;
+}

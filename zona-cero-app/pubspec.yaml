@@ -39,6 +39,7 @@ dependencies:
   flame: ^1.38.2
   supabase_flutter: ^2.18.2
   shared_preferences: ^2.5.6
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
@@ -59,28 +60,29 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/combat/
+    - assets/art/zombies/
+    - assets/art/items/
+    - assets/art/bg/
+    - assets/art/tex/
 
   fonts:
-    - family: Jost
+    - family: Oswald
       fonts:
-        - asset: assets/fonts/Jost-300.ttf
-          weight: 300
-        - asset: assets/fonts/Jost-400.ttf
-          weight: 400
-        - asset: assets/fonts/Jost-500.ttf
+        - asset: assets/fonts/Oswald-500.ttf
           weight: 500
-        - asset: assets/fonts/Jost-600.ttf
+        - asset: assets/fonts/Oswald-600.ttf
           weight: 600
-    - family: BarlowSemiCondensed
+        - asset: assets/fonts/Oswald-700.ttf
+          weight: 700
+    - family: BarlowCondensed
       fonts:
-        - asset: assets/fonts/BarlowSemiCondensed-400.ttf
+        - asset: assets/fonts/BarlowCondensed-400.ttf
           weight: 400
-        - asset: assets/fonts/BarlowSemiCondensed-500.ttf
+        - asset: assets/fonts/BarlowCondensed-500.ttf
           weight: 500
-        - asset: assets/fonts/BarlowSemiCondensed-600.ttf
+        - asset: assets/fonts/BarlowCondensed-600.ttf
           weight: 600
-        - asset: assets/fonts/BarlowSemiCondensed-700.ttf
+        - asset: assets/fonts/BarlowCondensed-700.ttf
           weight: 700
     - family: ShareTechMono
       fonts:
@@ -93,7 +95,3 @@ flutter:
     - family: SpecialElite
       fonts:
         - asset: assets/fonts/SpecialElite-400.ttf
-    - family: Syncopate
-      fonts:
-        - asset: assets/fonts/Syncopate-700.ttf
-          weight: 700

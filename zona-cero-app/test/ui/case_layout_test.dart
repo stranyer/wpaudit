@@ -4,36 +4,21 @@ import 'package:zona_cero/ui/screens/case_screen.dart';
 import 'package:zona_cero/ui/screens/profile_screen.dart';
 
 void main() {
-  group('packAttache', () {
-    test('acomoda sin superposiciones y dentro de las columnas', () {
-      final inv = <ItemId, int>{
-        ItemId.food: 3, ItemId.water: 2, ItemId.medicine: 1, ItemId.wood: 9, ItemId.metal: 4, ItemId.ammo: 10,
-        ItemId.nailBat: 1, ItemId.shotgun: 1, ItemId.pistol: 1, ItemId.riotArmor: 1, ItemId.scrapVest: 1, ItemId.medkit: 2,
-      };
-      final packed = packAttache(inv);
-      expect(packed.items.length, inv.length);
-      final cells = <int>{};
-      for (final it in packed.items) {
-        expect(it.x + it.w, lessThanOrEqualTo(6));
-        for (var dy = 0; dy < it.h; dy++) {
-          for (var dx = 0; dx < it.w; dx++) {
-            expect(cells.add((it.y + dy) * 6 + it.x + dx), isTrue, reason: 'celda ocupada dos veces por ${it.id}');
-          }
-        }
-        expect(it.y + it.h, lessThanOrEqualTo(packed.rows));
-      }
+  group('caseStacks', () {
+    test('lo equipado no ocupa espacio en el inventario', () {
+      final inv = <ItemId, int>{ItemId.food: 3, ItemId.pistol: 1, ItemId.nailBat: 2, ItemId.ammo: 12};
+      const eq = Equipment(melee: ItemId.nailBat, firearm: ItemId.pistol);
+      final stacks = {for (final e in caseStacks(inv, eq)) e.key: e.value};
+      expect(stacks.containsKey(ItemId.pistol), isFalse);
+      expect(stacks[ItemId.nailBat], 1);
+      expect(stacks[ItemId.food], 3);
+      expect(stacks[ItemId.ammo], 12);
     });
 
-    test('las armas van primero y respetan su huella', () {
-      final packed = packAttache({ItemId.food: 1, ItemId.machete: 1});
-      expect(packed.items.first.id, ItemId.machete);
-      expect((packed.items.first.w, packed.items.first.h), (3, 1));
-    });
-
-    test('maletín vacío', () {
-      final packed = packAttache({});
-      expect(packed.items, isEmpty);
-      expect(packed.rows, 0);
+    test('ordena consumibles primero y equipo al final', () {
+      final stacks = caseStacks({ItemId.riotArmor: 1, ItemId.wood: 2, ItemId.medkit: 1, ItemId.food: 1}, const Equipment());
+      expect(stacks.first.key, ItemId.medkit);
+      expect(stacks.last.key, ItemId.riotArmor);
     });
   });
 

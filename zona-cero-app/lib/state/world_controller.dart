@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/core.dart';
+import 'signals.dart';
 
 /// Visibilidad de un punto en el mapa (escáner estilo sonar).
 enum SpawnVisibility { hidden, near, revealed, echo }
@@ -11,6 +12,9 @@ class WorldController extends ChangeNotifier {
   List<Spawn> spawns = const [];
   List<Zone> zones = const [];
   List<Shelter> shelters = const [];
+
+  /// Señales de auxilio activas (siempre visibles: emiten solas).
+  List<DistressSignal> signals = const [];
   bool placementAvailable = false;
   String? selectedId;
   int generatedAt = 0;
@@ -88,9 +92,17 @@ class WorldController extends ChangeNotifier {
     _revealedUntil.removeWhere((id, _) => !next.any((s) => s.id == id));
     spawns = _cleanup(next, depleted, now);
     zones = world.zones;
+    signals = [
+      for (final sig in generateSignals(world.zones, now, worldSeed: gameConfig.worldSeed))
+        if (!depleted.containsKey(sig.id) && sig.expiresAt > now)
+          if (_placed[sig.id] case final pos?) sig.withPosition(pos) else sig,
+    ];
     centerCellId = cellId(cellOf(center));
     generatedAt = now;
-    if (selectedId != null && !spawns.any((s) => s.id == selectedId) && !shelters.any((s) => s.id == selectedId)) {
+    if (selectedId != null &&
+        !spawns.any((s) => s.id == selectedId) &&
+        !shelters.any((s) => s.id == selectedId) &&
+        !signals.any((s) => s.id == selectedId)) {
       selectedId = null;
     }
     _applyPlacementIfPossible();
@@ -115,6 +127,22 @@ class WorldController extends ChangeNotifier {
         _discarded.add(s.id);
       }
     }
+    final nextSignals = <DistressSignal>[];
+    for (final sig in signals) {
+      if (sig.snapped || (inView != null && !inView(sig.position))) {
+        nextSignals.add(sig);
+        continue;
+      }
+      changed = true;
+      final pos = placePoint(sig.position, data, gameConfig.snapMaxDistanceM * 2);
+      if (pos != null) {
+        _placed[sig.id] = pos;
+        nextSignals.add(sig.withPosition(pos));
+      } else {
+        nextSignals.add(sig); // Sin calle cerca: queda donde está (es una transmisión).
+      }
+    }
+    signals = nextSignals;
     if (changed || !placementAvailable) {
       spawns = filterSafeZones(next, [for (final s in shelters) s.position], gameConfig.shelterSafeRadiusM);
       placementAvailable = true;
@@ -167,6 +195,7 @@ class WorldController extends ChangeNotifier {
 
   void removeSpawn(String id) {
     spawns = spawns.where((s) => s.id != id).toList();
+    signals = signals.where((s) => s.id != id).toList();
     if (selectedId == id) selectedId = null;
     notifyListeners();
   }
@@ -180,6 +209,14 @@ class WorldController extends ChangeNotifier {
   Spawn? spawnById(String? id) {
     if (id == null) return null;
     for (final s in spawns) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  DistressSignal? signalById(String? id) {
+    if (id == null) return null;
+    for (final s in signals) {
       if (s.id == id) return s;
     }
     return null;

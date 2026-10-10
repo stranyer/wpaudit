@@ -1,14 +1,12 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 import '../widgets/brackets.dart';
+import '../widgets/grit.dart';
 import '../widgets/chamfer_button.dart';
-import '../widgets/hexagon.dart';
 import '../widgets/holo_in.dart';
-import '../widgets/seg_bar.dart';
 
 /// Arranque de la terminal VITA-7: secuencia de conexión, aviso de seguridad
 /// y elección entre GPS real o simulación.
@@ -26,8 +24,7 @@ class BootScreen extends StatefulWidget {
   State<BootScreen> createState() => _BootScreenState();
 }
 
-class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateMixin {
-  late final AnimationController _net = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..forward();
+class _BootScreenState extends State<BootScreen> {
   final List<String> _log = [];
   Timer? _timer;
   bool _ready = false;
@@ -59,7 +56,6 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
   @override
   void dispose() {
     _timer?.cancel();
-    _net.dispose();
     super.dispose();
   }
 
@@ -74,35 +70,53 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
       color: Sutura.void_,
       child: Stack(
         children: [
-          const Positioned.fill(child: CustomPaint(painter: _GridPainter())),
+          Positioned.fill(
+            child: Image.asset(
+              'assets/art/bg/combat_street.webp',
+              fit: BoxFit.cover,
+              alignment: const Alignment(0, -0.35),
+              color: const Color(0x55000000),
+              colorBlendMode: BlendMode.darken,
+              errorBuilder: (_, _, _) => const CustomPaint(painter: _GridPainter()),
+            ),
+          ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0, 0.35, 0.62, 1],
+                  colors: [Color(0xCC0A0B0C), Color(0x220A0B0C), Color(0xD90A0B0C), Color(0xFF0A0B0C)],
+                ),
+              ),
+            ),
+          ),
           Positioned.fill(
             child: Padding(
               padding: EdgeInsets.fromLTRB(22, pad.top + (compact ? 14 : 28), 22, pad.bottom + (compact ? 12 : 22)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Row(
                     children: [
-                      MicroText('VITA-7 · TERMINAL MÉDICA DE CAMPO'),
-                      MicroText('DESAM / PROTOCOLO SUTURA'),
+                      Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text('VITA-7 · TERMINAL DE CAMPO', style: SuturaText.label.copyWith(fontSize: 11)))),
+                      const Spacer(),
+                      Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text('DESAM / C.A.B.A.', style: SuturaText.label.copyWith(fontSize: 11)))),
                     ],
                   ),
                   SizedBox(height: compact ? 10 : 26),
-                  SizedBox(
-                    height: netH,
-                    child: AnimatedBuilder(
-                      animation: _net,
-                      builder: (context, _) => CustomPaint(painter: _NetworkPainter(_net.value)),
-                    ),
-                  ),
+                  // Espacio para que se vea la calle (y el Obelisco) detrás del logo.
+                  SizedBox(height: netH),
                   SizedBox(height: compact ? 8 : 18),
-                  const FittedBox(
+                  FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text('ZONA CERO', style: TextStyle(fontFamily: Sutura.fLogo, fontWeight: FontWeight.w700, fontSize: 38, letterSpacing: 9, color: Sutura.textHi)),
+                    child: GrungeTitle('Zona cero', size: compact ? 64 : 76, letterSpacing: 6, maxLines: 1),
                   ),
-                  const SizedBox(height: 6),
-                  Center(child: Text('PROTOCOLO SUTURA', style: SuturaText.mono.copyWith(color: Sutura.signal, letterSpacing: 6, fontSize: 12))),
+                  const SizedBox(height: 4),
+                  Center(
+                    child: Text('VITA-7  //  PROTOCOLO SUTURA', style: SuturaText.label.copyWith(color: Sutura.signal, letterSpacing: 4, fontSize: 14)),
+                  ),
                   SizedBox(height: compact ? 10 : 22),
                   Expanded(
                     child: LayoutBuilder(builder: (context, c) {
@@ -125,7 +139,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                                     overflow: TextOverflow.clip,
                                     style: SuturaText.mono.copyWith(
                                       fontSize: 11.5,
-                                      color: i == _lines.length - 1 ? Sutura.signal : Sutura.textMid,
+                                      color: i == _lines.length - 1 ? Sutura.accent : Sutura.textMid,
                                     ),
                                   ),
                                 ),
@@ -143,6 +157,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                       children: [
                         BracketPanel(
                           color: Sutura.amber,
+                          background: const Color(0xE6121415),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -176,7 +191,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                           label: 'Simulación · Buenos Aires',
                           sublabel: 'sin moverte, desde el Obelisco',
                           icon: Icons.gamepad_outlined,
-                          tone: ChamferTone.ghost,
+                          tone: ChamferTone.neutral,
                           height: compact ? 48 : 54,
                           expand: true,
                           onPressed: _ready && !widget.busy ? () => widget.onStart(false) : null,
@@ -212,61 +227,4 @@ class _GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GridPainter oldDelegate) => false;
-}
-
-/// Red de nodos hexagonales que se "suturan" progresivamente.
-class _NetworkPainter extends CustomPainter {
-  _NetworkPainter(this.t);
-  final double t;
-
-  static const _nodes = [
-    Offset(0.5, 0.5),
-    Offset(0.2, 0.25),
-    Offset(0.8, 0.22),
-    Offset(0.14, 0.78),
-    Offset(0.86, 0.76),
-    Offset(0.52, 0.06),
-  ];
-  static const _links = [(0, 1), (0, 2), (0, 3), (0, 4), (1, 5), (2, 5)];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    Offset at(int i) => Offset(_nodes[i].dx * size.width, _nodes[i].dy * size.height);
-    for (final (i, (a, b)) in _links.indexed) {
-      final start = i / _links.length * 0.7;
-      final k = ((t - start) / 0.3).clamp(0.0, 1.0);
-      if (k <= 0) continue;
-      final pa = at(a);
-      final pb = Offset.lerp(pa, at(b), k)!;
-      final paint = Paint()
-        ..color = Sutura.signal.withValues(alpha: 0.7)
-        ..strokeWidth = 1;
-      // Línea punteada (sutura).
-      final len = (pb - pa).distance;
-      final dir = (pb - pa) / (len == 0 ? 1 : len);
-      for (double d = 0; d < len; d += 7) {
-        canvas.drawLine(pa + dir * d, pa + dir * math.min(d + 4, len), paint);
-      }
-    }
-    for (final (i, n) in _nodes.indexed) {
-      final appear = (t * 1.6 - i * 0.12).clamp(0.0, 1.0);
-      if (appear <= 0) continue;
-      final c = Offset(n.dx * size.width, n.dy * size.height);
-      final r = i == 0 ? 22.0 : 12.0;
-      final path = hexPath(c, r * appear);
-      if (i == 0) {
-        canvas.drawPath(path, Paint()
-          ..color = Sutura.signal.withValues(alpha: 0.35)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
-      }
-      canvas.drawPath(path, Paint()..color = Sutura.surface2);
-      canvas.drawPath(path, Paint()
-        ..color = i == 0 ? Sutura.signal : Sutura.lineStrong
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_NetworkPainter old) => old.t != t;
 }

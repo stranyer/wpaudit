@@ -56,7 +56,13 @@ class _ShellState extends State<Shell> {
     if (app.combat != null && app.outcome != null) app.leaveCombat();
   }
 
-  void _openNode(String id) => Navigator.of(context).push(holoRoute<void>(NodeScreen(shelterId: id)));
+  void _openNode(String id) => Navigator.of(context).push(holoRoute<void>(NodeScreen(shelterId: id, onShowOnMap: _showOnMap)));
+
+  /// Selecciona algo del mundo y vuelve al mapa (el mapa centra la cámara en la selección).
+  void _showOnMap(String id) {
+    app.world.select(id);
+    app.ui.goTab(0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,12 +113,15 @@ class _NavItem {
 }
 
 const _items = [
-  _NavItem('Mapa', Icons.explore_outlined),
+  _NavItem('Mapa', Icons.map_outlined),
   _NavItem('Maletín', Icons.work_outline),
-  _NavItem('Red', Icons.hub_outlined),
-  _NavItem('Archivo', Icons.folder_open_outlined),
-  _NavItem('Perfil', Icons.badge_outlined),
+  _NavItem('Red', Icons.wifi_tethering),
+  _NavItem('Archivo', Icons.description_outlined),
+  _NavItem('Perfil', Icons.person_outline),
 ];
+
+/// Altura de la barra de navegación (sin el margen inferior del sistema).
+const navBarHeight = 68.0;
 
 class _NavBar extends StatelessWidget {
   const _NavBar({required this.index, required this.onTap});
@@ -130,14 +139,16 @@ class _NavBar extends StatelessWidget {
         return Container(
           padding: EdgeInsets.only(bottom: bottom),
           decoration: const BoxDecoration(
-            color: Color(0xF205070A),
-            border: Border(top: BorderSide(color: Sutura.lineHair)),
+            color: Color(0xFF0D0E0F),
+            border: Border(top: BorderSide(color: Sutura.lineStrong)),
+            image: DecorationImage(image: AssetImage(Sutura.texPanel), repeat: ImageRepeat.repeat, scale: 2, opacity: 0.5),
           ),
           child: SizedBox(
-            height: 60,
+            height: navBarHeight,
             child: Row(
               children: [
-                for (final (i, it) in _items.indexed)
+                for (final (i, it) in _items.indexed) ...[
+                  if (i > 0) Container(width: 1, margin: const EdgeInsets.symmetric(vertical: 14), color: Sutura.lineHair),
                   Expanded(
                     child: Semantics(
                       selected: i == index,
@@ -153,6 +164,7 @@ class _NavBar extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
               ],
             ),
           ),
@@ -171,19 +183,19 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? Sutura.signal : Sutura.textLow;
+    final color = active ? Sutura.textHi : Sutura.textLow;
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Marca superior de la pestaña activa.
+        // Línea roja superior de la pestaña activa.
         Positioned(
           top: 0,
-          child: AnimatedContainer(
+          left: 10,
+          right: 10,
+          child: AnimatedOpacity(
             duration: Sutura.fast,
-            curve: Sutura.easeIn,
-            width: active ? 26 : 0,
-            height: 2,
-            color: Sutura.signal,
+            opacity: active ? 1 : 0,
+            child: Container(height: 2, color: Sutura.accent),
           ),
         ),
         Column(
@@ -192,19 +204,28 @@ class _NavButton extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Icon(item.icon, size: 21, color: color),
+                Icon(item.icon, size: 26, color: color),
                 if (badge > 0)
                   Positioned(
-                    right: -9,
-                    top: -5,
-                    child: CountDot(badge),
+                    right: -10,
+                    top: -6,
+                    child: CountDot(badge, color: Sutura.accent),
                   ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
             Text(
               item.label.toUpperCase(),
-              style: SuturaText.mono.copyWith(fontSize: 9.5, letterSpacing: 1.4, color: color),
+              style: TextStyle(fontFamily: Sutura.fUi, fontWeight: FontWeight.w600, fontSize: 13, letterSpacing: 2.2, color: color),
+            ),
+            const SizedBox(height: 5),
+            // Subrayado rojo bajo el rótulo (como en la referencia).
+            AnimatedContainer(
+              duration: Sutura.fast,
+              curve: Sutura.easeIn,
+              width: active ? 40 : 0,
+              height: 3,
+              color: Sutura.accent,
             ),
           ],
         ),

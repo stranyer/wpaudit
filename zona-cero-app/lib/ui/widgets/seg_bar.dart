@@ -23,10 +23,10 @@ class SegBar extends StatelessWidget {
             child: AnimatedContainer(
               duration: Sutura.base,
               height: height,
-              color: i < filled ? color : Sutura.lineHair,
+              color: i < filled ? color : const Color(0xFF2A2D30),
             ),
           ),
-          if (i < segments - 1) const SizedBox(width: 2),
+          if (i < segments - 1) const SizedBox(width: 3),
         ],
       ],
     );

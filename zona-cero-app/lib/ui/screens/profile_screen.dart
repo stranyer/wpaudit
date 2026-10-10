@@ -93,7 +93,7 @@ class _Credential extends StatelessWidget {
     final p = player;
     final need = xpToNext(p.level);
     return BracketPanel(
-      color: Sutura.signal,
+      color: Sutura.accent,
       background: Sutura.surface1Solid,
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -112,7 +112,7 @@ class _Credential extends StatelessWidget {
                       gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1B2A30), Color(0xFF0A0F12)]),
                     ),
                     child: Image.asset(
-                      'assets/combat/survivor_portrait.png',
+                      'assets/art/bg/portrait.webp',
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) => const Icon(Icons.person_outline, size: 54, color: Sutura.textLow),
                     ),
@@ -124,7 +124,7 @@ class _Credential extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const MicroText('enlace registrado', color: Sutura.signal),
+                    Text('ENLACE REGISTRADO', style: SuturaText.label.copyWith(fontSize: 11.5, color: Sutura.accent)),
                     const SizedBox(height: 4),
                     CapsTitle(p.name, size: 20),
                     const SizedBox(height: 2),
@@ -134,7 +134,7 @@ class _Credential extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 4,
                       children: [
-                        StatusChip('Grado ${p.level}', color: Sutura.signal, filled: true),
+                        StatusChip('Grado ${p.level}', color: Sutura.accent, filled: true),
                         StatusChip(rankTitle(p.level)),
                         if (p.factionId != null) StatusChip(factionDefs[p.factionId]!.name, color: factionColor(p.factionId)),
                       ],

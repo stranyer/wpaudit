@@ -5,7 +5,6 @@ import '../../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/holo_in.dart';
 import '../widgets/screen_frame.dart';
-import '../widgets/seg_bar.dart';
 
 /// Pestaña ARCHIVO: documentos recuperados (informes, diarios, transmisiones).
 class ArchiveScreen extends StatefulWidget {
@@ -37,7 +36,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
           code: 'DESAM // REGISTROS RECUPERADOS',
           trailing: Text.rich(
             TextSpan(children: [
-              TextSpan(text: unlocked.toString().padLeft(2, '0'), style: const TextStyle(color: Sutura.signal)),
+              TextSpan(text: unlocked.toString().padLeft(2, '0'), style: const TextStyle(color: Sutura.textHi)),
               TextSpan(text: ' / ${loreFiles.length.toString().padLeft(2, '0')}', style: const TextStyle(color: Sutura.textLow)),
             ]),
             style: SuturaText.mono.copyWith(fontSize: 16),
@@ -94,7 +93,7 @@ class _FileRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: open ? Sutura.surface1Solid : Sutura.void_,
             border: Border(
-              left: BorderSide(color: unread ? Sutura.signal : (open ? Sutura.lineStrong : Sutura.lineHair), width: 2),
+              left: BorderSide(color: unread ? Sutura.accent : (open ? Sutura.lineBright : Sutura.lineHair), width: 4),
               top: const BorderSide(color: Sutura.lineHair),
               right: const BorderSide(color: Sutura.lineHair),
               bottom: const BorderSide(color: Sutura.lineHair),
@@ -105,7 +104,7 @@ class _FileRow extends StatelessWidget {
               Icon(
                 open ? _icon(file.category) : Icons.lock_outline,
                 size: 20,
-                color: open ? (unread ? Sutura.signal : Sutura.textMid) : Sutura.textLow,
+                color: open ? (unread ? Sutura.textHi : Sutura.textMid) : Sutura.textLow,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -116,7 +115,7 @@ class _FileRow extends StatelessWidget {
                       children: [
                         Text(file.code, style: SuturaText.mono.copyWith(fontSize: 10.5, color: open ? Sutura.textLow : Sutura.lineStrong, letterSpacing: 1)),
                         const Spacer(),
-                        if (unread) Text('NUEVO', style: SuturaText.mono.copyWith(fontSize: 10, color: Sutura.signal, letterSpacing: 1.5)),
+                        if (unread) Text('NUEVO', style: SuturaText.label.copyWith(fontSize: 12, color: Sutura.accent, letterSpacing: 2.4)),
                       ],
                     ),
                     const SizedBox(height: 3),
@@ -180,7 +179,7 @@ class _LoreReaderState extends State<LoreReader> {
               children: [
                 SquareIconButton(icon: Icons.arrow_back, onPressed: () => Navigator.of(context).pop(), tooltip: 'Volver'),
                 const SizedBox(width: 12),
-                Expanded(child: MicroText('${f.category.label} // ${f.code}', color: Sutura.signal)),
+                Expanded(child: Text('${f.category.label} // ${f.code}'.toUpperCase(), style: SuturaText.label.copyWith(fontSize: 12.5, color: Sutura.textMid))),
               ],
             ),
           ),

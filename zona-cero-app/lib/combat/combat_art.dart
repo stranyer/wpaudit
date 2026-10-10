@@ -1,5 +1,8 @@
-// Carga del arte del combate desde `assets/combat/` con reservas procedurales:
-// si falta el manifiesto, el fondo o una tira, la escena sigue funcionando.
+// Carga del arte del combate: placa de fondo HD (`assets/art/bg/`), recorte HD
+// de la criatura (`assets/art/zombies/`) y su análisis de alfa (rig), más las
+// texturas generadas (atlas de partículas, grano). Nunca falla: si falta la
+// placa usa un fondo procedural y si falta el recorte, una silueta procedural
+// que pasa por el mismo títere.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -10,18 +13,8 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
 import '../core/types.dart';
-import 'combat_manifest.dart';
+import 'cutout_rig.dart';
 import 'procedural_zombie.dart';
-
-/// Una tira de animación cargada.
-class ZombieStrip {
-  ZombieStrip(this.image, this.spec, this.frames);
-  final ui.Image image;
-  final AnimSpec spec;
-
-  /// Rectángulos fuente precalculados (sin asignaciones por cuadro).
-  final List<Rect> frames;
-}
 
 /// Regiones del atlas de partículas.
 abstract final class FxAtlas {
@@ -35,178 +28,79 @@ abstract final class FxAtlas {
 class CombatArt {
   CombatArt._({
     required this.type,
-    required this.manifest,
-    required this.background,
-    required this.proceduralBackground,
-    required this.foreground,
-    required this.strips,
-    required this.placement,
-    required this.bodyInFrame,
-    required this.headsInFrame,
-    required this.headHoldInFrame,
+    required this.plate,
+    required this.proceduralPlate,
+    required this.plateHorizon,
+    required this.cutout,
+    required this.fallbackCutout,
+    required this.rig,
     required this.fxAtlas,
-    required this.procedural,
+    required this.grain,
   });
 
   final ZombieTypeId type;
-  final CombatManifest manifest;
-  final ui.Image background;
-  final bool proceduralBackground;
-  final ui.Image? foreground;
-  final Map<ZombieAnim, ZombieStrip> strips;
-  final ZombiePlacement placement;
 
-  /// Caja del cuerpo en px del cuadro (para la puntería).
-  final Rect bodyInFrame;
+  /// Placa de fondo (calle bajo la lluvia).
+  final ui.Image plate;
+  final bool proceduralPlate;
 
-  /// Caja de la cabeza (px del cuadro) por cuadro de la animación `idle`.
-  /// Vacía = usar la zona de reserva de [headRectOf]. Un solo elemento =
-  /// caja fija (silueta procedural).
-  final List<Rect> headsInFrame;
+  /// Altura del punto de fuga en la placa (fracción).
+  final double plateHorizon;
 
-  /// Cabeza en el último cuadro de `charge_prepare` (pose sostenida).
-  /// `Rect.zero` = no hay cabeza a la vista (el Bruto la esconde al cargar).
-  final Rect? headHoldInFrame;
+  /// Recorte de la criatura (RGBA, fondo transparente).
+  final ui.Image cutout;
+  final bool fallbackCutout;
+  final CutoutRig rig;
   final ui.Image fxAtlas;
 
-  /// Silueta de reserva (si no hay tiras).
-  final ProceduralZombie? procedural;
+  /// Ruido para el grano de película (se repite en mosaico).
+  final ui.Image grain;
 
-  bool get hasSprites => strips.containsKey(ZombieAnim.idle);
-  Size get bgSize => manifest.background.size;
-  Size get frameSize => manifest.frameSize;
-
-  /// Duración de una animación (s), real o procedural.
-  double durationOf(ZombieAnim a) {
-    final s = strips[a];
-    if (s != null) return s.spec.duration(manifest.fps);
-    return ProceduralZombie.durationOf(a);
-  }
-
-  /// Momento del impacto/pico (s) de una animación.
-  double keyTimeOf(ZombieAnim a) {
-    final s = strips[a];
-    final k = s?.spec.keyTime(manifest.fps);
-    if (k != null) return k;
-    return durationOf(a) * 0.55;
-  }
-
-  /// Caja de la cabeza (px del cuadro) para el cuadro `i` de `idle`.
-  Rect? headInFrame(int i) {
-    if (headsInFrame.isEmpty) return null;
-    return headsInFrame[i.clamp(0, headsInFrame.length - 1)];
-  }
+  Size get plateSize => Size(plate.width.toDouble(), plate.height.toDouble());
 
   void dispose() {
-    background.dispose();
-    for (final s in strips.values) {
-      s.image.dispose();
-    }
-    foreground?.dispose();
+    plate.dispose();
+    cutout.dispose();
     fxAtlas.dispose();
+    grain.dispose();
   }
 
-  static const String base = 'assets/combat/';
+  static const plateAsset = 'assets/art/bg/combat_street.webp';
+  static String cutoutAsset(ZombieTypeId type) => 'assets/art/zombies/${type.key}.webp';
 
-  /// Carga todo lo necesario para pelear contra `type`. Nunca falla: ante
-  /// cualquier error usa la reserva procedural correspondiente.
+  /// Carga todo lo necesario para pelear contra `type`.
   static Future<CombatArt> load(ZombieTypeId type, {AssetBundle? bundle}) async {
     final b = bundle ?? rootBundle;
-    Set<String>? known;
-    try {
-      known = (await AssetManifest.loadFromAssetBundle(b)).listAssets().toSet();
-    } catch (_) {
-      known = null; // sin manifiesto de assets: se intenta igual
+    final plateF = _image(b, plateAsset);
+    final cutF = _image(b, cutoutAsset(type));
+    final plate = await plateF;
+    var cut = await cutF;
+    final hints = rigHints[type] ?? const RigHints();
+    CutoutRig? rig = cut == null ? null : await _analyze(cut, hints);
+    var fallback = false;
+    if (rig == null) {
+      cut?.dispose();
+      cut = ProceduralZombie(type).toImage();
+      fallback = true;
+      rig = await _analyze(cut, const RigHints());
     }
-    bool exists(String file) => known == null || known.contains('$base$file');
-
-    var manifest = CombatManifest.fallback;
-    if (exists('manifest.json')) {
-      try {
-        manifest = CombatManifest.tryParse(await b.loadString('${base}manifest.json', cache: false)) ?? CombatManifest.fallback;
-      } catch (_) {
-        manifest = CombatManifest.fallback;
-      }
-    }
-
-    final key = type.key;
-    final specs = manifest.animsFor(key);
-    final bgFile = manifest.background.file;
-    final fgFile = manifest.background.foreground ?? 'bg_street_fg.webp';
-
-    final bgF = exists(bgFile) ? _image(b, '$base$bgFile') : Future<ui.Image?>.value(null);
-    final fgF = exists(fgFile) ? _image(b, '$base$fgFile') : Future<ui.Image?>.value(null);
-    final stripF = {for (final e in specs.entries) e.key: exists(e.value.file) ? _image(b, '$base${e.value.file}') : Future<ui.Image?>.value(null)};
-
-    final bg = await bgF;
-    final fg = await fgF;
-    final strips = <ZombieAnim, ZombieStrip>{};
-    for (final e in stripF.entries) {
-      final img = await e.value;
-      if (img == null) continue;
-      final spec = specs[e.key]!;
-      final cols = spec.columns ?? spec.frames;
-      final rows = (spec.frames / cols).ceil();
-      // Una tira más chica que lo declarado es un error de arte: se ignora.
-      if (img.width < cols * manifest.frameWidth || img.height < rows * manifest.frameHeight) {
-        debugPrint('[combate] ${e.value} no coincide con el manifiesto; se ignora');
-        img.dispose();
-        continue;
-      }
-      strips[e.key] = ZombieStrip(img, spec, [for (var i = 0; i < spec.frames; i++) spec.frameRect(i, manifest.frameWidth, manifest.frameHeight)]);
-    }
-    if (!strips.containsKey(ZombieAnim.idle)) {
-      for (final s in strips.values) {
-        s.image.dispose();
-      }
-      strips.clear();
-    }
-
-    final hasSprites = strips.isNotEmpty;
-    final placement = hasSprites || manifest.placements.containsKey(key)
-        ? manifest.placementFor(key)
-        : (manifest.placements['walker'] ?? CombatManifest.fallback.placementFor(key));
-    final procedural = hasSprites ? null : ProceduralZombie(type, groundInFrame: placement.groundInFrame);
-
-    Rect? body = manifest.bodyBoxes[key];
-    var heads = <Rect>[];
-    if (hasSprites) {
-      final boxes = await _alphaBoxes(strips[ZombieAnim.idle]!, manifest, placement.groundInFrame);
-      body ??= boxes?.body;
-      heads = boxes?.heads ?? const [];
-    } else if (procedural != null) {
-      heads = [procedural.headBox];
-    }
-    Rect? hold;
-    final prep = strips[ZombieAnim.chargePrepare];
-    if (prep != null) {
-      hold = await _lastFrameHead(prep, manifest);
-      // Si "la cabeza" detectada es mucho más ancha que la de reposo, en
-      // realidad es la espalda encorvada: no hay tiro a la cabeza posible.
-      final ref = heads.isEmpty ? null : heads.first;
-      if (hold == null || (ref != null && hold.width > ref.width * 1.6)) hold = Rect.zero;
-    }
-    body ??= procedural?.bodyBox;
-    body ??= Rect.fromLTRB(
-      manifest.frameWidth * 0.33,
-      manifest.frameHeight * 0.17,
-      manifest.frameWidth * 0.67,
-      manifest.frameHeight * placement.groundInFrame,
+    rig ??= CutoutRig(
+      size: Size(cut.width.toDouble(), cut.height.toDouble()),
+      body: Rect.fromLTWH(0, 0, cut.width.toDouble(), cut.height.toDouble()),
+      head: Rect.fromLTWH(cut.width * 0.35, 0, cut.width * 0.3, cut.height * 0.16),
+      feet: Offset(cut.width / 2, cut.height.toDouble()),
+      centroidX: cut.width / 2,
     );
-
     return CombatArt._(
       type: type,
-      manifest: manifest,
-      background: bg ?? buildProceduralBackdrop(manifest.background.size),
-      proceduralBackground: bg == null,
-      foreground: fg,
-      strips: strips,
-      placement: placement,
-      bodyInFrame: body,
-      headsInFrame: heads,
-      headHoldInFrame: hold,
+      plate: plate ?? buildProceduralBackdrop(const Size(720, 1280)),
+      proceduralPlate: plate == null,
+      plateHorizon: plate == null ? 0.42 : 0.39,
+      cutout: cut,
+      fallbackCutout: fallback,
+      rig: rig,
       fxAtlas: buildFxAtlas(),
-      procedural: procedural,
+      grain: buildGrain(),
     );
   }
 
@@ -223,48 +117,38 @@ class CombatArt {
     }
   }
 
-  static Future<Rect?> _lastFrameHead(ZombieStrip strip, CombatManifest m) async {
+  static Future<CutoutRig?> _analyze(ui.Image img, RigHints hints) async {
     try {
-      final data = await strip.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final data = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (data == null) return null;
-      return alphaHeadBox(
-        rgba: data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        imageWidth: strip.image.width,
-        frameWidth: m.frameWidth,
-        frameHeight: m.frameHeight,
-        frame: strip.frames.last,
-      );
-    } catch (_) {
+      return analyzeCutout(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes), img.width, img.height, hints: hints);
+    } catch (e) {
+      debugPrint('[combate] no se pudo analizar el recorte: $e');
       return null;
     }
   }
+}
 
-  static Future<({Rect? body, List<Rect> heads})?> _alphaBoxes(ZombieStrip idle, CombatManifest m, double groundInFrame) async {
-    try {
-      final data = await idle.image.toByteData(format: ui.ImageByteFormat.rawRgba);
-      if (data == null) return null;
-      final rgba = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      final n = idle.frames.length;
-      final pick = {0, n ~/ 3, (2 * n) ~/ 3}.where((i) => i < n).map((i) => idle.frames[i]).toList();
-      final body = alphaBodyBox(
-        rgba: rgba,
-        imageWidth: idle.image.width,
-        frameWidth: m.frameWidth,
-        frameHeight: m.frameHeight,
-        frames: pick,
-        groundInFrame: groundInFrame,
-      );
-      final heads = <Rect>[];
-      for (final f in idle.frames) {
-        final h = alphaHeadBox(rgba: rgba, imageWidth: idle.image.width, frameWidth: m.frameWidth, frameHeight: m.frameHeight, frame: f);
-        if (h == null) return (body: body, heads: const <Rect>[]);
-        heads.add(h);
-      }
-      return (body: body, heads: heads);
-    } catch (_) {
-      return null;
+/// Mosaico de ruido para el grano de película (gris medio ± ruido, con alfa).
+ui.Image buildGrain({int size = 96, int seed = 5}) {
+  final rnd = math.Random(seed);
+  final rec = ui.PictureRecorder();
+  final c = Canvas(rec);
+  final p = Paint();
+  for (var y = 0; y < size; y++) {
+    for (var x = 0; x < size; x++) {
+      final v = rnd.nextDouble();
+      if (v > 0.35 && v < 0.65) continue;
+      final light = v > 0.5;
+      final a = ((light ? v - 0.65 : 0.35 - v) / 0.35 * 255).round().clamp(0, 255);
+      p.color = light ? Color.fromARGB(a, 220, 228, 236) : Color.fromARGB(a, 0, 0, 0);
+      c.drawRect(Rect.fromLTWH(x.toDouble(), y.toDouble(), 1, 1), p);
     }
   }
+  final pic = rec.endRecording();
+  final img = pic.toImageSync(size, size);
+  pic.dispose();
+  return img;
 }
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ Color vitalColor(VitalState s) => switch (s) {
     };
 
 String vitalLabel(VitalState s) => switch (s) {
-      VitalState.fine => 'ESTABLE',
+      VitalState.fine => 'BIEN',
       VitalState.caution => 'PRECAUCIÓN',
       VitalState.cautionHigh => 'PRECAUCIÓN',
       VitalState.danger => 'PELIGRO',

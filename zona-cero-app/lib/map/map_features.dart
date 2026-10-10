@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import '../core/core.dart';
-import 'contour.dart';
 
 /// Constructores de GeoJSON para los overlays del mapa. Funciones puras
 /// (sin Flutter ni maplibre) para poder probarlas y reutilizarlas.
@@ -63,162 +62,24 @@ Json circleCollection(LatLng center, double radiusM) =>
     featureCollection([polygonFeature([circleRing(center, radiusM)], const {})]);
 
 // ---------------------------------------------------------------------------
-// Grilla de 100 m
+// Contagio: un punto por celda infestada (capa de calor = mancha roja difusa)
 // ---------------------------------------------------------------------------
 
-/// Líneas cada `stepM` metros alrededor de la celda del jugador, ancladas a la
-/// esquina SO de la celda (se regeneran al cambiar de celda).
-Json gridCollection(LatLng player, {double stepM = 100, double extentM = 1300}) {
-  final cell = cellOf(player);
-  final anchor = cellBounds(cell).sw;
-  final c = toLocalXY(anchor, cellCenter(cell));
-  final feats = <Json>[];
-  final k0 = ((c.y - extentM) / stepM).floor();
-  final k1 = ((c.y + extentM) / stepM).ceil();
-  for (var k = k0; k <= k1; k++) {
-    final y = k * stepM;
-    feats.add(lineFeature(
-      [fromLocalXY(anchor, XY(c.x - extentM, y)), fromLocalXY(anchor, XY(c.x + extentM, y))],
-      {'major': k % 5 == 0},
-    ));
-  }
-  final m0 = ((c.x - extentM) / stepM).floor();
-  final m1 = ((c.x + extentM) / stepM).ceil();
-  for (var m = m0; m <= m1; m++) {
-    final x = m * stepM;
-    feats.add(lineFeature(
-      [fromLocalXY(anchor, XY(x, c.y - extentM)), fromLocalXY(anchor, XY(x, c.y + extentM))],
-      {'major': m % 5 == 0},
-    ));
-  }
-  return featureCollection(feats);
-}
-
-// ---------------------------------------------------------------------------
-// Contagio: curvas de nivel sobre las zonas infestadas
-// ---------------------------------------------------------------------------
-
-/// Niveles del campo de contagio (0 = limpio, 1 = infestado): halo exterior,
-/// borde del área infestada y núcleo.
-const contagionLevels = [0.18, 0.5, 0.82];
-
-/// Clave estable del conjunto de celdas infestadas (para no recalcular).
+/// Clave estable del conjunto de celdas infestadas (para no reenviar lo mismo).
 String contagionKey(List<Zone> zones) =>
     ([for (final z in zones) if (z.threat == ZoneThreat.infested) z.cellId]..sort()).join(',');
 
-/// Campo escalar = celdas infestadas (1) / limpias (0) suavizado con un desenfoque
-/// casi gaussiano (3 pasadas de caja), más un ruido de baja frecuencia para que
-/// parezca terreno. Se extraen tres isolíneas con marching squares. Devuelve
-/// una sola colección: líneas (`k: 'line'`, `lvl: 0..2`, de afuera hacia
-/// adentro) y el relleno del borde (`k: 'fill'`).
-Json contagionCollection(List<Zone> zones, {double stepM = 10, int blurRadius = 4}) {
-  final infested = [for (final z in zones) if (z.threat == ZoneThreat.infested) z];
-  if (infested.isEmpty) return emptyCollection();
-
-  var minLat = double.infinity, minLng = double.infinity;
-  var maxLat = -double.infinity, maxLng = -double.infinity;
-  for (final z in infested) {
-    minLat = math.min(minLat, z.bounds.sw.lat);
-    minLng = math.min(minLng, z.bounds.sw.lng);
-    maxLat = math.max(maxLat, z.bounds.ne.lat);
-    maxLng = math.max(maxLng, z.bounds.ne.lng);
+/// Centros de las celdas infestadas a menos de `maxM` de `around` (si se da).
+Json infestedHeatCollection(List<Zone> zones, {LatLng? around, double maxM = 2500}) {
+  final feats = <Json>[];
+  for (final z in zones) {
+    if (z.threat != ZoneThreat.infested) continue;
+    final c = cellCenter(parseCellId(z.cellId));
+    if (around != null && haversineM(around, c) > maxM) continue;
+    feats.add(pointFeature(c, const {}));
   }
-  // Margen suficiente para el desenfoque (3 pasadas de radio `blurRadius`).
-  final margin = stepM * (blurRadius * 3 + 3);
-  final origin = offsetM(LatLng(minLat, minLng), -margin, -margin);
-  final ne = toLocalXY(origin, LatLng(maxLat, maxLng));
-  final w = ((ne.x + margin) / stepM).ceil() + 1;
-  final h = ((ne.y + margin) / stepM).ceil() + 1;
-
-  final rects = [
-    for (final z in infested) (toLocalXY(origin, z.bounds.sw), toLocalXY(origin, z.bounds.ne)),
-  ];
-  var field = List<double>.filled(w * h, 0);
-  for (var j = 0; j < h; j++) {
-    final y = j * stepM;
-    for (var i = 0; i < w; i++) {
-      final x = i * stepM;
-      for (final (a, b) in rects) {
-        if (x >= a.x && x <= b.x && y >= a.y && y <= b.y) {
-          field[j * w + i] = 1;
-          break;
-        }
-      }
-    }
-  }
-  for (var pass = 0; pass < 3; pass++) {
-    field = _boxBlur(field, w, h, blurRadius, horizontal: true);
-    field = _boxBlur(field, w, h, blurRadius, horizontal: false);
-  }
-  // Ruido estable (coordenadas absolutas) y borde forzado a 0 para cerrar curvas.
-  final ax = origin.lng * 111320 * math.cos(origin.lat * math.pi / 180);
-  final ay = origin.lat * 110574;
-  for (var j = 0; j < h; j++) {
-    for (var i = 0; i < w; i++) {
-      final k = j * w + i;
-      if (i == 0 || j == 0 || i == w - 1 || j == h - 1) {
-        field[k] = 0;
-        continue;
-      }
-      final v = field[k];
-      if (v > 0.02 && v < 0.98) field[k] = v + _noise(ax + i * stepM, ay + j * stepM) * 0.07;
-    }
-  }
-  final grid = ScalarGrid(w, h, field);
-
-  LatLng toLatLng(GridPoint p) => fromLocalXY(origin, XY(p.x * stepM, p.y * stepM));
-
-  final lineFeats = <Json>[];
-  var edgeRings = <List<GridPoint>>[];
-  for (final (lvl, level) in contagionLevels.indexed) {
-    final rings = <List<GridPoint>>[];
-    for (final l in isoLines(grid, level)) {
-      if (l.points.length < 3) continue;
-      final pts = l.closed ? chaikinClosed(l.points) : l.points;
-      if (l.closed) rings.add(pts);
-      final ll = [for (final p in pts) toLatLng(p)];
-      if (l.closed) ll.add(ll.first);
-      lineFeats.add(lineFeature(ll, {'k': 'line', 'lvl': lvl}));
-    }
-    if (lvl == 1) edgeRings = rings;
-  }
-
-  final polys = ringsToPolygons(edgeRings);
-  return featureCollection([
-    if (polys.isNotEmpty)
-      multiPolygonFeature([
-        for (final poly in polys) [for (final ring in poly) ring.map(toLatLng).toList()],
-      ], const {'k': 'fill'}),
-    ...lineFeats,
-  ]);
+  return featureCollection(feats);
 }
-
-/// Desenfoque de caja separable (suma corrida), con 0 fuera de la grilla.
-List<double> _boxBlur(List<double> src, int w, int h, int r, {required bool horizontal}) {
-  final out = List<double>.filled(w * h, 0);
-  final n = 2 * r + 1;
-  final lines = horizontal ? h : w;
-  final len = horizontal ? w : h;
-  for (var line = 0; line < lines; line++) {
-    int idx(int t) => horizontal ? line * w + t : t * w + line;
-    var sum = 0.0;
-    for (var t = -r; t <= r; t++) {
-      if (t >= 0 && t < len) sum += src[idx(t)];
-    }
-    for (var t = 0; t < len; t++) {
-      out[idx(t)] = sum / n;
-      final add = t + r + 1;
-      final sub = t - r;
-      if (add < len) sum += src[idx(add)];
-      if (sub >= 0) sum -= src[idx(sub)];
-    }
-  }
-  return out;
-}
-
-/// Ruido determinístico de baja frecuencia en [-1, 1] (coordenadas en metros).
-double _noise(double x, double y) =>
-    0.55 * math.sin(x * 0.019 + 1.7 * math.sin(y * 0.011)) + 0.45 * math.sin(y * 0.023 + 1.3 * math.sin(x * 0.013 + 0.6));
 
 // ---------------------------------------------------------------------------
 // Celdas escaneadas (estado de "habitación" estilo survival horror)

@@ -13,7 +13,7 @@ extension LoreCategoryLabel on LoreCategory {
 }
 
 /// Condición de desbloqueo sobre el progreso del jugador.
-enum UnlockStat { always, level, kills, explored, looted, donated, bruteKills, shelters }
+enum UnlockStat { always, level, kills, explored, looted, donated, bruteKills, shelters, signals }
 
 class LoreUnlock {
   const LoreUnlock(this.stat, [this.value = 0]);
@@ -29,6 +29,7 @@ class LoreUnlock {
         UnlockStat.donated => 'Aportá $value recursos a un nodo',
         UnlockStat.bruteKills => 'Neutralizá un Bruto',
         UnlockStat.shelters => 'Suturá tu primer nodo',
+        UnlockStat.signals => value == 1 ? 'Respondé una señal de auxilio' : 'Respondé $value señales de auxilio',
       };
 }
 
@@ -237,5 +238,53 @@ Fin de transmisión. Gracias por caminar.''',
     body: '''Monté la antena en una esquina tranquila, lejos de casa: la terminal no deja instalarla donde vivís, y está bien que así sea.
 
 Escribí la primera línea en la bitácora. La máquina se trabó dos veces. Afuera, a lo lejos, un chillón. Adentro, por primera vez en días, silencio.''',
+  ),
+  LoreFile(
+    id: 'tx-auxilio-1',
+    category: LoreCategory.transmision,
+    code: 'TX/AUX-01',
+    title: 'Señal de auxilio · Balvanera',
+    date: 'Día 4 · 02:17',
+    author: 'Emisión de baja potencia, sin identificar',
+    unlock: LoreUnlock(UnlockStat.signals, 1),
+    stamp: 'INTERCEPTADA',
+    body: '''…si alguien escucha, estamos en el tercer piso. La escalera la tapiamos nosotros, así que no suban por ahí. Hay una soga en el balcón que da a la calle.
+
+Somos cuatro. Tenemos agua para dos días y una radio a pilas que no sabemos cuánto más aguanta.
+
+Dejamos una caja abajo, en el hall, con lo que nos sobra. No es mucho. Si la encontraste, ya sabés que seguimos acá.
+
+Repito. Tercer piso. Seguimos acá.''',
+  ),
+  LoreFile(
+    id: 'tx-auxilio-3',
+    category: LoreCategory.transmision,
+    code: 'TX/AUX-03',
+    title: 'La repetidora de Once',
+    date: 'Día 6 · 19:40',
+    author: 'Repetidora improvisada, frecuencia 146.520',
+    unlock: LoreUnlock(UnlockStat.signals, 3),
+    body: '''Esta repetidora la armamos con piezas de tres radios de taxi y una batería de colectivo. Retransmite cualquier pedido de auxilio que llegue en la banda. No tiene operador.
+
+Si estás escuchando esto es porque respondiste a alguien. Ya sos parte de la red, aunque no tengas terminal.
+
+Regla única de la repetidora: lo que encontrás en un punto de auxilio se reparte. Lo que te sobra, se deja.''',
+  ),
+  LoreFile(
+    id: 'tx-auxilio-6',
+    category: LoreCategory.transmision,
+    code: 'TX/7.3',
+    title: 'Frecuencia siete punto tres',
+    date: 'Día 8 · 04:03',
+    author: 'Voz no identificada, cifrado débil',
+    unlock: LoreUnlock(UnlockStat.signals, 6),
+    stamp: 'CLASIFICADO',
+    body: '''…Ferrán-Kessler sabía que el lote 7 no era estable. Las pruebas en Barracas se suspendieron dos veces y se reanudaron dos veces.
+
+La cepa no "escapó". La sacaron en camionetas sin identificación la madrugada del día cero. Tengo las planillas de despacho.
+
+No voy a decir dónde estoy. Voy a decir dónde están las planillas, cuando sepa que del otro lado hay alguien que no trabaja para ellos.
+
+Fin. Cambio de frecuencia en tres, dos…''',
   ),
 ];

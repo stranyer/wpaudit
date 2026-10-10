@@ -9,6 +9,7 @@ import '../theme/tokens.dart';
 import '../widgets/brackets.dart';
 import '../widgets/caps_title.dart';
 import '../widgets/chamfer_button.dart';
+import '../widgets/grit.dart';
 import '../widgets/hexagon.dart';
 import '../widgets/item_glyph.dart';
 import '../widgets/screen_frame.dart';
@@ -270,7 +271,7 @@ class _BuildNodeCardState extends State<_BuildNodeCard> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(itemIcon(e.key), size: 13, color: Sutura.textMid),
+                      SizedBox(width: 22, height: 22, child: ItemArt(e.key, size: 22, fallbackIcon: itemIcon(e.key))),
                       const SizedBox(width: 5),
                       Text('${itemDefs[e.key]!.name} ${countOf(p.inventory, e.key)}/${e.value}', style: SuturaText.mono.copyWith(fontSize: 11)),
                     ],
@@ -422,7 +423,7 @@ class _RankingTab extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
             decoration: BoxDecoration(
-              color: e.playerId == me ? Sutura.signal.withValues(alpha: 0.08) : null,
+              color: e.playerId == me ? Sutura.accent.withValues(alpha: 0.12) : null,
               border: const Border(bottom: BorderSide(color: Sutura.lineHair)),
             ),
             child: Row(
@@ -439,7 +440,7 @@ class _RankingTab extends StatelessWidget {
                 Expanded(
                   child: Text(
                     e.playerId == me ? '${e.playerName} (vos)' : e.playerName,
-                    style: SuturaText.body.copyWith(color: e.playerId == me ? Sutura.signal : Sutura.textHi, fontSize: 14),
+                    style: SuturaText.body.copyWith(color: e.playerId == me ? Sutura.textHi : Sutura.textHi, fontWeight: e.playerId == me ? FontWeight.w700 : FontWeight.w500, fontSize: 15),
                   ),
                 ),
                 SizedBox(width: 44, child: Text('${e.level}', style: SuturaText.mono.copyWith(color: Sutura.textMid))),

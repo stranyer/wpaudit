@@ -12,6 +12,7 @@ import '../data/supabase_repository.dart';
 import '../data/storage.dart';
 import '../services/location/location_types.dart';
 import 'location_controller.dart';
+import 'signals.dart';
 import 'ui_controller.dart';
 import 'world_controller.dart';
 
@@ -53,6 +54,9 @@ class AppState extends ChangeNotifier {
   LocationMode? lastMode;
   LatLng? demoPosition;
   Set<String> readLore = {};
+
+  /// Señales de auxilio respondidas (desbloquean transmisiones del Archivo).
+  int signalsAnswered = 0;
 
   Timer? _tick;
   Timer? _saveTimer;
@@ -110,6 +114,7 @@ class AppState extends ChangeNotifier {
     final dp = s['demoPosition'];
     demoPosition = dp is Map ? LatLng.fromJson(Map<String, dynamic>.from(dp)) : null;
     readLore = Set<String>.from(s['readLore'] as List? ?? const []);
+    signalsAnswered = (s['signalsAnswered'] as num?)?.toInt() ?? 0;
   }
 
   Future<void> _saveSession() => store.writeJson(_kSession, {
@@ -119,6 +124,7 @@ class AppState extends ChangeNotifier {
         'lastMode': lastMode?.name,
         'demoPosition': demoPosition?.toJson(),
         'readLore': readLore.toList(),
+        'signalsAnswered': signalsAnswered,
       });
 
   /// Cambia el jugador y programa un guardado (con límite de frecuencia).
@@ -391,6 +397,47 @@ class AppState extends ChangeNotifier {
     if (gain.added.isNotEmpty) ui.toast('Recuperado: ${describeItems(gain.added)}', ToastTone.loot);
     if (gain.overflow.isNotEmpty) ui.toast('Maletín lleno: quedó ${describeItems(gain.overflow)}', ToastTone.warn);
     awardXp(def.xp, null);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Señales de auxilio
+  // ---------------------------------------------------------------------------
+
+  /// Responde una señal en el lugar: botín de la caja que dejaron, XP y avance
+  /// en las transmisiones del Archivo. Devuelve el texto de la transmisión.
+  Future<String?> answerSignal(DistressSignal signal) async {
+    final p = player;
+    final f = _fix;
+    if (p == null || f == null) return null;
+    final result = await _net(() => repo.validateInteraction(InteractionRequest(
+          playerId: p.id,
+          action: InteractionAction.scavenge,
+          targetId: signal.id,
+          targetExpiresAt: signal.expiresAt,
+          targetPosition: signal.position,
+          playerPosition: f.position,
+          accuracyM: f.accuracyM,
+          timestamp: now,
+        )));
+    if (result == null) return null;
+    if (!result.ok) {
+      ui.toast((result.reason ?? InteractionRejection.outOfRange).message, ToastTone.warn);
+      if (result.reason == InteractionRejection.depleted || result.reason == InteractionRejection.expired) {
+        _markDepleted(signal.id, signal.expiresAt);
+      }
+      return null;
+    }
+    final loot = rollSupplyLoot(supplyDefs[SupplyTypeId.military]!, createRng('loot:${signal.id}:${p.id}'));
+    final gain = giveItems(player!, loot);
+    setPlayer(gain.player);
+    signalsAnswered++;
+    _markDepleted(signal.id, signal.expiresAt);
+    HapticFeedback.mediumImpact();
+    ui.toast('Señal respondida', ToastTone.network);
+    if (gain.added.isNotEmpty) ui.toast('Recuperado: ${describeItems(gain.added)}', ToastTone.loot);
+    if (gain.overflow.isNotEmpty) ui.toast('Maletín lleno: quedó ${describeItems(gain.overflow)}', ToastTone.warn);
+    awardXp(signalXp, null);
+    return signal.message;
   }
 
   // ---------------------------------------------------------------------------
@@ -699,6 +746,7 @@ class AppState extends ChangeNotifier {
       UnlockStat.donated => p.stats.resourcesDonated >= f.unlock.value,
       UnlockStat.bruteKills => (p.stats.zombiesKilled[ZombieTypeId.brute] ?? 0) >= 1,
       UnlockStat.shelters => ownShelter != null,
+      UnlockStat.signals => signalsAnswered >= f.unlock.value,
     };
   }
 
@@ -722,6 +770,7 @@ class AppState extends ChangeNotifier {
     explored = {};
     walkBuffer = 0;
     readLore = {};
+    signalsAnswered = 0;
     final id = await repo.init();
     setPlayer(createPlayer(id, _randomName(), now));
     ui.toast('Progreso reiniciado.', ToastTone.info);

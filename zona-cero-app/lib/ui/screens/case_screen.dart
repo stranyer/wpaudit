@@ -3,76 +3,38 @@ import 'package:flutter/material.dart';
 import '../../core/core.dart';
 import '../../state/app_state.dart';
 import '../theme/tokens.dart';
-import '../widgets/brackets.dart';
-import '../widgets/caps_title.dart';
 import '../widgets/chamfer_button.dart';
+import '../widgets/grit.dart';
 import '../widgets/item_glyph.dart';
 import '../widgets/screen_frame.dart';
-import '../widgets/seg_bar.dart';
+import '../widgets/weapon_panel.dart';
 
-/// Objeto ubicado en la grilla del maletín.
-class PlacedItem {
-  const PlacedItem(this.id, this.count, this.x, this.y, this.w, this.h);
-  final ItemId id;
-  final int count;
-  final int x, y, w, h;
+/// Espacios del maletín (cada tipo de objeto ocupa uno y se apila).
+const caseSlots = 24;
+
+/// Objetos que se muestran en la grilla: todo menos lo que está equipado
+/// (el equipo aparece arriba, en "EQUIPO ACTUAL").
+List<MapEntry<ItemId, int>> caseStacks(Inventory inv, Equipment eq) {
+  final equipped = {eq.melee, eq.firearm, eq.armor}.whereType<ItemId>().toSet();
+  final out = <MapEntry<ItemId, int>>[];
+  for (final e in entries(inv)) {
+    final n = equipped.contains(e.key) ? e.value - 1 : e.value;
+    if (n > 0) out.add(MapEntry(e.key, n));
+  }
+  int order(ItemId id) => switch (itemDefs[id]!.category) {
+        ItemCategory.consumable => 0,
+        ItemCategory.resource => isConsumable(id) ? 1 : 2,
+        ItemCategory.weapon => 3,
+        ItemCategory.armor => 4,
+      };
+  out.sort((a, b) {
+    final o = order(a.key).compareTo(order(b.key));
+    return o != 0 ? o : a.key.index.compareTo(b.key.index);
+  });
+  return out;
 }
 
-int _packOrder(ItemId id) => switch (itemDefs[id]!.category) {
-      ItemCategory.weapon => 0,
-      ItemCategory.armor => 1,
-      ItemCategory.consumable => 2,
-      ItemCategory.resource => 3,
-    };
-
-/// Acomoda los objetos en una grilla de `cols` columnas (primer hueco libre,
-/// de arriba a la izquierda), como un maletín de survival horror.
-/// Devuelve las ubicaciones y la cantidad de filas usadas.
-({List<PlacedItem> items, int rows}) packAttache(Inventory inv, {int cols = 6}) {
-  final list = entries(inv).toList()
-    ..sort((a, b) {
-      final o = _packOrder(a.key).compareTo(_packOrder(b.key));
-      if (o != 0) return o;
-      final fa = itemFootprint(a.key), fb = itemFootprint(b.key);
-      final area = (fb.w * fb.h).compareTo(fa.w * fa.h);
-      return area != 0 ? area : a.key.index.compareTo(b.key.index);
-    });
-  final occupied = <int>{};
-  bool free(int x, int y, int w, int h) {
-    if (x + w > cols) return false;
-    for (var dy = 0; dy < h; dy++) {
-      for (var dx = 0; dx < w; dx++) {
-        if (occupied.contains((y + dy) * cols + x + dx)) return false;
-      }
-    }
-    return true;
-  }
-
-  final placed = <PlacedItem>[];
-  var rows = 0;
-  for (final e in list) {
-    final f = itemFootprint(e.key);
-    final w = f.w > cols ? cols : f.w;
-    var done = false;
-    for (var y = 0; !done; y++) {
-      for (var x = 0; x + w <= cols; x++) {
-        if (!free(x, y, w, f.h)) continue;
-        for (var dy = 0; dy < f.h; dy++) {
-          for (var dx = 0; dx < w; dx++) {
-            occupied.add((y + dy) * cols + x + dx);
-          }
-        }
-        placed.add(PlacedItem(e.key, e.value, x, y, w, f.h));
-        if (y + f.h > rows) rows = y + f.h;
-        done = true;
-        break;
-      }
-    }
-  }
-  return (items: placed, rows: rows);
-}
-
-/// Pestaña MALETÍN: inventario en grilla, equipo y taller.
+/// Pestaña MALETÍN: equipo, inventario en espacios y taller.
 class CaseScreen extends StatefulWidget {
   const CaseScreen({super.key});
 
@@ -92,32 +54,33 @@ class _CaseScreenState extends State<CaseScreen> {
         if (p == null) return const SizedBox.shrink();
         final carried = carriedWeight(p.inventory);
         final cap = capacityOf(p);
+        final full = carried >= cap;
         return TabScreenFrame(
           title: 'Maletín',
-          code: 'VITA-7 // CARGA Y TALLER',
+          code: 'VITA-7  //  carga y taller',
           trailing: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text.rich(
                 TextSpan(children: [
-                  TextSpan(text: kg(carried), style: TextStyle(color: carried >= cap ? Sutura.danger : Sutura.textHi)),
-                  TextSpan(text: ' / ${kg(cap)} KG', style: const TextStyle(color: Sutura.textLow)),
+                  TextSpan(text: kg(carried), style: TextStyle(color: full ? Sutura.danger : Sutura.textHi)),
+                  const TextSpan(text: '  /  ', style: TextStyle(color: Sutura.textLow)),
+                  TextSpan(text: kg(cap), style: const TextStyle(color: Sutura.textMid)),
+                  const TextSpan(text: ' KG', style: TextStyle(color: Sutura.textMid, fontSize: 16)),
                 ]),
-                style: SuturaText.mono.copyWith(fontSize: 14),
+                style: SuturaText.number.copyWith(fontSize: 22, letterSpacing: 1.5),
               ),
-              const SizedBox(height: 5),
-              SizedBox(
-                width: 110,
-                child: SegBar(value: carried.toDouble(), max: cap.toDouble(), segments: 16, color: carried >= cap ? Sutura.danger : Sutura.amber, height: 4),
-              ),
+              const SizedBox(height: 8),
+              SizedBox(width: 132, child: BlockBar(ratio: carried / cap, segments: 12, height: 6)),
             ],
           ),
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: SegmentTabs(labels: const ['Objetos', 'Taller'], index: _tab, onChanged: (i) => setState(() => _tab = i)),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: GritTabs(labels: const ['Objetos', 'Taller'], index: _tab, onChanged: (i) => setState(() => _tab = i)),
               ),
+              const SizedBox(height: 10),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: Sutura.base,
@@ -144,76 +107,153 @@ class _ItemsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final eq = player.equipment;
-    final packed = packAttache(player.inventory);
+    final stacks = caseStacks(player.inventory, eq);
+    final slots = stacks.length > caseSlots ? stacks.length : caseSlots;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
       children: [
-        const SectionLabel('Equipo'),
+        const SectionHeader('Equipo actual'),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 168,
+          child: Row(
+            children: [
+              Expanded(child: _GearCard(label: 'Cuerpo a cuerpo', id: eq.melee, empty: 'Puños', emptyIcon: Icons.back_hand_outlined)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _GearCard(
+                  label: 'Arma de fuego',
+                  id: eq.firearm,
+                  empty: 'Sin arma',
+                  emptyIcon: Icons.do_not_disturb_alt_outlined,
+                  ammo: eq.firearm == null ? null : countOf(player.inventory, ItemId.ammo),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _GearCard(label: 'Protección', id: eq.armor, empty: 'Sin protección', emptyIcon: Icons.shield_outlined)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        SectionHeader('Inventario', trailing: '${stacks.length} / $slots espacios'),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.92),
+          itemCount: slots,
+          itemBuilder: (context, i) => i < stacks.length ? _SlotTile(id: stacks[i].key, count: stacks[i].value) : const _EmptySlot(),
+        ),
+        const SizedBox(height: 14),
         Row(
           children: [
-            Expanded(child: _SlotCard(label: 'Cuerpo a cuerpo', id: eq.melee, fallback: 'Puños')),
-            const SizedBox(width: 8),
-            Expanded(child: _SlotCard(label: 'Arma de fuego', id: eq.firearm)),
-            const SizedBox(width: 8),
-            Expanded(child: _SlotCard(label: 'Protección', id: eq.armor)),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Sutura.textLow)),
+              alignment: Alignment.center,
+              child: Text('i', style: SuturaText.caption.copyWith(color: Sutura.textMid, fontSize: 13)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Tocá un objeto para usarlo o equiparlo. Lo equipado no pesa.',
+                style: SuturaText.bodyMid.copyWith(letterSpacing: 0.6, color: Sutura.textMid),
+              ),
+            ),
           ],
-        ),
-        SectionLabel('Contenido', trailing: MicroText('${entries(player.inventory).length} tipos')),
-        if (packed.items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: Text('El maletín está vacío.\nEscaneá la zona y recuperá suministros.', textAlign: TextAlign.center, style: SuturaText.bodyMid)),
-          )
-        else
-          _AttacheGrid(packed: packed, equipment: eq),
-        const SizedBox(height: 10),
-        Text(
-          'Tocá un objeto para usarlo o equiparlo. Las armas y protecciones equipadas no pesan.',
-          style: SuturaText.caption.copyWith(color: Sutura.textLow, fontWeight: FontWeight.w500),
         ),
       ],
     );
   }
 }
 
-class _SlotCard extends StatelessWidget {
-  const _SlotCard({required this.label, required this.id, this.fallback});
+class _GearCard extends StatelessWidget {
+  const _GearCard({required this.label, required this.id, required this.empty, required this.emptyIcon, this.ammo});
 
   final String label;
   final ItemId? id;
-  final String? fallback;
+  final String empty;
+  final IconData emptyIcon;
+  final int? ammo;
 
   @override
   Widget build(BuildContext context) {
     final i = id;
-    final color = i == null ? Sutura.lineStrong : itemColor(i);
+    final split = i != null && ammo != null ? ammoSplit(i, ammo!) : null;
     return GestureDetector(
       onTap: i == null ? null : () => showItemSheet(context, i),
-      child: Container(
-        height: 86,
-        padding: const EdgeInsets.all(9),
-        decoration: BoxDecoration(
-          color: Sutura.surface1Solid,
-          border: Border.all(color: i == null ? Sutura.lineHair : color.withValues(alpha: 0.55)),
-        ),
+      child: GritPanel(
+        background: const Color(0xF0111315),
+        corners: i == null ? Sutura.lineStrong : Sutura.accent.withValues(alpha: 0.85),
+        padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            MicroText(label),
-            const Spacer(),
-            Row(
-              children: [
-                Icon(i == null ? Icons.remove : itemIcon(i), size: 18, color: i == null ? Sutura.textLow : color),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    i == null ? (fallback ?? 'Vacío') : itemDefs[i]!.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: SuturaText.caption.copyWith(color: i == null ? Sutura.textLow : Sutura.textHi, fontSize: 12.5, height: 1.1),
-                  ),
-                ),
-              ],
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(label.toUpperCase(), maxLines: 1, style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 1.8))),
+            Expanded(
+              child: Center(
+                child: i == null ? Icon(emptyIcon, size: 34, color: Sutura.textLow) : ItemArt(i, size: 96, fallbackIcon: itemIcon(i)),
+              ),
+            ),
+            Text(
+              i == null ? empty : itemName(i),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: SuturaText.body.copyWith(fontSize: 15, height: 1.1, color: i == null ? Sutura.textLow : Sutura.textHi),
+            ),
+            if (split != null)
+              Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: split.loaded.toString().padLeft(2, '0')),
+                  TextSpan(text: ' / ${split.reserve.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 15, color: Sutura.textMid)),
+                ]),
+                style: SuturaText.number.copyWith(fontSize: 24),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SlotTile extends StatelessWidget {
+  const _SlotTile({required this.id, required this.count});
+
+  final ItemId id;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final rarity = itemDefs[id]!.rarity;
+    return GestureDetector(
+      onTap: () => showItemSheet(context, id),
+      child: GritPanel(
+        background: const Color(0xF0121416),
+        border: rarity.index >= Rarity.rare.index ? itemColor(id).withValues(alpha: 0.6) : Sutura.lineStrong,
+        corners: Sutura.lineBright,
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 5),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              bottom: 16,
+              child: Center(child: ItemArt(id, size: 80, fallbackIcon: itemIcon(id))),
+            ),
+            Positioned(
+              left: 2,
+              right: 22,
+              bottom: 0,
+              child: Text(
+                itemName(id),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: SuturaText.body.copyWith(fontSize: 12.5, height: 1.05, color: Sutura.textHi, shadows: const [Shadow(color: Colors.black, blurRadius: 4)]),
+              ),
+            ),
+            Positioned(
+              right: 2,
+              bottom: 0,
+              child: Text('$count', style: SuturaText.number.copyWith(fontSize: 19, shadows: const [Shadow(color: Colors.black, blurRadius: 4)])),
             ),
           ],
         ),
@@ -222,109 +262,18 @@ class _SlotCard extends StatelessWidget {
   }
 }
 
-class _AttacheGrid extends StatelessWidget {
-  const _AttacheGrid({required this.packed, required this.equipment});
-
-  final ({List<PlacedItem> items, int rows}) packed;
-  final Equipment equipment;
-
-  static const cols = 6;
-  static const gap = 4.0;
-
-  bool _isEquipped(ItemId id) => equipment.melee == id || equipment.firearm == id || equipment.armor == id;
+class _EmptySlot extends StatelessWidget {
+  const _EmptySlot();
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final cell = (c.maxWidth - 16 - gap * (cols - 1)) / cols;
-      final rows = packed.rows < 5 ? 5 : packed.rows + 1;
-      final height = rows * cell + (rows - 1) * gap;
-      return BracketPanel(
-        padding: const EdgeInsets.all(8),
-        color: Sutura.lineStrong,
-        background: const Color(0xFF0B1013),
-        child: SizedBox(
-          height: height,
-          child: Stack(
-            children: [
-              // Celdas vacías del forro del maletín.
-              for (var y = 0; y < rows; y++)
-                for (var x = 0; x < cols; x++)
-                  Positioned(
-                    left: x * (cell + gap),
-                    top: y * (cell + gap),
-                    width: cell,
-                    height: cell,
-                    child: Container(decoration: BoxDecoration(border: Border.all(color: Sutura.lineHair.withValues(alpha: 0.5)))),
-                  ),
-              for (final it in packed.items)
-                Positioned(
-                  left: it.x * (cell + gap),
-                  top: it.y * (cell + gap),
-                  width: it.w * cell + (it.w - 1) * gap,
-                  height: it.h * cell + (it.h - 1) * gap,
-                  child: _ItemTile(item: it, cell: cell, equipped: _isEquipped(it.id)),
-                ),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
-class _ItemTile extends StatelessWidget {
-  const _ItemTile({required this.item, required this.cell, required this.equipped});
-
-  final PlacedItem item;
-  final double cell;
-  final bool equipped;
-
-  @override
-  Widget build(BuildContext context) {
-    final def = itemDefs[item.id]!;
-    final color = itemColor(item.id);
-    final wide = item.w > 1;
-    return GestureDetector(
-      onTap: () => showItemSheet(context, item.id),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Sutura.surface2, Color.lerp(Sutura.surface2, color, 0.08)!],
-          ),
-          border: Border.all(color: equipped ? Sutura.signal : color.withValues(alpha: 0.45), width: equipped ? 1.4 : 1),
-        ),
-        child: Stack(
-          children: [
-            Center(child: Icon(itemIcon(item.id), size: cell * (item.h > 1 ? 0.8 : 0.5), color: color)),
-            if (wide)
-              Positioned(
-                left: 5,
-                top: 4,
-                right: 5,
-                child: Text(def.name.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: SuturaText.micro.copyWith(color: Sutura.textMid, fontSize: 8)),
-              ),
-            if (item.count > 1)
-              Positioned(
-                right: 3,
-                bottom: 1,
-                child: Text('${item.count}', style: SuturaText.mono.copyWith(fontSize: 11, color: Sutura.textHi)),
-              ),
-            if (equipped)
-              Positioned(
-                left: 0,
-                bottom: 0,
-                child: Container(
-                  color: Sutura.signal,
-                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                  child: Text('EQ', style: SuturaText.mono.copyWith(fontSize: 8.5, color: Sutura.void_, height: 1.1)),
-                ),
-              ),
-          ],
-        ),
-      ),
+    return GritPanel(
+      background: const Color(0xC00E1011),
+      border: Sutura.lineHair,
+      corners: Sutura.lineStrong,
+      texture: false,
+      padding: EdgeInsets.zero,
+      child: const Center(child: Icon(Icons.add, size: 22, color: Color(0xFF3A3E41))),
     );
   }
 }
@@ -337,7 +286,7 @@ Future<void> showItemSheet(BuildContext context, ItemId id) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
-    barrierColor: Sutura.void_.withValues(alpha: 0.7),
+    barrierColor: Sutura.void_.withValues(alpha: 0.75),
     isScrollControlled: true,
     builder: (_) => _ItemSheet(id: id),
   );
@@ -358,7 +307,9 @@ class _ItemSheet extends StatelessWidget {
         final count = p == null ? 0 : countOf(p.inventory, id);
         final slot = slotFor(id);
         final eq = p?.equipment;
-        final equipped = slot != null && eq != null && switch (slot) {
+        final equipped = slot != null &&
+            eq != null &&
+            switch (slot) {
               EquipmentSlot.melee => eq.melee == id,
               EquipmentSlot.firearm => eq.firearm == id,
               EquipmentSlot.armor => eq.armor == id,
@@ -368,32 +319,42 @@ class _ItemSheet extends StatelessWidget {
         return SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: BracketPanel(
-              color: color,
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: GritPanel(
               background: Sutura.surface1Solid,
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+              corners: Sutura.accent,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ItemGlyph(id, size: 54),
+                      Container(
+                        width: 112,
+                        height: 112,
+                        decoration: BoxDecoration(
+                          gradient: const RadialGradient(colors: [Color(0xFF2A2D30), Color(0xFF111315)]),
+                          border: Border.all(color: color.withValues(alpha: 0.5)),
+                        ),
+                        padding: const EdgeInsets.all(6),
+                        child: ItemArt(id, size: 100, fallbackIcon: itemIcon(id)),
+                      ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CapsTitle(def.name, size: 18),
-                            const SizedBox(height: 6),
+                            GrungeTitle(itemName(id), size: 28),
+                            const SizedBox(height: 8),
                             Wrap(
                               spacing: 6,
-                              runSpacing: 4,
+                              runSpacing: 6,
                               children: [
                                 StatusChip(def.rarity.label, color: color),
                                 StatusChip(categoryLabel(def.category)),
-                                if (equipped) const StatusChip('Equipado', color: Sutura.signal, filled: true),
+                                if (equipped) const StatusChip('Equipado', color: Sutura.accent, filled: true),
                               ],
                             ),
                           ],
@@ -403,7 +364,7 @@ class _ItemSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(def.description, style: SuturaText.bodyMid),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   if (w != null) ...[
                     DataRow2('Daño', '${w.damage.min}–${w.damage.max}'),
                     DataRow2('Precisión', '${(w.accuracy * 100).round()} %'),
@@ -412,7 +373,7 @@ class _ItemSheet extends StatelessWidget {
                   ],
                   if (def.armor != null) DataRow2('Defensa', '${def.armor!.defense}'),
                   if (def.effects?.health case final h? when h > 0) DataRow2('Salud', '+$h', valueColor: Sutura.fine),
-                  if (def.effects?.stamina case final s? when s > 0) DataRow2('Resistencia', '+$s', valueColor: Sutura.fine),
+                  if (def.effects?.stamina case final s? when s > 0) DataRow2('Resistencia', '+$s', valueColor: Sutura.signal),
                   DataRow2('Peso', def.weight == 0 ? '—' : '${kg(def.weight)} kg'),
                   DataRow2('En el maletín', '$count'),
                   const SizedBox(height: 14),
@@ -423,7 +384,7 @@ class _ItemSheet extends StatelessWidget {
                           child: ChamferButton(
                             label: 'Usar',
                             icon: Icons.healing_outlined,
-                            tone: ChamferTone.primary,
+                            tone: ChamferTone.amber,
                             expand: true,
                             onPressed: count > 0 ? () => app.consume(id) : null,
                           ),
@@ -445,7 +406,7 @@ class _ItemSheet extends StatelessWidget {
                         Expanded(
                           child: Text(
                             isResource(id) ? 'Material para el taller o para la antena de un nodo.' : '',
-                            style: SuturaText.caption.copyWith(color: Sutura.textLow),
+                            style: SuturaText.bodyMid.copyWith(color: Sutura.textLow),
                           ),
                         ),
                     ],
@@ -473,17 +434,20 @@ class _WorkshopTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final level = app.workshopLevel;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
       children: [
-        SectionLabel(
+        SectionHeader(
           'Recetas',
-          trailing: MicroText(level == 0 ? 'sin nodo propio' : 'antena nv $level', color: level == 0 ? Sutura.textLow : Sutura.amber),
+          icon: Icons.build_outlined,
+          trailing: level == 0 ? 'sin nodo propio' : 'antena nv $level',
+          trailingColor: level == 0 ? Sutura.textLow : Sutura.amber,
         ),
+        const SizedBox(height: 8),
         for (final r in recipes) _RecipeCard(recipe: r, player: player, workshopLevel: level),
         const SizedBox(height: 6),
         Text(
           'Las recetas avanzadas necesitan tu propio nodo con la antena mejorada. Instalalo desde la pestaña Red.',
-          style: SuturaText.caption.copyWith(color: Sutura.textLow, fontWeight: FontWeight.w500),
+          style: SuturaText.bodyMid.copyWith(color: Sutura.textLow),
         ),
       ],
     );
@@ -511,34 +475,33 @@ class _RecipeCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Opacity(
-        opacity: locked ? 0.55 : 1,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Sutura.surface1Solid,
-            border: Border.all(color: check.ok ? Sutura.signal.withValues(alpha: 0.6) : Sutura.lineHair),
-          ),
+        opacity: locked ? 0.6 : 1,
+        child: GritPanel(
+          background: const Color(0xF0121416),
+          accent: check.ok ? Sutura.amber : null,
+          corners: check.ok ? Sutura.amber : Sutura.lineStrong,
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
-                  ItemGlyph(recipe.output, size: 42, dim: locked),
+                  SizedBox(width: 64, height: 64, child: ItemArt(recipe.output, size: 64, dim: locked, fallbackIcon: itemIcon(recipe.output))),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(recipeName(recipe), style: SuturaText.body.copyWith(fontWeight: FontWeight.w600)),
+                        Text(recipeName(recipe).toUpperCase(), style: SuturaText.body.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1.6, fontSize: 17)),
                         const SizedBox(height: 3),
-                        if (recipe.requiresShelterLevel > 0)
-                          MicroText('antena nv ${recipe.requiresShelterLevel}', color: locked ? Sutura.danger : Sutura.amber)
-                        else
-                          const MicroText('se fabrica en cualquier lado'),
+                        Text(
+                          recipe.requiresShelterLevel > 0 ? 'ANTENA NV ${recipe.requiresShelterLevel}' : 'SE FABRICA EN CUALQUIER LADO',
+                          style: SuturaText.label.copyWith(fontSize: 11.5, color: locked ? Sutura.accent : Sutura.textLow),
+                        ),
                       ],
                     ),
                   ),
-                  if (locked) const Icon(Icons.lock_outline, size: 18, color: Sutura.textLow),
+                  if (locked) const Icon(Icons.lock_outline, size: 20, color: Sutura.textLow),
                 ],
               ),
               const SizedBox(height: 10),
@@ -546,8 +509,7 @@ class _RecipeCard extends StatelessWidget {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  for (final e in entries(recipe.inputs))
-                    _InputChip(id: e.key, have: countOf(player.inventory, e.key), need: e.value),
+                  for (final e in entries(recipe.inputs)) _InputChip(id: e.key, have: countOf(player.inventory, e.key), need: e.value),
                 ],
               ),
               const SizedBox(height: 10),
@@ -556,15 +518,15 @@ class _RecipeCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       reason ?? 'Listo para fabricar',
-                      style: SuturaText.caption.copyWith(color: check.ok ? Sutura.fine : Sutura.textLow),
+                      style: SuturaText.caption.copyWith(color: check.ok ? Sutura.fine : Sutura.textLow, fontSize: 13.5),
                     ),
                   ),
                   ChamferButton(
                     label: 'Fabricar',
                     icon: Icons.build_outlined,
-                    tone: ChamferTone.primary,
+                    tone: ChamferTone.amber,
                     dense: true,
-                    height: 38,
+                    height: 40,
                     onPressed: check.ok ? () => app.craftRecipe(recipe) : null,
                   ),
                 ],
@@ -588,16 +550,19 @@ class _InputChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final ok = have >= need;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(border: Border.all(color: ok ? Sutura.lineStrong : Sutura.danger.withValues(alpha: 0.6))),
+      padding: const EdgeInsets.fromLTRB(4, 3, 8, 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF15171A),
+        border: Border.all(color: ok ? Sutura.lineStrong : Sutura.accent.withValues(alpha: 0.7)),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(itemIcon(id), size: 13, color: ok ? Sutura.textMid : Sutura.danger),
-          const SizedBox(width: 5),
-          Text(itemDefs[id]!.name, style: SuturaText.caption.copyWith(fontSize: 11.5, color: Sutura.textMid)),
+          SizedBox(width: 26, height: 26, child: ItemArt(id, size: 26, fallbackIcon: itemIcon(id))),
           const SizedBox(width: 6),
-          Text('$have/$need', style: SuturaText.mono.copyWith(fontSize: 11, color: ok ? Sutura.textHi : Sutura.danger)),
+          Text(itemName(id), style: SuturaText.caption.copyWith(fontSize: 13, color: Sutura.textMid)),
+          const SizedBox(width: 6),
+          Text('$have/$need', style: SuturaText.number.copyWith(fontSize: 15, color: ok ? Sutura.textHi : Sutura.accent)),
         ],
       ),
     );

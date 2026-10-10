@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/core.dart';
 import '../theme/tokens.dart';
+import 'grit.dart';
 
 /// Ícono de cada objeto (trazo fino, sin relleno).
 IconData itemIcon(ItemId id) => switch (id) {
@@ -27,6 +28,16 @@ IconData itemIcon(ItemId id) => switch (id) {
 
 Color itemColor(ItemId id) => rarityColor(itemDefs[id]!.rarity.key);
 
+/// Nombre para mostrar en la interfaz (más corto que el del catálogo).
+String itemName(ItemId id) => switch (id) {
+      ItemId.water => 'Agua',
+      ItemId.medicine => 'Medicinas',
+      ItemId.metal => 'Chatarra',
+      ItemId.ammo => 'Munición 9 mm',
+      ItemId.adrenaline => 'Inyectable VITA-7',
+      _ => itemDefs[id]!.name,
+    };
+
 String categoryLabel(ItemCategory c) => switch (c) {
       ItemCategory.resource => 'Recurso',
       ItemCategory.consumable => 'Consumible',
@@ -34,19 +45,7 @@ String categoryLabel(ItemCategory c) => switch (c) {
       ItemCategory.armor => 'Protección',
     };
 
-/// Huella del objeto en la grilla del maletín (columnas × filas).
-({int w, int h}) itemFootprint(ItemId id) {
-  final def = itemDefs[id]!;
-  return switch (def.category) {
-    ItemCategory.weapon when id == ItemId.shotgun => (w: 4, h: 1),
-    ItemCategory.weapon when (def.weapon?.ammoPerShot ?? 0) > 0 => (w: 2, h: 1),
-    ItemCategory.weapon => (w: 3, h: 1),
-    ItemCategory.armor => (w: 2, h: 2),
-    _ => (w: 1, h: 1),
-  };
-}
-
-/// Glifo de objeto dentro de un cuadro con chaflán.
+/// Objeto (foto HD) dentro de un marco oscuro con borde según rareza.
 class ItemGlyph extends StatelessWidget {
   const ItemGlyph(this.id, {super.key, this.size = 40, this.dim = false});
 
@@ -56,16 +55,13 @@ class ItemGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = dim ? Sutura.textLow : itemColor(id);
+    final c = dim ? Sutura.lineHair : itemColor(id).withValues(alpha: 0.55);
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: Sutura.surface2,
-        border: Border.all(color: c.withValues(alpha: 0.5)),
-      ),
-      alignment: Alignment.center,
-      child: Icon(itemIcon(id), size: size * 0.52, color: c),
+      decoration: BoxDecoration(color: const Color(0xFF16181A), border: Border.all(color: c)),
+      padding: EdgeInsets.all(size * 0.08),
+      child: ItemArt(id, size: size, fallbackIcon: itemIcon(id), dim: dim),
     );
   }
 }

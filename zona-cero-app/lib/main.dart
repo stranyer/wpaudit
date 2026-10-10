@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'data/repository_factory.dart';
 import 'ui/app.dart';
+import 'ui/widgets/grit.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,5 +14,7 @@ Future<void> main() async {
     systemNavigationBarColor: Color(0xFF05070A),
     systemNavigationBarIconBrightness: Brightness.light,
   ));
+  // Máscara de desgaste de los títulos (si falla, los títulos se ven limpios).
+  await GritAssets.load();
   runApp(const ZonaCeroApp(repositoryFactory: createRepository));
 }
