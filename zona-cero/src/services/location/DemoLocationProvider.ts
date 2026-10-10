@@ -18,9 +18,23 @@ export class DemoLocationProvider implements LocationProvider {
   private lastTick = 0;
   private onFix: ((fix: LocationFix) => void) | null = null;
 
-  constructor(start: LatLng, speedMps: number) {
-    this.position = start;
+  constructor(
+    start: LatLng,
+    speedMps: number,
+    /** Zona permitida (web demo: solo donde hay mapa empaquetado). */
+    private readonly bounds: { south: number; west: number; north: number; east: number } | null = null,
+  ) {
+    this.position = this.clamp(start);
     this.speedMps = speedMps;
+  }
+
+  private clamp(p: LatLng): LatLng {
+    const b = this.bounds;
+    if (!b) return p;
+    return {
+      lat: Math.min(b.north, Math.max(b.south, p.lat)),
+      lng: Math.min(b.east, Math.max(b.west, p.lng)),
+    };
   }
 
   async start(onFix: (fix: LocationFix) => void, _onError: (code: LocationErrorCode) => void): Promise<void> {
@@ -80,8 +94,9 @@ export class DemoLocationProvider implements LocationProvider {
   teleport(p: LatLng): void {
     this.target = null;
     this.applyVelocity(0, 0, 1);
-    this.heading = bearingDeg(this.position, p);
-    this.position = p;
+    const target = this.clamp(p);
+    this.heading = bearingDeg(this.position, target);
+    this.position = target;
     this.emit(true);
   }
 
@@ -93,7 +108,7 @@ export class DemoLocationProvider implements LocationProvider {
     const east = this.velocity.x * this.speedMps * dt;
     if (north === 0 && east === 0) return;
     this.heading = ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
-    this.position = offsetM(this.position, north, east);
+    this.position = this.clamp(offsetM(this.position, north, east));
     if (this.target) {
       if (haversineM(this.position, this.target) <= this.stopAtM) {
         this.target = null;

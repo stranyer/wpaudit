@@ -1,4 +1,5 @@
 import { GAME_CONFIG } from '../config/gameConfig';
+import { OFFLINE_MAP_BOUNDS, WEB_DEMO } from '../config/platform';
 import { cellId, cellOf, haversineM } from '../core/geo';
 import { updateSpeedGuard, type SpeedGuardState } from '../core/interaction';
 import { applyRegen, createPlayer, grantXp } from '../core/player';
@@ -150,7 +151,7 @@ export async function startLocation(mode: LocationMode): Promise<void> {
 
   if (mode === 'demo') {
     const start = useGameStore.getState().demoPosition ?? GAME_CONFIG.demo.start;
-    demo = new DemoLocationProvider(start, GAME_CONFIG.demo.walkSpeedMps);
+    demo = new DemoLocationProvider(start, GAME_CONFIG.demo.walkSpeedMps, WEB_DEMO ? OFFLINE_MAP_BOUNDS : null);
     provider = demo;
   } else {
     demo = null;

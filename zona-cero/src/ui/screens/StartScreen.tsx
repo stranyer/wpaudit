@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Biohazard, Gamepad2, Satellite, TriangleAlert } from 'lucide-react';
+import { WEB_DEMO } from '../../config/platform';
 import { startLocation } from '../../game/session';
 import { useGameStore } from '../../store/gameStore';
 
@@ -43,14 +44,25 @@ export function StartScreen() {
             manejás. Tu ubicación exacta nunca se comparte con otros jugadores.
           </span>
         </div>
-        <div className="start-actions">
-          <button className="btn btn-primary btn-lg btn-block" disabled={busy} onClick={() => begin('gps')}>
-            <Satellite size={20} /> {lastMode === 'gps' ? 'Continuar con GPS' : 'Usar mi ubicación'}
-          </button>
-          <button className="btn btn-lg btn-block" disabled={busy} onClick={() => begin('demo')}>
-            <Gamepad2 size={20} /> Modo demo · Buenos Aires
-          </button>
-        </div>
+        {WEB_DEMO ? (
+          <div className="start-actions">
+            <button className="btn btn-primary btn-lg btn-block" disabled={busy} onClick={() => begin('demo')}>
+              <Gamepad2 size={20} /> Jugar · Centro de Buenos Aires
+            </button>
+            <p className="label" style={{ textAlign: 'center', margin: 0, lineHeight: 1.5, letterSpacing: '0.08em' }}>
+              Versión web de prueba: te movés con el joystick. El GPS real llega con la app Android.
+            </p>
+          </div>
+        ) : (
+          <div className="start-actions">
+            <button className="btn btn-primary btn-lg btn-block" disabled={busy} onClick={() => begin('gps')}>
+              <Satellite size={20} /> {lastMode === 'gps' ? 'Continuar con GPS' : 'Usar mi ubicación'}
+            </button>
+            <button className="btn btn-lg btn-block" disabled={busy} onClick={() => begin('demo')}>
+              <Gamepad2 size={20} /> Modo demo · Buenos Aires
+            </button>
+          </div>
+        )}
         <p className="label" style={{ textAlign: 'center', margin: 0 }}>
           v0.1 · Mapas © OpenStreetMap
         </p>

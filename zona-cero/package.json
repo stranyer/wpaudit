@@ -13,7 +13,9 @@
     "test:watch": "vitest",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
-    "android:run": "npm run build && cap sync android && cap run android"
+    "android:run": "npm run build && cap sync android && cap run android",
+    "offline-map": "node scripts/build-offline-map.mjs",
+    "build:web-demo": "node scripts/build-offline-map.mjs && tsc --noEmit -p tsconfig.json && vite build --mode webdemo --outDir dist-web && node scripts/prepare-web-demo.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

@@ -166,6 +166,21 @@ npm run android:run
 - Orientación vertical fija; el WebView sirve el juego desde `https://localhost`.
 - El GPS usa el plugin nativo `@capacitor/geolocation` (pide permisos del sistema).
 
+## Web demo (para probar desde el celular)
+
+```bash
+npm run build:web-demo
+```
+
+Genera `dist-web/` con el juego listo para publicar en hostings que **no permiten conexiones
+externas** (por ejemplo, una página privada de claude.ai):
+
+- El mapa del centro de Buenos Aires (Palermo/Recoleta → San Telmo/Lezama) viaja empaquetado en
+  `offline-map/` (~6 MB, se descarga una sola vez con `npm run offline-map`; zona configurable en
+  `src/config/offlineMapBounds.json`).
+- Solo modo demo: la caminata queda limitada a esa zona y el GPS real queda para la app Android.
+- `zona-cero.html` es el contenido de la página sin `<html>/<head>/<body>`, para hostings que lo envuelven.
+
 ## Supabase (opcional)
 
 Ver [`supabase/README.md`](supabase/README.md): esquema PostGIS, RLS, funciones RPC con validación de

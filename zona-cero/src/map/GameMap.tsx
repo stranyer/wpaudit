@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './setupMaplibre';
 import { LocateFixed, Rotate3d, Skull } from 'lucide-react';
 import { GAME_CONFIG } from '../config/gameConfig';
+import { OFFLINE_MAP_BOUNDS, WEB_DEMO } from '../config/platform';
 import { FACTION_DEFS } from '../core/factions';
 import { haversineM, offsetM } from '../core/geo';
 import { effectiveRadius } from '../core/interaction';
@@ -92,6 +93,13 @@ export function GameMap({ active }: { active: boolean }) {
       fadeDuration: 0,
       canvasContextAttributes: { antialias: false },
       maxTileCacheSize: 60,
+      // En la web demo la cámara no se aleja de la zona con mapa empaquetado.
+      maxBounds: WEB_DEMO
+        ? [
+            [OFFLINE_MAP_BOUNDS.west - 0.01, OFFLINE_MAP_BOUNDS.south - 0.01],
+            [OFFLINE_MAP_BOUNDS.east + 0.01, OFFLINE_MAP_BOUNDS.north + 0.01],
+          ]
+        : undefined,
     });
     m.touchZoomRotate.enableRotation();
 

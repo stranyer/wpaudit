@@ -1,4 +1,5 @@
-import type { StyleSpecification } from 'maplibre-gl';
+import type { StyleSpecification, VectorSourceSpecification } from 'maplibre-gl';
+import { OFFLINE_MAP_BOUNDS, WEB_DEMO } from '../config/platform';
 
 // Estilo de mapa propio: oscuro, postapocalíptico, sobre los tiles vectoriales
 // gratuitos de OpenFreeMap (datos de OpenStreetMap). No requiere API key.
@@ -28,20 +29,34 @@ const C = {
   place: '#a3ad92',
 };
 
+const ATTRIBUTION =
+  '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
+
+/** Fuente de tiles: OpenFreeMap en línea, o el paquete local en la web demo (protocolo zc://). */
+function tileSource(): VectorSourceSpecification {
+  if (WEB_DEMO) {
+    const b = OFFLINE_MAP_BOUNDS;
+    return {
+      type: 'vector',
+      tiles: ['zc://tiles/{z}/{x}/{y}'],
+      minzoom: 13,
+      maxzoom: 14,
+      bounds: [b.west, b.south, b.east, b.north],
+      attribution: ATTRIBUTION,
+    };
+  }
+  return { type: 'vector', url: 'https://tiles.openfreemap.org/planet', attribution: ATTRIBUTION };
+}
+
 export function buildMapStyle(): StyleSpecification | string {
   const custom = import.meta.env.VITE_MAP_STYLE_URL as string | undefined;
-  if (custom) return custom;
+  if (custom && !WEB_DEMO) return custom;
   return {
     version: 8,
     name: 'Zona Cero',
-    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    glyphs: WEB_DEMO ? 'zc://fonts/{fontstack}/{range}' : 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources: {
-      [OMT_SOURCE]: {
-        type: 'vector',
-        url: 'https://tiles.openfreemap.org/planet',
-        attribution:
-          '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
-      },
+      [OMT_SOURCE]: tileSource(),
     },
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': C.background } },

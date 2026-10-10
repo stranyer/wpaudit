@@ -10,6 +10,7 @@ import { useGameStore } from '../../store/gameStore';
 import { useLocationStore } from '../../store/locationStore';
 import { useUiStore } from '../../store/uiStore';
 import { useWorldStore } from '../../store/worldStore';
+import { ConfirmButton } from '../components/ConfirmButton';
 import { ShelterRow } from './ShelterScreen';
 
 type Tab = 'shelters' | 'factions' | 'ranking' | 'survivors';
@@ -86,18 +87,19 @@ function FactionsTab() {
               <span className="chip">{f.members} miembros</span>
               <span className="chip">{f.totalContribution} aportes</span>
             </div>
-            <button
-              className={`btn btn-sm btn-block ${mine ? 'btn-ghost' : 'btn-primary'}`}
-              onClick={() => {
-                if (mine) {
-                  if (window.confirm('¿Abandonar la facción?')) void joinFaction(null);
-                } else if (!player?.factionId || window.confirm(`¿Cambiarte a ${f.name}?`)) {
-                  void joinFaction(f.id);
-                }
-              }}
-            >
-              {mine ? 'Abandonar' : player?.factionId ? 'Cambiarme' : 'Unirme'}
-            </button>
+            {mine ? (
+              <ConfirmButton className="btn btn-sm btn-block btn-ghost" confirmLabel="¿Abandonar? Tocá de nuevo" onConfirm={() => void joinFaction(null)}>
+                Abandonar
+              </ConfirmButton>
+            ) : player?.factionId ? (
+              <ConfirmButton className="btn btn-sm btn-block btn-primary" confirmLabel={`¿Pasarte a ${f.name}?`} onConfirm={() => void joinFaction(f.id)}>
+                Cambiarme
+              </ConfirmButton>
+            ) : (
+              <button className="btn btn-sm btn-block btn-primary" onClick={() => void joinFaction(f.id)}>
+                Unirme
+              </button>
+            )}
           </div>
         );
       })}

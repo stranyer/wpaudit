@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { Check, Pencil, RotateCcw } from 'lucide-react';
 import { GAME_CONFIG } from '../../config/gameConfig';
+import { WEB_DEMO } from '../../config/platform';
 import { FACTION_DEFS } from '../../core/factions';
 import { formatDistance } from '../../core/geo';
 import { maxHealth, maxStamina } from '../../core/player';
@@ -10,6 +11,7 @@ import { renamePlayer } from '../../game/actions';
 import { startLocation, stopSession } from '../../game/session';
 import { useGameStore } from '../../store/gameStore';
 import { useLocationStore } from '../../store/locationStore';
+import { ConfirmButton } from '../components/ConfirmButton';
 import { StatBar } from '../components/StatBar';
 
 const AvatarViewport = lazy(() => import('../../three/react/AvatarViewport'));
@@ -26,7 +28,6 @@ export function ProfileScreen() {
   const kills = ZOMBIE_TYPES.reduce((a, t) => a + (player.stats.zombiesKilled[t] ?? 0), 0);
 
   const reset = () => {
-    if (!window.confirm('¿Borrar todo tu progreso local? Esta acción no se puede deshacer.')) return;
     stopSession();
     // Solo se borran las claves del juego (prefijo "zc:").
     for (const key of Object.keys(localStorage)) if (key.startsWith('zc:')) localStorage.removeItem(key);
@@ -122,11 +123,16 @@ export function ProfileScreen() {
           <div className="list-row">
             <div className="list-main">
               <div className="list-title">Ubicación</div>
-              <div className="list-sub">{mode === 'demo' ? 'Modo demo (simulada)' : 'GPS real'}</div>
+              <div className="list-sub">
+                {mode === 'demo' ? 'Modo demo (simulada)' : 'GPS real'}
+                {WEB_DEMO ? ' · el GPS está disponible en la app Android' : ''}
+              </div>
             </div>
-            <button className="btn btn-sm" onClick={() => void startLocation(mode === 'demo' ? 'gps' : 'demo')}>
-              Cambiar a {mode === 'demo' ? 'GPS' : 'demo'}
-            </button>
+            {!WEB_DEMO && (
+              <button className="btn btn-sm" onClick={() => void startLocation(mode === 'demo' ? 'gps' : 'demo')}>
+                Cambiar a {mode === 'demo' ? 'GPS' : 'demo'}
+              </button>
+            )}
           </div>
           <div className="list-row">
             <div className="list-main">
@@ -141,9 +147,11 @@ export function ProfileScreen() {
             </div>
           </div>
         </div>
-        <button className="btn btn-danger btn-block" style={{ marginTop: 12 }} onClick={reset}>
-          <RotateCcw size={16} /> Reiniciar progreso
-        </button>
+        <div style={{ marginTop: 12 }}>
+          <ConfirmButton className="btn btn-danger btn-block" confirmLabel="¿Borrar todo? Tocá de nuevo" onConfirm={reset}>
+            <RotateCcw size={16} /> Reiniciar progreso
+          </ConfirmButton>
+        </div>
       </div>
       <p className="label" style={{ textAlign: 'center' }}>
         Zona Cero v0.1 · Mapas © OpenStreetMap / OpenFreeMap
