@@ -37,8 +37,8 @@ const ZOMBIE_YAW = 0.3;
 const HEIGHT_FILL = 0.66;
 /** Fracción máxima del ancho del canvas que puede ocupar el zombie (pantallas muy estrechas). */
 const WIDTH_FILL = 0.85;
-/** Centro vertical del zombie, medido desde ABAJO del canvas (0.43 ≈ 57% desde arriba). */
-const CENTER_FROM_BOTTOM = 0.43;
+/** Centro vertical del zombie, medido desde ABAJO del canvas (0.45 ≈ 55% desde arriba). */
+const CENTER_FROM_BOTTOM = 0.45;
 
 /** Ancho aproximado (m) de cada zombie con los brazos en reposo (vista 3/4). */
 const ZOMBIE_WIDTH: Record<ZombieTypeId, number> = {
@@ -152,7 +152,7 @@ export class CombatScene {
     scene.add(env);
     scene.add(createSkyDome({ radius: 110, top: '#05070a', horizon: FOG_COLOR, glow: '#36261a' }));
     const moonDisc = createMoon(1.9);
-    moonDisc.position.set(7.5, 15.5, -84);
+    moonDisc.position.set(-10, 19, -84);
     moonDisc.lookAt(0, 1.6, 4);
     scene.add(moonDisc);
 
@@ -318,7 +318,7 @@ export class CombatScene {
     });
     this.muzzle = new THREE.Mesh(starburstGeometry(10, 1, 0.35), this.muzzleMat);
     this.muzzle.visible = false;
-    this.muzzle.renderOrder = 998;
+    this.muzzle.renderOrder = 1001; // por encima de la viñeta
     cam.add(this.muzzle);
 
     this.vignetteMat = new THREE.MeshBasicMaterial({
@@ -500,13 +500,14 @@ export class CombatScene {
     this.hemi.intensity = 1.3 + this.hemiFlash * 2.4;
     this.hemi.color.lerpColors(_hemiSky, _hemiFlash, this.hemiFlash * 0.8);
     if (this.muzzleT >= 0) {
-      this.muzzleT += dt;
+      // se evalúa ANTES de avanzar el tiempo: el primer frame siempre muestra el fogonazo
       const mt = this.muzzleT;
-      const on = mt < 0.09;
+      this.muzzleT += dt;
+      const on = mt < 0.1;
       this.muzzle.visible = on;
       if (on) {
-        this.muzzleMat.opacity = 1 - mt / 0.09;
-        const s = 0.16 + Math.random() * 0.06;
+        this.muzzleMat.opacity = 1 - (mt / 0.1) * 0.6;
+        const s = 0.095 + Math.random() * 0.04;
         this.muzzle.scale.set(s, s, 1);
         this.muzzle.rotation.z = Math.random() * Math.PI;
       } else {
@@ -746,7 +747,7 @@ export class CombatScene {
   private toxicCloud(): void {
     this.zombie.getChestWorldPosition(_v);
     this.blood.emit({
-      count: 46,
+      count: 36,
       origin: _v,
       spread: 0.35,
       radial: 1.4,
@@ -755,10 +756,10 @@ export class CombatScene {
       gravity: -0.12,
       drag: 0.9,
       life: [1.8, 2.8],
-      size: [0.35, 1.6],
+      size: [0.35, 1.5],
       sizeRandom: 0.4,
       colors: TOXIC,
-      alpha: [0.55, 0],
+      alpha: [0.42, 0],
     });
     this.glow.emit({
       count: 18,
@@ -864,7 +865,8 @@ export class CombatScene {
     const aspect = w / h;
     cam.fov = FOV;
     const T = Math.tan(THREE.MathUtils.degToRad(FOV) / 2);
-    const H = this.zombie.height + 0.08;
+    // el corredor va encorvado: su altura visible es menor que la del rig
+    const H = (this.zombieType === 'runner' ? 1.62 : this.zombie.height) + 0.08;
     const W = ZOMBIE_WIDTH[this.zombieType] ?? 1.2;
     const dH = H / (HEIGHT_FILL * 2 * T);
     const dW = W / (WIDTH_FILL * 2 * T * aspect);
@@ -889,7 +891,7 @@ export class CombatScene {
     this.dim.position.copy(_v);
     this.dim.scale.set(halfW * 2.2, halfH * 2.2, 1);
     // fogonazo: abajo a la derecha (como si el arma estuviera ahí)
-    this.screenToCamera(0.8, 0.16, 0.9, _v);
+    this.screenToCamera(0.76, 0.2, 0.9, _v);
     this.muzzle.position.copy(_v);
     this.applyCamera(0);
   };

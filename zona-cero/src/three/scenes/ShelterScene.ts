@@ -8,7 +8,7 @@ import { PALETTE, disposeTree, lerp, mergeStatic } from '../models/materials';
 import { createBuilding, createSkyDome } from '../models/props';
 import { createShelterModel, SHELTER_RADIUS, type ShelterModel } from '../models/shelterModel';
 
-const TARGET = new THREE.Vector3(0, 0.9, 0);
+const TARGET = new THREE.Vector3(0, 1.3, 0);
 /** Dirección por defecto de la cámara (desde el objetivo). */
 const DEFAULT_DIR = new THREE.Vector3(0.62, 0.55, 0.85).normalize();
 const AUTO_ROTATE_RESUME_MS = 4000;
@@ -44,8 +44,8 @@ export class ShelterScene {
     const scene = stage.scene;
 
     // Luces: hemisférica + luna + fogata
-    scene.add(new THREE.HemisphereLight('#52637a', '#1c150d', 1.15));
-    const moon = new THREE.DirectionalLight('#a6bcd6', 1.1);
+    scene.add(new THREE.HemisphereLight('#5a6d86', '#1c150d', 1.5));
+    const moon = new THREE.DirectionalLight('#a6bcd6', 1.5);
     moon.position.set(-9, 14, 7);
     scene.add(moon);
     this.fireLight = new THREE.PointLight('#ff8a3c', 30, 13, 1.5);
@@ -57,10 +57,10 @@ export class ShelterScene {
     city.name = 'skyline';
     for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2 + Math.sin(i * 7.3) * 0.15;
-      const r = 34 + (Math.sin(i * 3.1) * 0.5 + 0.5) * 12;
-      const h = 8 + (Math.sin(i * 5.7) * 0.5 + 0.5) * 22;
-      const b = createBuilding({ width: 7 + (i % 3) * 3, height: h, depth: 7, seed: 500 + i, lit: 0.07 });
-      b.position.set(Math.sin(a) * r, -6, Math.cos(a) * r);
+      const r = 46 + (Math.sin(i * 3.1) * 0.5 + 0.5) * 14;
+      const h = 9 + (Math.sin(i * 5.7) * 0.5 + 0.5) * 12;
+      const b = createBuilding({ width: 9 + (i % 3) * 4, height: h, depth: 8, seed: 500 + i, lit: 0.1 });
+      b.position.set(Math.sin(a) * r, -5, Math.cos(a) * r);
       b.rotation.y = a;
       city.add(b);
     }
@@ -150,8 +150,12 @@ export class ShelterScene {
     cam.updateProjectionMatrix();
     const vTan = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
     const hTan = vTan * aspect;
-    const fitR = SHELTER_RADIUS * 0.92;
-    const dist = Math.min(48, Math.max(12, Math.max(fitR / hTan, (fitR * 0.62) / vTan)));
+    // Ancho: el disco completo (radio R). Alto: profundidad del disco proyectada según la
+    // elevación de la cámara + la mitad de la altura de la torre/bandera (~6.3 m).
+    const R = SHELTER_RADIUS + 0.3;
+    const elev = Math.asin(DEFAULT_DIR.y);
+    const halfV = R * Math.sin(elev) + 3.2 * Math.cos(elev);
+    const dist = Math.min(60, Math.max(12, (R * 0.98) / hTan, halfV / vTan));
     this.controls.minDistance = dist * 0.5;
     this.controls.maxDistance = dist * 1.45;
     if (!this.fitted) {

@@ -35,8 +35,8 @@ export class AvatarScene {
     const scene = stage.scene;
 
     // Luces: ambiente frío + clave cálida + contraluz (rim) frío intenso
-    scene.add(new THREE.HemisphereLight('#5d6f82', '#1e1710', 1.0));
-    const key = new THREE.DirectionalLight('#f0b070', 1.5);
+    scene.add(new THREE.HemisphereLight('#6a7d92', '#241a10', 1.5));
+    const key = new THREE.DirectionalLight('#f0b070', 2.2);
     key.position.set(-2.5, 2.6, 3.5);
     scene.add(key);
     this.rim = new THREE.DirectionalLight('#a8c8ff', 3.2);
@@ -48,7 +48,7 @@ export class AvatarScene {
     b.cyl(0.62, 0.7, PEDESTAL_H, 9, '#4a4f52', { p: [0, PEDESTAL_H / 2, 0] });
     b.cyl(0.5, 0.58, 0.05, 9, '#5a5f60', { p: [0.04, PEDESTAL_H + 0.01, -0.02], r: [0.03, 0.4, -0.02] });
     b.box(0.5, 0.06, 0.3, '#3e4244', { p: [0.38, PEDESTAL_H + 0.02, 0.3], r: [0.1, 0.6, 0.12] });
-    addRubble(b, { seed: 5, count: 16, radius: 0.95, height: 0.18 }, 0, 0);
+    addRubble(b, { seed: 5, count: 16, radius: 0.9, height: 0.18, mixed: false }, 0, 0);
     b.box(0.03, 0.55, 0.03, '#6e3f1f', { p: [-0.45, PEDESTAL_H + 0.18, -0.25], r: [0.3, 0, 0.5] }, 0); // varilla
     b.box(0.03, 0.4, 0.03, '#5a3420', { p: [-0.5, PEDESTAL_H + 0.12, -0.15], r: [-0.2, 0, 0.7] }, 0);
     b.box(0.22, 0.07, 0.1, '#5a3a2e', { p: [0.55, 0.035, 0.45], r: [0, 0.4, 0] });

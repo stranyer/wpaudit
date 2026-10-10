@@ -63,8 +63,8 @@ function buildBase(level: number): THREE.Mesh {
   const pos: number[] = [];
   const nor: number[] = [];
   const col: number[] = [];
-  const dirt = new THREE.Color(PALETTE.dirt);
-  const dirtL = new THREE.Color(PALETTE.dirtLight);
+  const dirt = new THREE.Color('#3a3327');
+  const dirtL = new THREE.Color('#4d4434');
   const ash = new THREE.Color('#191714');
   const gravel = new THREE.Color('#3a3b38');
   const tmp = new THREE.Color();
@@ -533,8 +533,11 @@ export function createShelterModel(level: number, opts: ShelterModelOptions = {}
 
   root.add(buildBase(L));
   // falda del diorama
-  S.cyl(SHELTER_RADIUS, SHELTER_RADIUS * 0.9, 0.8, 32, '#1d1913', { p: [0, -0.4, 0] }, 0.1);
-  S.cyl(SHELTER_RADIUS * 0.9, SHELTER_RADIUS * 0.75, 0.5, 32, '#141210', { p: [0, -1.05, 0] }, 0.1);
+  // (sin tapas: la tapa superior se pelearía en profundidad con el suelo)
+  const skirt = new THREE.CylinderGeometry(SHELTER_RADIUS, SHELTER_RADIUS * 0.9, 0.8, 32, 1, true);
+  S.add(skirt, '#2a241b', { p: [0, -0.4, 0] }, 0.1);
+  skirt.dispose();
+  S.cyl(SHELTER_RADIUS * 0.9, SHELTER_RADIUS * 0.75, 0.5, 32, '#1a1713', { p: [0, -1.05, 0] }, 0.1);
 
   // ---------------- L1: campamento ----------------
   campfire(S);

@@ -1328,7 +1328,7 @@ class ZombieRigImpl implements ZombieRig {
       }
       case 'charge': {
         const pc = u < 0.2 ? smooth01(u / 0.2) : 1 - smooth01((u - 0.3) / 0.6);
-        T[BZ] += Math.min(2.4, this.reach * 0.55) * pc * inv;
+        T[BZ] += Math.min(2.4, this.reach * 0.46) * pc * inv;
         T[SX] += 0.55 * pc;
         T[HX] -= 0.45 * pc;
         T[BRY] += 0.45 * pc * dir;
@@ -1482,7 +1482,7 @@ class ZombieRigImpl implements ZombieRig {
   private applyMaterials(): void {
     // Destello de golpe (emisivo rojo)
     const f = Math.min(1, this.flash);
-    this.bodyMat.emissive.setRGB(0.42 * f, 0.02 * f, 0.01 * f);
+    this.bodyMat.emissive.setRGB(0.3 * f, 0.012 * f, 0.004 * f);
 
     // Ojos
     const g = this.cur[EYE];
