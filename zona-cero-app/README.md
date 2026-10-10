@@ -7,7 +7,7 @@ infectados y reconstruís una red de nodos (refugios) junto a otros sobrevivient
 Escenario inicial: **Buenos Aires** (simulación desde el Obelisco), pero funciona en cualquier
 ciudad: el mundo se genera de forma determinística a partir de la ubicación.
 
-> Estado: **v0.2 jugable**. Funciona completo sin backend (datos locales + comunidad simulada) y
+> Estado: **v0.3 jugable**. Funciona completo sin backend (datos locales + comunidad simulada) y
 > se conecta a **Supabase/PostGIS** si le pasás credenciales.
 
 Esta app reemplaza a la versión web de `../zona-cero` (React + Three.js) con la misma lógica de
@@ -15,24 +15,31 @@ juego, portada a Dart y verificada contra la versión original con tests de pari
 
 ---
 
-## Dirección de arte: "Protocolo Sutura"
+## Dirección de arte (v0.3): survival horror de calle
 
-Survival horror clínico (Resident Evil) × red holográfica fría (Death Stranding), con IP propia.
+Panel de metal gastado, títulos condensados con desgaste y la ciudad real bajo la lluvia. IP propia
+(sin marcas de terceros).
 
 | Elemento | Decisión |
 | --- | --- |
-| Paleta | Fondo `#05070A`, señal cian `#6ADBEA` (red, escáner), ámbar `#E2B53E` (recompensas, nodos), estados ECG verde/amarillo/naranja/rojo |
-| Tipografía | Jost (títulos), Barlow Semi Condensed (UI), Share Tech Mono (datos), Courier Prime (documentos), Special Elite (sellos), Syncopate (logo). Todas incluidas como TTF |
-| Formas | Esquinas en L, chaflán a 45°, hexágonos = nodos, rombos = amenazas |
-| Salud | Monitor ECG que cambia de ritmo y color (ESTABLE / PRECAUCIÓN / PELIGRO) |
-| Mapa | Topográfico oscuro; zonas infestadas como curvas de nivel rojas |
-| Escáner | Pulso de 250 m tipo sonar: los contactos aparecen cuando los alcanza la onda y quedan como eco |
-| Combate | Escena 2D con sprites pre-renderizados de los modelos 3D low-poly (Flame) |
+| Paleta | Fondo `#0A0B0C`; **rojo de emergencia** `#C8322B` para lo activo y lo hostil; **ámbar** `#D9A233` para recursos y entregas; **azul acero** `#8DB4C9` para la red, los refugios y la resistencia; verde ECG para la salud |
+| Tipografía | Oswald (títulos, con textura de desgaste en dos capas: manchas + rayones), Barlow Condensed (interfaz, rótulos espaciados), Share Tech Mono (registros), Courier Prime (documentos), Special Elite (sellos). Todas OFL e incluidas |
+| Paneles | Metal oscuro con textura, borde fino, marcas en las esquinas y esquinas cortadas a 45° |
+| Mapa | Estilo "foto aérea" nocturna (texturas de techos y copas de árboles sobre teselas vectoriales), marcadores con tallo y rótulo (SAQUEO, REFUGIO, SEÑAL DE AUXILIO, infectados), zonas infectadas como resplandor rojo, clima real |
+| Combate | Criaturas en alta definición animadas en tiempo real (ver abajo) sobre una calle de Buenos Aires con el Obelisco |
 
-Lore original: la cepa AMB-0 ("la Ámbar"), Laboratorios Ferrán-Kessler, la DESAM y las
-terminales VITA-7. Todo el texto del juego está en español rioplatense.
+### Arte HD y cómo se animan los monstruos
 
----
+El arte (5 criaturas, 18 objetos, fondos, retrato y texturas) se generó con modelos de imagen y se
+recortó con BiRefNet; está en `assets/art/` (≈3 MB en WebP).
+
+Cada criatura es **una sola imagen HD** que se anima como una marioneta: se dibuja sobre una malla
+de 11×17 vértices (`Canvas.drawVertices`) que se deforma cada cuadro. Así respira, se balancea,
+gira la cabeza, embiste hacia la cámara (con estelas de movimiento), acusa los golpes (abolladura +
+destello), grita (Chillón), se agacha para cargar (Bruto), suelta gas (Hinchado) y cae al morir
+(se disuelve en ceniza). La zona de la cabeza se detecta sola a partir del recorte, para la
+puntería. Se eligió este enfoque frente a 3D en tiempo real porque da calidad de ilustración con
+un costo bajo en celulares de gama media (ver `lib/combat/puppet.dart` y `cutout_rig.dart`).
 
 ## Cómo se juega
 
@@ -41,6 +48,8 @@ terminales VITA-7. Todo el texto del juego está en español rioplatense.
    (rombos rojos), suministros (cuadros ámbar) y nodos (hexágonos).
 3. Acercate a menos de **40 m** (más tolerancia por la precisión del GPS) y tocá el objetivo:
    - **Recuperar** un suministro (cuesta resistencia, llena el maletín).
+   - **Responder** una **señal de auxilio** (siempre visible en el mapa): botín y transmisiones
+     nuevas en el Archivo.
    - **Enfrentar** un infectado: combate por turnos con puntería. Mantené apretado para que la
      mira se cierre y soltá para atacar. Con la mira cerrada sobre la cabeza el golpe es crítico
      garantizado; si seguís manteniendo con un arma cuerpo a cuerpo, la mira se pone ámbar
@@ -160,8 +169,10 @@ puntería del combate y la grilla del maletín.
 
 ## Assets
 
-- `assets/combat/`: sprites de los cinco tipos de infectado (idle, ataque, impacto, muerte y
-  especiales), fondos y retrato, renderizados desde los modelos low-poly de la versión web.
-  `manifest.json` describe cuadros, fps y ubicación sobre el fondo.
+- `assets/art/zombies/`: las cinco criaturas recortadas (WebP con transparencia).
+- `assets/art/items/`: fotos de los 18 objetos (256×256).
+- `assets/art/bg/`: calle del combate, campamento del nodo, retrato del enlace y miniatura de pulsos.
+- `assets/art/tex/`: texturas de paneles, desgaste de títulos y del mapa (techos y árboles).
 - `assets/fonts/`: tipografías con licencia OFL.
 - Mapa: teselas vectoriales de [OpenFreeMap](https://openfreemap.org) (datos © OpenStreetMap).
+- Clima: [Open-Meteo](https://open-meteo.com) con coordenadas redondeadas a 0,1° (privacidad).

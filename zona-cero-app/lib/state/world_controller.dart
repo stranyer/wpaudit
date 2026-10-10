@@ -200,8 +200,10 @@ class WorldController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Selecciona algo del mundo. Volver a seleccionar lo mismo vuelve a avisar
+  /// (así "VER EN EL MAPA" centra la cámara aunque ya estuviera seleccionado).
   void select(String? id) {
-    if (selectedId == id) return;
+    if (selectedId == id && id == null) return;
     selectedId = id;
     notifyListeners();
   }

@@ -317,7 +317,7 @@ class _Scrim extends StatelessWidget {
           begin: top ? Alignment.topCenter : Alignment.bottomCenter,
           end: top ? Alignment.bottomCenter : Alignment.topCenter,
           colors: top
-              ? [Sutura.void_.withValues(alpha: 0.88), Sutura.void_.withValues(alpha: 0.55), Sutura.void_.withValues(alpha: 0)]
+              ? [Sutura.void_.withValues(alpha: 0.96), Sutura.void_.withValues(alpha: 0.72), Sutura.void_.withValues(alpha: 0)]
               : [Sutura.void_.withValues(alpha: 0.94), Sutura.void_.withValues(alpha: 0.78), Sutura.void_.withValues(alpha: 0)],
           stops: top ? const [0, 0.45, 1] : const [0, 0.42, 1],
         ),
