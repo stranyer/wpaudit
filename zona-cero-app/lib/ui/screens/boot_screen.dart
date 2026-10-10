@@ -66,6 +66,10 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
+    // En pantallas bajas (360×640) se achican la red y los espacios para que todo entre.
+    final h = MediaQuery.sizeOf(context).height - pad.vertical;
+    final compact = h < 720;
+    final netH = (h - 500).clamp(64.0, 190.0);
     return ColoredBox(
       color: Sutura.void_,
       child: Stack(
@@ -73,7 +77,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
           const Positioned.fill(child: CustomPaint(painter: _GridPainter())),
           Positioned.fill(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(22, pad.top + 28, 22, pad.bottom + 22),
+              padding: EdgeInsets.fromLTRB(22, pad.top + (compact ? 14 : 28), 22, pad.bottom + (compact ? 12 : 22)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -84,38 +88,52 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                       MicroText('DESAM / PROTOCOLO SUTURA'),
                     ],
                   ),
-                  const SizedBox(height: 26),
+                  SizedBox(height: compact ? 10 : 26),
                   SizedBox(
-                    height: 190,
+                    height: netH,
                     child: AnimatedBuilder(
                       animation: _net,
                       builder: (context, _) => CustomPaint(painter: _NetworkPainter(_net.value)),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  SizedBox(height: compact ? 8 : 18),
                   const FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text('ZONA CERO', style: TextStyle(fontFamily: Sutura.fLogo, fontWeight: FontWeight.w700, fontSize: 38, letterSpacing: 9, color: Sutura.textHi)),
                   ),
                   const SizedBox(height: 6),
                   Center(child: Text('PROTOCOLO SUTURA', style: SuturaText.mono.copyWith(color: Sutura.signal, letterSpacing: 6, fontSize: 12))),
-                  const SizedBox(height: 22),
+                  SizedBox(height: compact ? 10 : 22),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final (i, l) in _log.indexed)
-                          HoloIn(
-                            child: Text(
-                              '> $l',
-                              style: SuturaText.mono.copyWith(
-                                fontSize: 11.5,
-                                color: i == _lines.length - 1 ? Sutura.signal : Sutura.textMid,
+                    child: LayoutBuilder(builder: (context, c) {
+                      // Si no entran todas las líneas, se muestran las últimas.
+                      const lineH = 17.0;
+                      final fit = (c.maxHeight / lineH).floor().clamp(0, _log.length);
+                      final start = _log.length - fit;
+                      return ClipRect(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (var i = start; i < _log.length; i++)
+                              HoloIn(
+                                key: ValueKey(i),
+                                child: SizedBox(
+                                  height: lineH,
+                                  child: Text(
+                                    '> ${_log[i]}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.clip,
+                                    style: SuturaText.mono.copyWith(
+                                      fontSize: 11.5,
+                                      color: i == _lines.length - 1 ? Sutura.signal : Sutura.textMid,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                      ],
-                    ),
+                          ],
+                        ),
+                      );
+                    }),
                   ),
                   AnimatedOpacity(
                     opacity: _ready ? 1 : 0,
@@ -139,7 +157,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                             ],
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: compact ? 8 : 14),
                         if (widget.returning != null) ...[
                           Center(child: Text(widget.returning!, style: SuturaText.mono.copyWith(color: Sutura.textMid, fontSize: 11))),
                           const SizedBox(height: 8),
@@ -149,7 +167,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                           sublabel: 'jugá caminando tu ciudad',
                           icon: Icons.satellite_alt_outlined,
                           tone: ChamferTone.primary,
-                          height: 58,
+                          height: compact ? 52 : 58,
                           expand: true,
                           onPressed: _ready && !widget.busy ? () => widget.onStart(true) : null,
                         ),
@@ -159,7 +177,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                           sublabel: 'sin moverte, desde el Obelisco',
                           icon: Icons.gamepad_outlined,
                           tone: ChamferTone.ghost,
-                          height: 54,
+                          height: compact ? 48 : 54,
                           expand: true,
                           onPressed: _ready && !widget.busy ? () => widget.onStart(false) : null,
                         ),

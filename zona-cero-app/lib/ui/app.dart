@@ -93,7 +93,11 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
       switchInCurve: Sutura.easeIn,
       child: _started
           ? const Shell(key: ValueKey('shell'))
-          : BootScreen(key: const ValueKey('boot'), onStart: _start, busy: _busy, returning: _returning),
+          : Scaffold(
+              key: const ValueKey('boot'),
+              backgroundColor: Sutura.void_,
+              body: BootScreen(onStart: _start, busy: _busy, returning: _returning),
+            ),
     );
   }
 }

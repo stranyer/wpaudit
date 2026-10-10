@@ -38,8 +38,8 @@ class ObjectiveLine extends StatelessWidget {
       final d = app.distanceTo(sel.position) ?? 0;
       final near = app.isNear(sel.position);
       return switch (sel) {
-        ZombieSpawn() => near ? ('Enfrentá al infectado', Sutura.danger) : ('Acercate al contacto · ${d.round()} m', Sutura.textHi),
-        SupplySpawn() => near ? ('Recuperá el suministro', Sutura.amber) : ('Acercate al suministro · ${d.round()} m', Sutura.textHi),
+        ZombieSpawn() => near ? ('Enfrentá al infectado', Sutura.danger) : ('Acercate · ${d.round()}\u00A0m', Sutura.textHi),
+        SupplySpawn() => near ? ('Recuperá el suministro', Sutura.amber) : ('Acercate · ${d.round()}\u00A0m', Sutura.textHi),
       };
     }
     final node = w.shelterById(w.selectedId);
