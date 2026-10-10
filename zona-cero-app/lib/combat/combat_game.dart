@@ -312,9 +312,9 @@ class _CameraRig extends Component with HasGameReference<CombatStageGame> {
 
 class _Backdrop extends Component with HasGameReference<CombatStageGame> {
   _Backdrop(this.art)
-      : _src = Rect.fromLTWH(0, 0, art.background.width.toDouble(), art.background.height.toDouble()),
-        _skySrc = Rect.fromLTWH(0, 0, art.background.width.toDouble(), 2),
-        _groundSrc = Rect.fromLTWH(0, art.background.height - 2.0, art.background.width.toDouble(), 2);
+    : _src = Rect.fromLTWH(0, 0, art.background.width.toDouble(), art.background.height.toDouble()),
+      _skySrc = Rect.fromLTWH(0, 0, art.background.width.toDouble(), 2),
+      _groundSrc = Rect.fromLTWH(0, art.background.height - 2.0, art.background.width.toDouble(), 2);
 
   final CombatArt art;
   final Rect _src;
@@ -372,18 +372,24 @@ class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
     // Destello de impacto: tinte parcial (el detalle del sprite se sigue viendo).
     for (var i = 0; i < 8; i++) {
       final a = (i + 1) * 20; // hasta ~63 %
-      _white.add(Paint()
-        ..colorFilter = const ColorFilter.mode(Color(0xFFF2FAFB), BlendMode.srcIn)
-        ..color = Color.fromARGB(a, 255, 255, 255)
-        ..filterQuality = FilterQuality.medium);
-      _red.add(Paint()
-        ..colorFilter = const ColorFilter.mode(Color(0xFFFF4A52), BlendMode.srcIn)
-        ..color = Color.fromARGB((a * 0.85).round(), 255, 255, 255)
-        ..filterQuality = FilterQuality.medium);
-      _glow.add(Paint()
-        ..colorFilter = const ColorFilter.mode(Color(0xFFEE3B45), BlendMode.srcIn)
-        ..color = Color.fromARGB((a * 0.55).round(), 255, 255, 255)
-        ..filterQuality = FilterQuality.low);
+      _white.add(
+        Paint()
+          ..colorFilter = const ColorFilter.mode(Color(0xFFF2FAFB), BlendMode.srcIn)
+          ..color = Color.fromARGB(a, 255, 255, 255)
+          ..filterQuality = FilterQuality.medium,
+      );
+      _red.add(
+        Paint()
+          ..colorFilter = const ColorFilter.mode(Color(0xFFFF4A52), BlendMode.srcIn)
+          ..color = Color.fromARGB((a * 0.85).round(), 255, 255, 255)
+          ..filterQuality = FilterQuality.medium,
+      );
+      _glow.add(
+        Paint()
+          ..colorFilter = const ColorFilter.mode(Color(0xFFEE3B45), BlendMode.srcIn)
+          ..color = Color.fromARGB((a * 0.55).round(), 255, 255, 255)
+          ..filterQuality = FilterQuality.low,
+      );
     }
   }
 
@@ -430,10 +436,10 @@ class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
   }
 
   static double _emuDuration(ZombieAnim a) => switch (a) {
-        ZombieAnim.attack || ZombieAnim.charge => 0.6,
-        ZombieAnim.death => 1.0,
-        _ => 0.5,
-      };
+    ZombieAnim.attack || ZombieAnim.charge => 0.6,
+    ZombieAnim.death => 1.0,
+    _ => 0.5,
+  };
 
   void flash({bool red = false}) {
     _flash = 1;
@@ -555,7 +561,8 @@ class _ZombieLayer extends Component with HasGameReference<CombatStageGame> {
 // -----------------------------------------------------------------------------
 
 class _Foreground extends Component with HasGameReference<CombatStageGame> {
-  _Foreground(this.art) : _fog = FxPool(art.foreground != null ? 7 : 12);
+  // Con la niebla del arte alcanzan pocos bancos extra (cuidar el overdraw).
+  _Foreground(this.art) : _fog = FxPool(art.foreground != null ? 5 : 9);
 
   final CombatArt art;
   final FxPool _fog;
@@ -576,7 +583,7 @@ class _Foreground extends Component with HasGameReference<CombatStageGame> {
     final v = game._layout.view;
     if (v.isEmpty) return;
     final low = _rnd.nextDouble() < 0.7;
-    final size = v.width * (0.7 + _rnd.nextDouble() * 0.8);
+    final size = v.width * (0.55 + _rnd.nextDouble() * 0.5);
     final y = low ? v.height * (0.62 + _rnd.nextDouble() * 0.3) : v.height * (0.3 + _rnd.nextDouble() * 0.3);
     final dir = _rnd.nextBool() ? 1.0 : -1.0;
     final x = initial ? _rnd.nextDouble() * v.width : (dir > 0 ? -size * 0.4 : v.width + size * 0.4);
@@ -606,7 +613,7 @@ class _Foreground extends Component with HasGameReference<CombatStageGame> {
     }
     _spawnIn -= dt;
     if (_spawnIn <= 0) {
-      _spawnIn = 2.2;
+      _spawnIn = 3.2;
       _spawn(initial: false);
     }
     _fog.update(dt);
@@ -1127,7 +1134,13 @@ class _ReticleLayer extends Component with HasGameReference<CombatStageGame> {
       return TextPainter(
         text: TextSpan(
           text: text,
-          style: TextStyle(fontFamily: Sutura.fMono, fontSize: size, color: color, letterSpacing: 1.4, shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 4)]),
+          style: TextStyle(
+            fontFamily: Sutura.fMono,
+            fontSize: size,
+            color: color,
+            letterSpacing: 1.4,
+            shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 4)],
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();

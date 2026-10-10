@@ -632,44 +632,47 @@ class _EncounterScreenState extends State<EncounterScreen> {
             top: pad.top + 8,
             left: 12,
             right: 12,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: VitalsPanel(
-                          health: _hp,
-                          maxHealth: s.player.maxHealth,
-                          stamina: _sta,
-                          maxStamina: s.player.maxStamina,
-                          defending: _busy && s.player.defending,
+            // Aísla el ECG (repinta cada cuadro) del resto del HUD.
+            child: RepaintBoundary(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: VitalsPanel(
+                            health: _hp,
+                            maxHealth: s.player.maxHealth,
+                            stamina: _sta,
+                            maxStamina: s.player.maxStamina,
+                            defending: _busy && s.player.defending,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TargetPanel(name: s.zombie.name, level: s.zombie.level, threat: threat, health: _zHp, maxHealth: s.zombie.maxHealth),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TargetPanel(name: s.zombie.name, level: s.zombie.level, threat: threat, health: _zHp, maxHealth: s.zombie.maxHealth),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    alignment: WrapAlignment.end,
-                    children: [
-                      if (_charging) const StatusChip('CARGANDO EMBESTIDA', color: Sutura.danger, blink: true, icon: Icons.warning_amber_rounded),
-                      if (_stunned) const StatusChip('ATURDIDO', color: Sutura.signal, icon: Icons.blur_on),
-                      if (_screamed) const StatusChip('GRITO', color: Sutura.caution2, icon: Icons.campaign_outlined),
-                    ],
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        if (_charging) const StatusChip('CARGANDO EMBESTIDA', color: Sutura.danger, blink: true, icon: Icons.warning_amber_rounded),
+                        if (_stunned) const StatusChip('ATURDIDO', color: Sutura.signal, icon: Icons.blur_on),
+                        if (_screamed) const StatusChip('GRITO', color: Sutura.caution2, icon: Icons.campaign_outlined),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         // HUD inferior: registro + arma (el panel del arma toma su alto natural).

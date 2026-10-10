@@ -215,10 +215,10 @@ class CombatManifest {
 
   /// Archivos de imagen que necesita un tipo (fondo, primer plano y tiras).
   List<String> filesFor(String type) => [
-        background.file,
-        if (background.foreground != null) background.foreground!,
-        for (final a in animsFor(type).values) a.file,
-      ];
+    background.file,
+    if (background.foreground != null) background.foreground!,
+    for (final a in animsFor(type).values) a.file,
+  ];
 
   static CombatManifest? tryParse(String? source) {
     if (source == null || source.trim().isEmpty) return null;
@@ -325,12 +325,7 @@ class StageLayout {
   /// `frameBgHeight` (alto del cuadro del zombie en px del fondo) limita la
   /// escala en vistas muy anchas para que el zombie no ocupe más de
   /// `maxZombieScreenFrac` de la altura.
-  factory StageLayout.compute({
-    required Size view,
-    required Size bg,
-    double frameBgHeight = 960,
-    double maxZombieScreenFrac = 0.82,
-  }) {
+  factory StageLayout.compute({required Size view, required Size bg, double frameBgHeight = 960, double maxZombieScreenFrac = 0.82}) {
     if (view.isEmpty || bg.isEmpty) {
       return StageLayout(view: view, bgSize: bg, scale: 1, offset: Offset.zero);
     }
@@ -344,8 +339,7 @@ class StageLayout {
 
   Offset toScreen(Offset bg) => Offset(offset.dx + bg.dx * scale, offset.dy + bg.dy * scale);
 
-  Rect rectToScreen(Rect r) =>
-      Rect.fromLTWH(offset.dx + r.left * scale, offset.dy + r.top * scale, r.width * scale, r.height * scale);
+  Rect rectToScreen(Rect r) => Rect.fromLTWH(offset.dx + r.left * scale, offset.dy + r.top * scale, r.width * scale, r.height * scale);
 
   Rect get bgScreenRect => rectToScreen(Offset.zero & bgSize);
 }
@@ -354,12 +348,7 @@ class StageLayout {
 Rect frameBoxToScreen(Rect frameBox, Size frameSize, Rect frameScreen) {
   final sx = frameScreen.width / frameSize.width;
   final sy = frameScreen.height / frameSize.height;
-  return Rect.fromLTWH(
-    frameScreen.left + frameBox.left * sx,
-    frameScreen.top + frameBox.top * sy,
-    frameBox.width * sx,
-    frameBox.height * sy,
-  );
+  return Rect.fromLTWH(frameScreen.left + frameBox.left * sx, frameScreen.top + frameBox.top * sy, frameBox.width * sx, frameBox.height * sy);
 }
 
 /// Caja del cuerpo a partir del alfa de los cuadros (RGBA8 sin premultiplicar

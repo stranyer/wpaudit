@@ -136,10 +136,7 @@ class CombatArt {
 
     final bgF = exists(bgFile) ? _image(b, '$base$bgFile') : Future<ui.Image?>.value(null);
     final fgF = exists(fgFile) ? _image(b, '$base$fgFile') : Future<ui.Image?>.value(null);
-    final stripF = {
-      for (final e in specs.entries)
-        e.key: exists(e.value.file) ? _image(b, '$base${e.value.file}') : Future<ui.Image?>.value(null),
-    };
+    final stripF = {for (final e in specs.entries) e.key: exists(e.value.file) ? _image(b, '$base${e.value.file}') : Future<ui.Image?>.value(null)};
 
     final bg = await bgF;
     final fg = await fgF;
@@ -345,8 +342,7 @@ ui.Image buildProceduralBackdrop(Size size) {
   c.drawCircle(
     Offset(w * 0.62, horizon),
     w * 0.55,
-    Paint()
-      ..shader = ui.Gradient.radial(Offset(w * 0.62, horizon), w * 0.55, const [Color(0x332E3A3E), Color(0x00000000)]),
+    Paint()..shader = ui.Gradient.radial(Offset(w * 0.62, horizon), w * 0.55, const [Color(0x332E3A3E), Color(0x00000000)]),
   );
 
   // Siluetas lejanas.
@@ -414,15 +410,7 @@ ui.Image buildProceduralBackdrop(Size size) {
       ..lineTo(farX, horizon + 6)
       ..lineTo(nearX, h * 0.80)
       ..close();
-    c.drawPath(
-      path,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(nearX, 0),
-          Offset(farX, 0),
-          const [Color(0xFF0B0F12), Color(0xFF111A1E)],
-        ),
-    );
+    c.drawPath(path, Paint()..shader = ui.Gradient.linear(Offset(nearX, 0), Offset(farX, 0), const [Color(0xFF0B0F12), Color(0xFF111A1E)]));
     // Ventanas en perspectiva.
     final dark = Paint()..color = const Color(0xFF070A0C);
     final lit = Paint()..color = const Color(0x664E6A72);
@@ -489,7 +477,12 @@ ui.Image buildProceduralBackdrop(Size size) {
     Offset(-w * 0.05, h * 0.5),
     w * 0.75,
     Paint()
-      ..shader = ui.Gradient.radial(Offset(-w * 0.05, h * 0.5), w * 0.75, const [Color(0x40EE3B45), Color(0x10EE3B45), Color(0x00000000)], const [0, 0.5, 1]),
+      ..shader = ui.Gradient.radial(
+        Offset(-w * 0.05, h * 0.5),
+        w * 0.75,
+        const [Color(0x40EE3B45), Color(0x10EE3B45), Color(0x00000000)],
+        const [0, 0.5, 1],
+      ),
   );
   // Reflejo rojo en el piso mojado.
   c.drawOval(
@@ -511,8 +504,7 @@ ui.Image buildProceduralBackdrop(Size size) {
   // Viñeta.
   c.drawRect(
     Offset.zero & size,
-    Paint()
-      ..shader = ui.Gradient.radial(Offset(w / 2, h * 0.55), h * 0.75, const [Color(0x00000000), Color(0xA0000000)], const [0.55, 1]),
+    Paint()..shader = ui.Gradient.radial(Offset(w / 2, h * 0.55), h * 0.75, const [Color(0x00000000), Color(0xA0000000)], const [0.55, 1]),
   );
 
   final pic = rec.endRecording();

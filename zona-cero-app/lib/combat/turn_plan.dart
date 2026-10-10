@@ -10,9 +10,9 @@ import '../core/types.dart';
 
 /// Eventos que pertenecen a la respuesta del zombie (se muestran después).
 bool isZombiePhase(CombatEvent e) => switch (e) {
-      ZombieHit() || ZombieMiss() || ZombieChargePrepare() || ZombieStunned() || ZombieScream() || PlayerDown() => true,
-      _ => false,
-    };
+  ZombieHit() || ZombieMiss() || ZombieChargePrepare() || ZombieStunned() || ZombieScream() || PlayerDown() => true,
+  _ => false,
+};
 
 /// Ataques del zombie: tienen anticipación (animación) e impacto.
 bool isZombieAttack(CombatEvent e) => e is ZombieHit || e is ZombieMiss;
@@ -52,8 +52,14 @@ abstract final class TurnTiming {
 /// del zombie (desde la animación); se acota a [TurnTiming.minWindup]…[TurnTiming.maxWindup].
 TurnPlan planTurn(List<CombatEvent> events, {int Function(CombatEvent e)? windupMs}) {
   final out = <PlannedEvent>[];
-  final player = [for (final e in events) if (!isZombiePhase(e)) e];
-  final zombie = [for (final e in events) if (isZombiePhase(e)) e];
+  final player = [
+    for (final e in events)
+      if (!isZombiePhase(e)) e,
+  ];
+  final zombie = [
+    for (final e in events)
+      if (isZombiePhase(e)) e,
+  ];
 
   var t = 0;
   for (var i = 0; i < player.length; i++) {

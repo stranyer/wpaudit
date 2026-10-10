@@ -73,14 +73,14 @@ class ProceduralZombie {
   final Paint _overlay = Paint();
 
   static double durationOf(ZombieAnim a) => switch (a) {
-        ZombieAnim.idle => 2.4,
-        ZombieAnim.attack => 0.66,
-        ZombieAnim.hit => 0.34,
-        ZombieAnim.death => 1.1,
-        ZombieAnim.chargePrepare => 0.6,
-        ZombieAnim.charge => 0.6,
-        ZombieAnim.scream => 0.9,
-      };
+    ZombieAnim.idle => 2.4,
+    ZombieAnim.attack => 0.66,
+    ZombieAnim.hit => 0.34,
+    ZombieAnim.death => 1.1,
+    ZombieAnim.chargePrepare => 0.6,
+    ZombieAnim.charge => 0.6,
+    ZombieAnim.scream => 0.9,
+  };
 
   void _build() {
     final s = _s;

@@ -71,8 +71,7 @@ double reticleRadius(double ms) {
 }
 
 /// 0 (retícula abierta) … 1 (cerrada al mínimo).
-double tightnessFor(double radius) =>
-    ((AimTuning.maxRadius - radius) / (AimTuning.maxRadius - AimTuning.minRadius)).clamp(0.0, 1.0);
+double tightnessFor(double radius) => ((AimTuning.maxRadius - radius) / (AimTuning.maxRadius - AimTuning.minRadius)).clamp(0.0, 1.0);
 
 /// Zona de cabeza de reserva dentro de la caja del cuerpo.
 Rect headRectOf(Rect body) {

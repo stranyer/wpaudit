@@ -65,11 +65,7 @@ class _PreviewApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: buildSuturaTheme(),
-      home: const _Launcher(),
-    );
+    final app = MaterialApp(debugShowCheckedModeBanner: false, theme: buildSuturaTheme(), home: const _Launcher());
     return _q['noart'] == '1' ? DefaultAssetBundle(bundle: _NoArt(), child: app) : app;
   }
 }
@@ -96,26 +92,23 @@ class _LauncherState extends State<_Launcher> {
 
   void _open(ZombieTypeId t) {
     _setupFight(t);
-    Navigator.of(context).push(PageRouteBuilder<void>(
-      pageBuilder: (_, _, _) => const EncounterScreen(),
-      transitionDuration: Duration.zero,
-    ));
+    Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => const EncounterScreen(), transitionDuration: Duration.zero));
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Sutura.void_,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final t in ZombieTypeId.values)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: ChamferButton(label: zombieDefs[t]!.name, onPressed: () => _open(t)),
-                ),
-            ],
-          ),
-        ),
-      );
+    backgroundColor: Sutura.void_,
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final t in ZombieTypeId.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: ChamferButton(label: zombieDefs[t]!.name, onPressed: () => _open(t)),
+            ),
+        ],
+      ),
+    ),
+  );
 }
