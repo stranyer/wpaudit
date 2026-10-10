@@ -12,13 +12,21 @@ export interface AvatarSceneOptions {
 }
 
 const PEDESTAL_H = 0.26;
-const LOOK_Y = 1.08;
+/** Elevación de la cámara (rad): un poco desde arriba para ver el pedestal. */
+const CAM_ELEVATION = 0.1;
+/** Margen en NDC: |x|,|y| ≤ 0.8 deja ~10% libre a cada lado. */
+const NDC_LIMIT = 0.8;
+
+const _p = new THREE.Vector3();
+const _target = new THREE.Vector3();
 
 export class AvatarScene {
   private readonly stage: Stage;
   private readonly survivor: SurvivorRig;
   private readonly turntable = new THREE.Group();
   private readonly rim: THREE.DirectionalLight;
+  /** Puntos de control (espacio del mundo, invariantes al giro) para encuadrar. */
+  private readonly fitPoints: THREE.Vector3[] = [];
   private disposed = false;
 
   constructor(container: HTMLElement, opts: AvatarSceneOptions = {}) {
@@ -57,6 +65,24 @@ export class AvatarScene {
     this.turntable.rotation.y = -0.5;
     scene.add(this.turntable);
 
+    // Puntos de encuadre: anillos (simétricos al girar) en la base, el pedestal, los hombros y
+    // la cabeza, con la altura real del personaje medida con su caja envolvente.
+    const figure = new THREE.Box3().setFromObject(this.survivor.root);
+    const top = figure.max.y + 0.03;
+    const rings: [number, number][] = [
+      [0.0, 0.98],
+      [PEDESTAL_H, 0.72],
+      [top * 0.55, 0.42],
+      [top * 0.8, 0.4],
+      [top, 0.18],
+    ];
+    for (const [y, r] of rings) {
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        this.fitPoints.push(new THREE.Vector3(Math.sin(a) * r, y, Math.cos(a) * r));
+      }
+    }
+
     stage.onResize(this.onResize);
     stage.onUpdate(this.update);
     stage.renderOnce();
@@ -79,13 +105,55 @@ export class AvatarScene {
     this.rim.intensity = 3.2 + Math.sin(elapsed * 0.7) * 0.25;
   };
 
+  /**
+   * Encuadre según el aspecto: busca la distancia mínima a la que todos los puntos de control
+   * entran con ~10% de margen y luego centra verticalmente la figura.
+   */
   private onResize = (w: number, h: number): void => {
     const cam = this.stage.camera;
-    const aspect = w / h;
-    const vTan = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
-    // Encuadre: ~2.25 m de alto (pedestal + personaje) y ~1.7 m de ancho
-    const dist = Math.max(1.18 / vTan, 0.85 / (vTan * aspect));
-    cam.position.set(0, LOOK_Y + 0.15, dist);
-    cam.lookAt(0, LOOK_Y, 0);
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+    let ty = 1.0;
+    let dist = 5;
+    for (let pass = 0; pass < 3; pass++) {
+      let lo = 1;
+      let hi = 40;
+      for (let i = 0; i < 22; i++) {
+        const mid = (lo + hi) / 2;
+        if (this.extent(mid, ty).fits) hi = mid;
+        else lo = mid;
+      }
+      dist = hi;
+      const e = this.extent(dist, ty);
+      // recentra: desplaza el objetivo para que el centro proyectado quede en y = 0
+      const T = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+      ty += ((e.minY + e.maxY) / 2) * dist * T;
+    }
+    this.placeCamera(dist, ty);
   };
+
+  private placeCamera(dist: number, ty: number): void {
+    const cam = this.stage.camera;
+    _target.set(0, ty, 0);
+    cam.position.set(0, ty + Math.sin(CAM_ELEVATION) * dist, Math.cos(CAM_ELEVATION) * dist);
+    cam.lookAt(_target);
+    cam.updateMatrixWorld(true);
+  }
+
+  private extent(dist: number, ty: number): { fits: boolean; minY: number; maxY: number } {
+    this.placeCamera(dist, ty);
+    const cam = this.stage.camera;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let fits = true;
+    for (const p of this.fitPoints) {
+      _p.copy(p).project(cam);
+      if (_p.z > 1 || _p.z < -1) fits = false;
+      if (Math.abs(_p.x) > NDC_LIMIT + 0.05) fits = false;
+      minY = Math.min(minY, _p.y);
+      maxY = Math.max(maxY, _p.y);
+    }
+    if (maxY - minY > NDC_LIMIT * 2) fits = false;
+    return { fits, minY, maxY };
+  }
 }
