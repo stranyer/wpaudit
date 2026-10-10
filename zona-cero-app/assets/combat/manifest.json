@@ -5,25 +5,25 @@
  "zombies": {
   "walker": {
    "idle": {
-    "file": "walker_idle.png",
+    "file": "walker_idle.webp",
     "frames": 12,
     "loop": true,
     "columns": 6
    },
    "attack": {
-    "file": "walker_attack.png",
+    "file": "walker_attack.webp",
     "frames": 10,
     "loop": false,
     "impactFrame": 3,
     "columns": 6
    },
    "hit": {
-    "file": "walker_hit.png",
+    "file": "walker_hit.webp",
     "frames": 5,
     "loop": false
    },
    "death": {
-    "file": "walker_death.png",
+    "file": "walker_death.webp",
     "frames": 14,
     "loop": false,
     "holdLast": true,
@@ -32,25 +32,25 @@
   },
   "runner": {
    "idle": {
-    "file": "runner_idle.png",
+    "file": "runner_idle.webp",
     "frames": 12,
     "loop": true,
     "columns": 6
    },
    "attack": {
-    "file": "runner_attack.png",
+    "file": "runner_attack.webp",
     "frames": 10,
     "loop": false,
     "impactFrame": 3,
     "columns": 6
    },
    "hit": {
-    "file": "runner_hit.png",
+    "file": "runner_hit.webp",
     "frames": 5,
     "loop": false
    },
    "death": {
-    "file": "runner_death.png",
+    "file": "runner_death.webp",
     "frames": 14,
     "loop": false,
     "holdLast": true,
@@ -59,25 +59,25 @@
   },
   "bloater": {
    "idle": {
-    "file": "bloater_idle.png",
+    "file": "bloater_idle.webp",
     "frames": 12,
     "loop": true,
     "columns": 6
    },
    "attack": {
-    "file": "bloater_attack.png",
+    "file": "bloater_attack.webp",
     "frames": 10,
     "loop": false,
     "impactFrame": 3,
     "columns": 6
    },
    "hit": {
-    "file": "bloater_hit.png",
+    "file": "bloater_hit.webp",
     "frames": 5,
     "loop": false
    },
    "death": {
-    "file": "bloater_death.png",
+    "file": "bloater_death.webp",
     "frames": 14,
     "loop": false,
     "holdLast": true,
@@ -86,32 +86,32 @@
   },
   "screamer": {
    "idle": {
-    "file": "screamer_idle.png",
+    "file": "screamer_idle.webp",
     "frames": 12,
     "loop": true,
     "columns": 6
    },
    "attack": {
-    "file": "screamer_attack.png",
+    "file": "screamer_attack.webp",
     "frames": 10,
     "loop": false,
     "impactFrame": 3,
     "columns": 6
    },
    "hit": {
-    "file": "screamer_hit.png",
+    "file": "screamer_hit.webp",
     "frames": 5,
     "loop": false
    },
    "death": {
-    "file": "screamer_death.png",
+    "file": "screamer_death.webp",
     "frames": 14,
     "loop": false,
     "holdLast": true,
     "columns": 6
    },
    "scream": {
-    "file": "screamer_scream.png",
+    "file": "screamer_scream.webp",
     "frames": 10,
     "loop": false,
     "peakFrame": 3,
@@ -120,39 +120,39 @@
   },
   "brute": {
    "idle": {
-    "file": "brute_idle.png",
+    "file": "brute_idle.webp",
     "frames": 12,
     "loop": true,
     "columns": 6
    },
    "attack": {
-    "file": "brute_attack.png",
+    "file": "brute_attack.webp",
     "frames": 10,
     "loop": false,
     "impactFrame": 3,
     "columns": 6
    },
    "hit": {
-    "file": "brute_hit.png",
+    "file": "brute_hit.webp",
     "frames": 5,
     "loop": false
    },
    "death": {
-    "file": "brute_death.png",
+    "file": "brute_death.webp",
     "frames": 14,
     "loop": false,
     "holdLast": true,
     "columns": 6
    },
    "charge_prepare": {
-    "file": "brute_charge_prepare.png",
+    "file": "brute_charge_prepare.webp",
     "frames": 8,
     "loop": false,
     "holdLast": true,
     "columns": 6
    },
    "charge": {
-    "file": "brute_charge.png",
+    "file": "brute_charge.webp",
     "frames": 10,
     "loop": false,
     "impactFrame": 2,
@@ -162,7 +162,7 @@
  },
  "background": {
   "file": "bg_street.jpg",
-  "foreground": "bg_street_fg.png",
+  "foreground": "bg_street_fg.webp",
   "width": 720,
   "height": 1280,
   "horizonY": 536.3,

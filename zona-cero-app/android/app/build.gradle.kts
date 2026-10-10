@@ -29,6 +29,14 @@ android {
         versionName = flutter.versionName
     }
 
+    // Bibliotecas nativas comprimidas dentro del APK: la descarga para instalar a mano
+    // baja ~15 MB (Flutter + MapLibre). En Play Store conviene un App Bundle.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

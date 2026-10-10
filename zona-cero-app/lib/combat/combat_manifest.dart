@@ -7,7 +7,7 @@
 //   "frameWidth": 360, "frameHeight": 480, "fps": 15,
 //   "anchor": {"x": 0.5, "y": 1.0},             // abajo-centro del CUADRO, fracción (o px) del fondo
 //   "spriteScale": 2,                            // px del fondo por px del cuadro
-//   "background": {"file": "bg_street.jpg", "foreground": "bg_street_fg.png",
+//   "background": {"file": "bg_street.jpg", "foreground": "bg_street_fg.webp",
 //                  "width": 720, "height": 1280},
 //   "zombies": {"walker": {"idle": {"file": "walker_idle.png", "frames": 12, "loop": true},
 //                          "attack": {"file": "...", "frames": 10, "impactFrame": 6}, ...}},
@@ -120,7 +120,7 @@ class BackgroundSpec {
   Size get size => Size(width, height);
 
   static BackgroundSpec fromJson(Object? json) {
-    if (json is! Map) return const BackgroundSpec(foreground: 'bg_street_fg.png');
+    if (json is! Map) return const BackgroundSpec(foreground: 'bg_street_fg.webp');
     final f = json['file'];
     final fg = json['foreground'];
     return BackgroundSpec(

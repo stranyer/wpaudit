@@ -132,7 +132,7 @@ class CombatArt {
     final key = type.key;
     final specs = manifest.animsFor(key);
     final bgFile = manifest.background.file;
-    final fgFile = manifest.background.foreground ?? 'bg_street_fg.png';
+    final fgFile = manifest.background.foreground ?? 'bg_street_fg.webp';
 
     final bgF = exists(bgFile) ? _image(b, '$base$bgFile') : Future<ui.Image?>.value(null);
     final fgF = exists(fgFile) ? _image(b, '$base$fgFile') : Future<ui.Image?>.value(null);

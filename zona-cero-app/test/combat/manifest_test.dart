@@ -30,7 +30,7 @@ void main() {
       expect(m.frameHeight, 480);
       expect(m.fps, 15);
       expect(m.background.file, 'bg_street.jpg');
-      expect(m.background.foreground, 'bg_street_fg.png');
+      expect(m.background.foreground, 'bg_street_fg.webp');
       for (final t in ['walker', 'runner', 'bloater', 'screamer', 'brute']) {
         expect(m.hasSprites(t), isTrue, reason: t);
         final idle = m.animsFor(t)[ZombieAnim.idle]!;
@@ -46,6 +46,15 @@ void main() {
       expect(w.groundInFrame, closeTo(0.92, 1e-6));
       // El bruto está más lejos: apoya más arriba en el fondo.
       expect(m.placementFor('brute').groundBgY, lessThan(w.groundBgY));
+      // Cada tira existe y su grilla entra en una textura de 4096 px (GPUs de gama baja).
+      for (final t in ['walker', 'runner', 'bloater', 'screamer', 'brute']) {
+        for (final a in m.animsFor(t).values) {
+          expect(File('assets/combat/${a.file}').existsSync(), isTrue, reason: a.file);
+          final cols = a.columns ?? a.frames;
+          expect(cols * m.frameWidth, lessThanOrEqualTo(4096), reason: a.file);
+          expect((a.frames / cols).ceil() * m.frameHeight, lessThanOrEqualTo(4096), reason: a.file);
+        }
+      }
     });
 
     test('tolerante: anim inválida se descarta, números como texto, ancla en px', () {
