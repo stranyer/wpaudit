@@ -1566,7 +1566,7 @@ class _ReticleLayer extends Component with HasGameReference<CombatStageGame> {
       if (!f.isEmpty) {
         final inset = 14 * _tight;
         final r = Rect.fromLTRB(f.left + inset, f.top + inset * 0.6, f.right - inset, f.bottom - inset * 0.6);
-        _bracket.color = _white.withValues(alpha: (0.45 + 0.45 * _tight) * _frameA);
+        _bracket.color = _white.withValues(alpha: (0.3 + 0.6 * _tight) * _frameA);
         _corners(canvas, r, 18 - 6 * _tight, _bracket);
       }
     }

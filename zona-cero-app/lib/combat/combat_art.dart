@@ -31,8 +31,8 @@ enum CombatPlate {
     focusX: 0.55,
     tint: Color(0xFFC9C5C0),
     look: PlateLook(
-      shadowTint: Color(0xFF6E6A6C),
-      lightTint: Color(0xFFC4BCB4),
+      shadowTint: Color(0xFF605C5E),
+      lightTint: Color(0xFFB4ADA6),
       rim: Color(0xFFFF4A30),
       rimSide: 1,
       rimBase: 0.1,
