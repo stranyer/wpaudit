@@ -206,6 +206,7 @@ void main() {
       final big = infestedClusters(row).single;
       expect(big.cells, 4);
       expect(big.radiusM, greaterThan(minZoneRadiusM));
+      expect(big.radiusM, lessThanOrEqualTo(maxZoneRadiusM));
     });
 
     test('ignora las zonas tranquilas', () {

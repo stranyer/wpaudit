@@ -256,6 +256,10 @@ typedef InfestedCluster = ({LatLng center, double radiusM, int cells});
 
 const minZoneRadiusM = 95.0;
 
+/// Tope del área roja: un núcleo localizado (como en la referencia), no un
+/// manto que tiña media pantalla en los grupos grandes.
+const maxZoneRadiusM = 170.0;
+
 List<InfestedCluster> infestedClusters(List<Zone> zones) {
   final cells = <String, CellCoord>{
     for (final z in zones)
@@ -303,7 +307,7 @@ List<InfestedCluster> infestedClusters(List<Zone> zones) {
     }
     // Media celda (~100 m) alrededor de la celda más lejana, achicada para que
     // el área no tape media pantalla.
-    out.add((center: best, radiusM: math.max(minZoneRadiusM, r * 0.8 + 70), cells: group.length));
+    out.add((center: best, radiusM: (r * 0.8 + 70).clamp(minZoneRadiusM, maxZoneRadiusM), cells: group.length));
   }
   return out;
 }

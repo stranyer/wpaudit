@@ -70,6 +70,9 @@ flutter:
     - assets/art/fp/
     - assets/audio/
 
+  shaders:
+    - lib/map/shaders/scan_ripple.frag
+
   fonts:
     - family: Oswald
       fonts:
