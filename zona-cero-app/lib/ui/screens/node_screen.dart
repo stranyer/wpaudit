@@ -41,11 +41,19 @@ const _streets = ['Av. Corrientes', 'Av. de Mayo', 'Tucumán', 'Av. Callao', 'Vi
 /// Eventos de otros enlaces derivados de los aportes del nodo (deterministas
 /// por nodo y día), para que la bitácora de los nodos de la red no esté vacía.
 List<NodeLogEntry> communityLog(Shelter s, int now) {
-  final day = DateTime.fromMillisecondsSinceEpoch(now);
-  final midnight = DateTime(day.year, day.month, day.day).millisecondsSinceEpoch;
-  final rng = createRng('nodelog:${s.id}:${now ~/ 86400000}');
-  final sinceMidnight = math.max(31, (now - midnight) ~/ 60000);
-  int at() => midnight + rng.intRange(30, sinceMidnight) * 60000;
+  final today = DateTime.fromMillisecondsSinceEpoch(now);
+  // Ayer y hoy: los horarios son fijos para cada día y se muestran los que ya
+  // pasaron (así la bitácora no queda vacía apenas pasada la medianoche).
+  final out = <NodeLogEntry>[
+    for (final d in [today.subtract(const Duration(days: 1)), today]) ..._dayLog(s, DateTime(d.year, d.month, d.day)),
+  ];
+  return out.where((e) => e.at <= now).toList();
+}
+
+List<NodeLogEntry> _dayLog(Shelter s, DateTime day) {
+  final midnight = day.millisecondsSinceEpoch;
+  final rng = createRng('nodelog:${s.id}:${day.year}-${day.month}-${day.day}');
+  int at() => midnight + rng.intRange(20, 1430) * 60000;
   final out = <NodeLogEntry>[];
   final mats = [ItemId.wood, ItemId.metal, ItemId.food, ItemId.water];
   for (final c in s.contributions.take(4)) {
@@ -62,7 +70,7 @@ List<NodeLogEntry> communityLog(Shelter s, int now) {
   if (rng.chance(0.6)) out.add(NodeLogEntry(at(), 'Se restableció la señal. Zona ${_zonesOf[rng.intRange(0, 3)]} conectada.', kind: NodeLogKind.signal));
   if (rng.chance(0.6)) out.add(NodeLogEntry(at(), 'Se reportan movimientos en ${_streets[rng.intRange(0, _streets.length - 1)]}.', kind: NodeLogKind.alert));
   if (rng.chance(0.7)) out.add(NodeLogEntry(at(), 'Se registraron ${rng.intRange(2, 9)} pulsos en el nodo.', kind: NodeLogKind.people));
-  return out.where((e) => e.at <= now).toList();
+  return out;
 }
 
 const _mottos = [
