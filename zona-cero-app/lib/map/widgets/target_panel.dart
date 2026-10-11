@@ -108,7 +108,12 @@ class _TargetPanelState extends State<TargetPanel> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => Sfx.play(SfxId.error, volume: 0.7),
-            child: ChamferButton(label: 'Acercate ${distanceLabel(left.toDouble())}', sublabel: 'FUERA DE ALCANCE', expand: true, dense: true),
+            child: ChamferButton(
+              label: 'Acercate ${distanceLabel(left.toDouble())}',
+              sublabel: 'FUERA DE ALCANCE',
+              expand: true,
+              dense: true,
+            ),
           ),
         ),
         if (_demo) ...[
@@ -148,22 +153,22 @@ class _TargetPanelState extends State<TargetPanel> {
       actions: r.locked
           ? const _Locked()
           : r.near
-              ? ChamferButton(
-                  label: 'Enfrentar',
-                  tone: ChamferTone.primary,
-                  icon: Icons.gps_fixed,
-                  expand: true,
-                  onPressed: _busy
-                      ? null
-                      : () => _run(() async {
-                            if (await app.engage(z)) {
-                              widget.onOpenEncounter();
-                            } else {
-                              Sfx.play(SfxId.error);
-                            }
-                          }),
-                )
-              : _approachButtons(app.world.positionAt(z, DateTime.now().millisecondsSinceEpoch), r),
+          ? ChamferButton(
+              label: 'Enfrentar',
+              tone: ChamferTone.primary,
+              icon: Icons.gps_fixed,
+              expand: true,
+              onPressed: _busy
+                  ? null
+                  : () => _run(() async {
+                      if (await app.engage(z)) {
+                        widget.onOpenEncounter();
+                      } else {
+                        Sfx.play(SfxId.error);
+                      }
+                    }),
+            )
+          : _approachButtons(app.world.positionAt(z, DateTime.now().millisecondsSinceEpoch), r),
     );
   }
 
@@ -186,20 +191,20 @@ class _TargetPanelState extends State<TargetPanel> {
       actions: r.locked
           ? const _Locked()
           : r.near
-              ? ChamferButton(
-                  label: 'Recuperar',
-                  sublabel: enough ? null : 'RESISTENCIA INSUFICIENTE',
-                  tone: ChamferTone.amber,
-                  icon: Icons.inventory_2_outlined,
-                  expand: true,
-                  onPressed: _busy
-                      ? null
-                      : () => _run(() async {
-                            if (!enough) Sfx.play(SfxId.error);
-                            await app.scavenge(s);
-                          }),
-                )
-              : _approachButtons(s.position, r),
+          ? ChamferButton(
+              label: 'Recuperar',
+              sublabel: enough ? null : 'RESISTENCIA INSUFICIENTE',
+              tone: ChamferTone.amber,
+              icon: Icons.inventory_2_outlined,
+              expand: true,
+              onPressed: _busy
+                  ? null
+                  : () => _run(() async {
+                      if (!enough) Sfx.play(SfxId.error);
+                      await app.scavenge(s);
+                    }),
+            )
+          : _approachButtons(s.position, r),
     );
   }
 
@@ -260,31 +265,28 @@ class _TargetPanelState extends State<TargetPanel> {
       accent: Sutura.amber,
       kicker: 'TRANSMISIÓN · CANAL ABIERTO',
       title: 'Señal de auxilio',
-      chips: [
-        _Chip('Se apaga en $mins min', Sutura.amber),
-        _Chip(distanceLabel(r.distance), Sutura.textHi),
-      ],
+      chips: [_Chip('Se apaga en $mins min', Sutura.amber), _Chip(distanceLabel(r.distance), Sutura.textHi)],
       description: 'Alguien está transmitiendo desde acá. Respondé en el lugar para recuperar lo que dejaron.',
       actions: r.locked
           ? const _Locked()
           : r.near
-              ? ChamferButton(
-                  label: 'Responder',
-                  tone: ChamferTone.amber,
-                  icon: Icons.settings_input_antenna,
-                  expand: true,
-                  onPressed: _busy
-                      ? null
-                      : () => _run(() async {
-                            final text = await app.answerSignal(s);
-                            if (text != null) {
-                              widget.onTransmission(text);
-                            } else {
-                              Sfx.play(SfxId.error);
-                            }
-                          }),
-                )
-              : _approachButtons(s.position, r),
+          ? ChamferButton(
+              label: 'Responder',
+              tone: ChamferTone.amber,
+              icon: Icons.settings_input_antenna,
+              expand: true,
+              onPressed: _busy
+                  ? null
+                  : () => _run(() async {
+                      final text = await app.answerSignal(s);
+                      if (text != null) {
+                        widget.onTransmission(text);
+                      } else {
+                        Sfx.play(SfxId.error);
+                      }
+                    }),
+            )
+          : _approachButtons(s.position, r),
     );
   }
 }
@@ -365,7 +367,12 @@ class _PanelHeader extends StatelessWidget {
         Container(width: 7, height: 7, color: color),
         const SizedBox(width: 9),
         Expanded(
-          child: Text(kicker, maxLines: 1, overflow: TextOverflow.ellipsis, style: SuturaText.label.copyWith(color: color, fontSize: 11, letterSpacing: 2.8)),
+          child: Text(
+            kicker,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: SuturaText.label.copyWith(color: color, fontSize: 11, letterSpacing: 2.8),
+          ),
         ),
         Semantics(
           button: true,
@@ -400,7 +407,12 @@ class _Portrait extends StatelessWidget {
         boxShadow: const [BoxShadow(color: Color(0x80C8322B), blurRadius: 10)],
       ),
       child: ClipOval(
-        child: Image.asset(asset, fit: BoxFit.cover, filterQuality: FilterQuality.medium, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+        child: Image.asset(
+          asset,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        ),
       ),
     );
   }
@@ -429,15 +441,10 @@ class _Locked extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => Sfx.play(SfxId.error, volume: 0.7),
-        child: const ChamferButton(
-          label: 'Interacciones en pausa',
-          sublabel: 'VELOCIDAD EXCESIVA',
-          icon: Icons.speed,
-          expand: true,
-        ),
-      );
+    behavior: HitTestBehavior.opaque,
+    onTap: () => Sfx.play(SfxId.error, volume: 0.7),
+    child: const ChamferButton(label: 'Interacciones en pausa', sublabel: 'VELOCIDAD EXCESIVA', icon: Icons.speed, expand: true),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -503,7 +510,12 @@ class _TransmissionPanelState extends State<TransmissionPanel> with SingleTicker
                         children: [
                           Text(
                             'FREC. 7.3 MHZ  ·  REGISTRO VITA-7',
-                            style: SuturaText.paper.copyWith(fontSize: 10.5, letterSpacing: 1.4, color: const Color(0xFF6B6250), height: 1.2),
+                            style: SuturaText.paper.copyWith(
+                              fontSize: 10.5,
+                              letterSpacing: 1.4,
+                              color: const Color(0xFF6B6250),
+                              height: 1.2,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           // El texto completo reserva el alto; el visible se tipea encima.
@@ -543,4 +555,3 @@ class _TransmissionPanelState extends State<TransmissionPanel> with SingleTicker
 
   static const _paperStyle = TextStyle(fontFamily: Sutura.fPaper, fontSize: 15, height: 1.5, color: Color(0xFF2A251D));
 }
-

@@ -13,10 +13,10 @@ class MapEventFeed extends StatelessWidget {
   final GameMapController camera;
 
   static Color colorOf(AmbientTone t) => switch (t) {
-        AmbientTone.hostile => const Color(0xFFE5574C),
-        AmbientTone.hazard => Sutura.amber,
-        AmbientTone.signal => Sutura.signal,
-      };
+    AmbientTone.hostile => const Color(0xFFE5574C),
+    AmbientTone.hazard => Sutura.amber,
+    AmbientTone.signal => Sutura.signal,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +51,8 @@ class _EventRow extends StatefulWidget {
 }
 
 class _EventRowState extends State<_EventRow> with SingleTickerProviderStateMixin {
-  late final AnimationController _blink = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  late final AnimationController _blink = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
 
   @override
   void dispose() {
@@ -76,19 +77,25 @@ class _EventRowState extends State<_EventRow> with SingleTickerProviderStateMixi
             child: Container(
               width: 5,
               height: 5,
-              decoration: BoxDecoration(color: c, shape: BoxShape.circle, boxShadow: [BoxShadow(color: c.withValues(alpha: 0.7), blurRadius: 4)]),
+              decoration: BoxDecoration(
+                color: c,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: c.withValues(alpha: 0.7), blurRadius: 4)],
+              ),
             ),
           ),
           const SizedBox(width: 7),
           Flexible(
             child: Text.rich(
-              TextSpan(children: [
-                TextSpan(text: widget.event.text.toUpperCase()),
-                TextSpan(
-                  text: '   ${widget.event.detail}',
-                  style: const TextStyle(color: Sutura.textLow, fontSize: 9.5, letterSpacing: 1.2),
-                ),
-              ]),
+              TextSpan(
+                children: [
+                  TextSpan(text: widget.event.text.toUpperCase()),
+                  TextSpan(
+                    text: '   ${widget.event.detail}',
+                    style: const TextStyle(color: Sutura.textLow, fontSize: 9.5, letterSpacing: 1.2),
+                  ),
+                ],
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: SuturaText.label.copyWith(fontSize: 10.5, letterSpacing: 1.5, color: Sutura.textHi),

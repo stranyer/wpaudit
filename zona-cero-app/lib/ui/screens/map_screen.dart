@@ -114,7 +114,9 @@ class _MapScreenState extends State<MapScreen> {
               child: Stack(
                 children: [
                   Positioned.fill(child: _map),
-                  Positioned.fill(child: ScanWave(camera: _camera, shake: _shake)),
+                  Positioned.fill(
+                    child: ScanWave(camera: _camera, shake: _shake),
+                  ),
                 ],
               ),
             ),
@@ -215,7 +217,10 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   );
                 } else {
-                  child = const PointerShield(key: ValueKey('hud'), child: MapVitalsPanel(height: _panelH));
+                  child = const PointerShield(
+                    key: ValueKey('hud'),
+                    child: MapVitalsPanel(height: _panelH),
+                  );
                 }
                 return AnimatedSwitcher(
                   duration: Sutura.base,
@@ -371,11 +376,7 @@ class _MapGrain extends StatelessWidget {
         ),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            gradient: RadialGradient(
-              radius: 0.95,
-              colors: [Color(0x00000000), Color(0x00000000), Color(0x8C050606)],
-              stops: [0, 0.55, 1],
-            ),
+            gradient: RadialGradient(radius: 0.95, colors: [Color(0x00000000), Color(0x00000000), Color(0x8C050606)], stops: [0, 0.55, 1]),
           ),
         ),
       ),
@@ -398,12 +399,7 @@ class _Scrim extends StatelessWidget {
         gradient: LinearGradient(
           begin: top ? Alignment.topCenter : Alignment.bottomCenter,
           end: top ? Alignment.bottomCenter : Alignment.topCenter,
-          colors: [
-            const Color(0xFF0A0B0C),
-            const Color(0xF20A0B0C),
-            const Color(0x8C0A0B0C),
-            const Color(0x000A0B0C),
-          ],
+          colors: [const Color(0xFF0A0B0C), const Color(0xF20A0B0C), const Color(0x8C0A0B0C), const Color(0x000A0B0C)],
           stops: [0, s, s + (1 - s) * 0.4, 1],
         ),
       ),

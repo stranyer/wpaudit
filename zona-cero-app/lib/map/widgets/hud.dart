@@ -121,11 +121,7 @@ class MapHeader extends StatelessWidget {
           children: [
             Flexible(
               child: IgnorePointer(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.topLeft,
-                  child: const ZcLogo(size: 27),
-                ),
+                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.topLeft, child: const ZcLogo(size: 27)),
               ),
             ),
             const SizedBox(width: 10),
@@ -232,7 +228,12 @@ class _StatusCardState extends State<StatusCard> {
                         opacity: 0.55,
                         child: ColorFiltered(
                           colorFilter: _greyscale,
-                          child: Image.asset(_obelisco, fit: BoxFit.fitHeight, alignment: const Alignment(-0.08, -1), filterQuality: FilterQuality.medium),
+                          child: Image.asset(
+                            _obelisco,
+                            fit: BoxFit.fitHeight,
+                            alignment: const Alignment(-0.08, -1),
+                            filterQuality: FilterQuality.medium,
+                          ),
                         ),
                       ),
                     ),
@@ -263,10 +264,16 @@ class _StatusCardState extends State<StatusCard> {
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            Expanded(child: Text(label, maxLines: 1, style: small.copyWith(color: color))),
+                            Expanded(
+                              child: Text(label, maxLines: 1, style: small.copyWith(color: color)),
+                            ),
                             Text(
                               w != null ? '${w.tempC.round()}°C' : '—°C',
-                              style: SuturaText.label.copyWith(fontSize: 10, letterSpacing: 0.6, color: w != null ? Sutura.textHi : Sutura.textLow),
+                              style: SuturaText.label.copyWith(
+                                fontSize: 10,
+                                letterSpacing: 0.6,
+                                color: w != null ? Sutura.textHi : Sutura.textLow,
+                              ),
                             ),
                           ],
                         ),
@@ -276,7 +283,12 @@ class _StatusCardState extends State<StatusCard> {
                           children: [
                             Text(
                               hhmm,
-                              style: SuturaText.number.copyWith(fontSize: 20, letterSpacing: 1.4, fontWeight: FontWeight.w500, color: const Color(0xFFD9D6CF)),
+                              style: SuturaText.number.copyWith(
+                                fontSize: 20,
+                                letterSpacing: 1.4,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFFD9D6CF),
+                              ),
                             ),
                             Container(width: 1, height: 13, margin: const EdgeInsets.fromLTRB(6, 0, 5, 2), color: Sutura.lineStrong),
                             Padding(
@@ -356,7 +368,9 @@ class WeatherGlyphPainter extends CustomPainter {
       case WeatherKind.partly:
         // Sol (o luna) asomando detrás de la nube.
         canvas.save();
-        canvas.clipPath(Path.combine(PathOperation.difference, Path()..addRect(const Rect.fromLTWH(0, 0, 20, 14)), cloudPath(const Offset(8, 8))));
+        canvas.clipPath(
+          Path.combine(PathOperation.difference, Path()..addRect(const Rect.fromLTWH(0, 0, 20, 14)), cloudPath(const Offset(8, 8))),
+        );
         day ? sun(const Offset(13.2, 4.6), 2.4) : moon(const Offset(13.5, 4.5), 3.4);
         canvas.restore();
         cloud(const Offset(8, 8));
@@ -563,7 +577,12 @@ class ObjectiveCard extends StatelessWidget {
                             opacity: 0.72,
                             child: ColorFiltered(
                               colorFilter: _greyscale,
-                              child: Image.asset(_obelisco, fit: BoxFit.cover, alignment: const Alignment(0, 0.25), filterQuality: FilterQuality.medium),
+                              child: Image.asset(
+                                _obelisco,
+                                fit: BoxFit.cover,
+                                alignment: const Alignment(0, 0.25),
+                                filterQuality: FilterQuality.medium,
+                              ),
                             ),
                           ),
                         ),
@@ -581,7 +600,10 @@ class ObjectiveCard extends StatelessWidget {
                                     children: [
                                       Container(width: 1, height: 9, color: Sutura.textLow),
                                       const SizedBox(width: 4),
-                                      Text('OBJETIVO ACTUAL', style: SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 2.6, color: Sutura.textLow)),
+                                      Text(
+                                        'OBJETIVO ACTUAL',
+                                        style: SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 2.6, color: Sutura.textLow),
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 4),
@@ -707,15 +729,8 @@ class MapControlFrame extends StatelessWidget {
   final Color? glow;
 
   @override
-  Widget build(BuildContext context) => GritPanel(
-        padding: EdgeInsets.zero,
-        background: background,
-        border: border,
-        corners: null,
-        cuts: kMapCuts,
-        glow: glow,
-        child: child,
-      );
+  Widget build(BuildContext context) =>
+      GritPanel(padding: EdgeInsets.zero, background: background, border: border, corners: null, cuts: kMapCuts, glow: glow, child: child);
 }
 
 /// Botón cuadrado de los controles del mapa.
@@ -839,7 +854,12 @@ class _ArrowPainter extends CustomPainter {
     final shadow = Paint()
       ..color = const Color(0x99000000)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawPath(Path()..addPath(left, Offset.zero)..addPath(right, Offset.zero), shadow);
+    canvas.drawPath(
+      Path()
+        ..addPath(left, Offset.zero)
+        ..addPath(right, Offset.zero),
+      shadow,
+    );
     canvas.drawPath(left, Paint()..color = const Color(0xFFE1E3E4));
     canvas.drawPath(right, Paint()..color = const Color(0xFF9A9EA0));
   }
@@ -977,23 +997,34 @@ class SutureSealPainter extends CustomPainter {
       i == 0 ? hex.moveTo(v.dx, v.dy) : hex.lineTo(v.dx, v.dy);
     }
     hex.close();
-    canvas.drawPath(hex, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.9
-      ..color = color);
+    canvas.drawPath(
+      hex,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.9
+        ..color = color,
+    );
     // Sutura: costura en diagonal con puntadas.
     final a = c + Offset(-hr * 0.62, hr * 0.5);
     final b = c + Offset(hr * 0.62, -hr * 0.5);
-    canvas.drawLine(a, b, Paint()
-      ..strokeWidth = 0.8
-      ..color = const Color(0xFF9C3A33));
+    canvas.drawLine(
+      a,
+      b,
+      Paint()
+        ..strokeWidth = 0.8
+        ..color = const Color(0xFF9C3A33),
+    );
     final dir = (b - a) / (b - a).distance;
     final n = Offset(-dir.dy, dir.dx);
     for (var i = 1; i <= 4; i++) {
       final p = a + (b - a) * (i / 5);
-      canvas.drawLine(p - n * 1.8, p + n * 1.8, Paint()
-        ..strokeWidth = 0.8
-        ..color = const Color(0xFF9C3A33));
+      canvas.drawLine(
+        p - n * 1.8,
+        p + n * 1.8,
+        Paint()
+          ..strokeWidth = 0.8
+          ..color = const Color(0xFF9C3A33),
+      );
     }
     // "ZC".
     final tp = TextPainter(
@@ -1139,12 +1170,22 @@ class IntroCaption extends StatelessWidget {
               children: [
                 Text(
                   'ENLACE SATELITAL',
-                  style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 4.4, color: Sutura.textHi, shadows: const [Shadow(color: Color(0xE6000000), blurRadius: 6)]),
+                  style: SuturaText.label.copyWith(
+                    fontSize: 11,
+                    letterSpacing: 4.4,
+                    color: Sutura.textHi,
+                    shadows: const [Shadow(color: Color(0xE6000000), blurRadius: 6)],
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'VITA-7  //  TRIANGULANDO TU POSICIÓN',
-                  style: SuturaText.label.copyWith(fontSize: 8.5, letterSpacing: 2.4, color: Sutura.signal, shadows: const [Shadow(color: Color(0xE6000000), blurRadius: 6)]),
+                  style: SuturaText.label.copyWith(
+                    fontSize: 8.5,
+                    letterSpacing: 2.4,
+                    color: Sutura.signal,
+                    shadows: const [Shadow(color: Color(0xE6000000), blurRadius: 6)],
+                  ),
                 ),
               ],
             ),

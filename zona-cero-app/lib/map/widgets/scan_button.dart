@@ -88,7 +88,6 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
   }
 
   void _down(PointerDownEvent _) {
-    debugPrint('ZCDBG scan down ready=$_ready left=$_left fix=$_hasFix');
     if (!_ready) return;
     _holding = true;
     HapticFeedback.selectionClick();
@@ -98,7 +97,6 @@ class _ScanButtonState extends State<ScanButton> with TickerProviderStateMixin {
   }
 
   void _up(PointerUpEvent _) {
-    debugPrint('ZCDBG scan up ready=$_ready holding=$_holding charge=${_charge.value}');
     if (!_ready) {
       // Durante la recarga (o sin GNSS), un toque informa por qué no se puede.
       if (!app.scan()) Sfx.play(SfxId.error, volume: 0.7);

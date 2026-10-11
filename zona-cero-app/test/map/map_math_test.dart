@@ -130,9 +130,7 @@ void main() {
     final mpp = metersPerPixel(obelisco.lat, 16);
 
     test('lleva etiqueta lo más cercano, hasta el máximo', () {
-      final c = [
-        for (var i = 0; i < 8; i++) LabelCandidate('c$i', offsetM(obelisco, i * 150.0, 0), i * 150.0 + 10),
-      ];
+      final c = [for (var i = 0; i < 8; i++) LabelCandidate('c$i', offsetM(obelisco, i * 150.0, 0), i * 150.0 + 10)];
       final out = pickLabelled(c, metersPerPx: mpp, max: 3);
       expect(out, {'c0', 'c1', 'c2'});
     });
@@ -189,7 +187,9 @@ void main() {
       final base = cellOf(obelisco);
       final group = [base, CellCoord(base.cx + 1, base.cy), CellCoord(base.cx + 1, base.cy + 1)];
       final lonely = CellCoord(base.cx + 6, base.cy - 4);
-      final zones = [for (final c in [...group, lonely]) _zone(c)];
+      final zones = [
+        for (final c in [...group, lonely]) _zone(c),
+      ];
       final centers = infestedClusterCenters(zones);
       expect(centers, hasLength(2));
       final groupCenters = {for (final c in group) cellCenter(c)};

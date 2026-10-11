@@ -33,8 +33,7 @@ const kMapPitch = 45.0;
 const kIntroZoom = 11.2;
 const kIntroPitch = 52.0;
 const kIntroBearing = -38.0;
-/// Duración del vuelo (ms). `--dart-define=ZC_INTRO_MS=...` solo para capturas.
-const kIntroMs = int.fromEnvironment('ZC_INTRO_MS', defaultValue: 3100);
+const kIntroMs = 3100;
 
 /// Distancia (px lógicos, sin contar el margen superior del sistema) desde el
 /// borde superior del mapa hasta el botón (i) de atribución: a la derecha, en
@@ -186,8 +185,19 @@ class _RawProps implements ml.LayerProperties {
 
 /// Un marcador antes de convertirse en feature.
 class _Mark {
-  const _Mark(this.id, this.position, this.kind, this.title,
-      {this.echo = false, this.own = false, this.mortal = false, this.avatar, required this.z, this.weight = 1, this.radiusM});
+  const _Mark(
+    this.id,
+    this.position,
+    this.kind,
+    this.title, {
+    this.echo = false,
+    this.own = false,
+    this.mortal = false,
+    this.avatar,
+    required this.z,
+    this.weight = 1,
+    this.radiusM,
+  });
   final String id;
   final LatLng position;
   final MarkKind kind;
@@ -421,9 +431,11 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     // la pose de la entrada ya, así no "salta" al empezar el vuelo.
     if (!_introDone) {
       final start = app.location.position ?? app.demoPosition ?? gameConfig.demo.start;
-      c.moveCamera(ml.CameraUpdate.newCameraPosition(
-        ml.CameraPosition(target: _ll(_introFrom(start)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
-      ));
+      c.moveCamera(
+        ml.CameraUpdate.newCameraPosition(
+          ml.CameraPosition(target: _ll(_introFrom(start)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
+        ),
+      );
     }
   }
 
@@ -514,69 +526,90 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     }
 
     if (tex.ground) {
-      await guard(_Lyr.bgTex, () => c.addBackgroundLayer(
-            _Lyr.bgTex,
-            const ml.BackgroundLayerProperties(backgroundPattern: SuturaMapStyle.texGround, backgroundOpacity: 0.5),
-            belowLayerId: 'green-base',
-          ));
+      await guard(
+        _Lyr.bgTex,
+        () => c.addBackgroundLayer(
+          _Lyr.bgTex,
+          const ml.BackgroundLayerProperties(backgroundPattern: SuturaMapStyle.texGround, backgroundOpacity: 0.5),
+          belowLayerId: 'green-base',
+        ),
+      );
     }
     if (tex.canopy) {
       const green = ml.FillLayerProperties(fillPattern: SuturaMapStyle.texCanopy, fillOpacity: 0.97, fillAntialias: false);
-      await guard(_Lyr.canopy, () => c.addFillLayer(
-            src,
-            _Lyr.canopy,
-            green,
-            sourceLayer: 'landcover',
-            filter: ['match', ['get', 'class'], SuturaMapStyle.greenClasses, true, false],
-            belowLayerId: SuturaMapStyle.waterLayer,
-            enableInteraction: false,
-          ));
-      await guard(_Lyr.canopyPark, () => c.addFillLayer(
-            src,
-            _Lyr.canopyPark,
-            green,
-            sourceLayer: 'park',
-            belowLayerId: SuturaMapStyle.waterLayer,
-            enableInteraction: false,
-          ));
+      await guard(
+        _Lyr.canopy,
+        () => c.addFillLayer(
+          src,
+          _Lyr.canopy,
+          green,
+          sourceLayer: 'landcover',
+          filter: [
+            'match',
+            ['get', 'class'],
+            SuturaMapStyle.greenClasses,
+            true,
+            false,
+          ],
+          belowLayerId: SuturaMapStyle.waterLayer,
+          enableInteraction: false,
+        ),
+      );
+      await guard(
+        _Lyr.canopyPark,
+        () => c.addFillLayer(
+          src,
+          _Lyr.canopyPark,
+          green,
+          sourceLayer: 'park',
+          belowLayerId: SuturaMapStyle.waterLayer,
+          enableInteraction: false,
+        ),
+      );
     }
-    await guard(_Lyr.building, () => c.addFillLayer(
-          src,
-          _Lyr.building,
-          ml.FillLayerProperties(
-            fillPattern: tex.roofs ? SuturaMapStyle.texRoofs : null,
-            fillColor: tex.roofs ? null : SuturaMapStyle.buildingFallback,
-            fillOpacity: tex.roofs ? 0.95 : 1,
-          ),
-          sourceLayer: 'building',
-          minzoom: 14,
-          belowLayerId: SuturaMapStyle.buildingEdgeLayer,
-          enableInteraction: false,
-        ));
-    await guard(_Lyr.metro, () => c.addSymbolLayer(
-          src,
-          _Lyr.metro,
-          ml.SymbolLayerProperties(
-            iconImage: MapIcons.metro,
-            iconSize: _iconBase,
-            textField: SuturaMapStyle.stationName,
-            textFont: const ['Noto Sans Regular'],
-            textSize: 9.5,
-            textTransform: 'uppercase',
-            textLetterSpacing: 0.22,
-            textAnchor: 'top',
-            textOffset: const [0, 1.05],
-            textPadding: 4,
-            textOptional: true,
-            textColor: '#D5D8D9',
-            textHaloColor: SuturaMapStyle.halo,
-            textHaloWidth: 1.5,
-          ),
-          sourceLayer: 'poi',
-          minzoom: 15,
-          filter: SuturaMapStyle.subwayFilter,
-          enableInteraction: false,
-        ));
+    await guard(
+      _Lyr.building,
+      () => c.addFillLayer(
+        src,
+        _Lyr.building,
+        ml.FillLayerProperties(
+          fillPattern: tex.roofs ? SuturaMapStyle.texRoofs : null,
+          fillColor: tex.roofs ? null : SuturaMapStyle.buildingFallback,
+          fillOpacity: tex.roofs ? 0.95 : 1,
+        ),
+        sourceLayer: 'building',
+        minzoom: 14,
+        belowLayerId: SuturaMapStyle.buildingEdgeLayer,
+        enableInteraction: false,
+      ),
+    );
+    await guard(
+      _Lyr.metro,
+      () => c.addSymbolLayer(
+        src,
+        _Lyr.metro,
+        ml.SymbolLayerProperties(
+          iconImage: MapIcons.metro,
+          iconSize: _iconBase,
+          textField: SuturaMapStyle.stationName,
+          textFont: const ['Noto Sans Regular'],
+          textSize: 9.5,
+          textTransform: 'uppercase',
+          textLetterSpacing: 0.22,
+          textAnchor: 'top',
+          textOffset: const [0, 1.05],
+          textPadding: 4,
+          textOptional: true,
+          textColor: '#D5D8D9',
+          textHaloColor: SuturaMapStyle.halo,
+          textHaloWidth: 1.5,
+        ),
+        sourceLayer: 'poi',
+        minzoom: 15,
+        filter: SuturaMapStyle.subwayFilter,
+        enableInteraction: false,
+      ),
+    );
   }
 
   Future<void> _addOverlays(ml.MapLibreMapController c) async {
@@ -595,8 +628,20 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       _Src.cells,
       _Lyr.cellsFill,
       const ml.FillLayerProperties(
-        fillColor: ['match', ['get', 'st'], 'loot', amber, steel],
-        fillOpacity: ['match', ['get', 'st'], 'loot', 0.05, 0.03],
+        fillColor: [
+          'match',
+          ['get', 'st'],
+          'loot',
+          amber,
+          steel,
+        ],
+        fillOpacity: [
+          'match',
+          ['get', 'st'],
+          'loot',
+          0.05,
+          0.03,
+        ],
       ),
       belowLayerId: outline,
       enableInteraction: false,
@@ -605,9 +650,21 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       _Src.cells,
       _Lyr.cellsLine,
       const ml.LineLayerProperties(
-        lineColor: ['match', ['get', 'st'], 'loot', amber, steel],
+        lineColor: [
+          'match',
+          ['get', 'st'],
+          'loot',
+          amber,
+          steel,
+        ],
         lineWidth: 1,
-        lineOpacity: ['match', ['get', 'st'], 'loot', 0.22, 0.12],
+        lineOpacity: [
+          'match',
+          ['get', 'st'],
+          'loot',
+          0.22,
+          0.12,
+        ],
         lineDasharray: [4, 3],
       ),
       belowLayerId: label,
@@ -620,9 +677,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
       _Lyr.zoneArea,
       ml.CircleLayerProperties(
         circleRadius: _metersToPxExpr(lat, ['get', 'rm']),
-        circleColor: '#8A1610',
-        circleOpacity: 0.32,
-        circleBlur: 0.45,
+        circleColor: '#7E140E',
+        circleOpacity: 0.22,
+        circleBlur: 0.5,
         circlePitchAlignment: 'map',
         circlePitchScale: 'map',
       ),
@@ -637,7 +694,7 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         circleOpacity: 0,
         circleStrokeColor: red,
         circleStrokeWidth: 0.9,
-        circleStrokeOpacity: 0.32,
+        circleStrokeOpacity: 0.26,
         circlePitchAlignment: 'map',
         circlePitchScale: 'map',
       ),
@@ -657,13 +714,12 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     await c.addLineLayer(
       _Src.sutures,
       _Lyr.sutures,
-      const ml.LineLayerProperties(
-        lineColor: steel,
-        lineWidth: 1,
-        lineOpacity: 0.45,
-        lineDasharray: [2, 3],
-      ),
-      filter: ['==', ['get', 'own'], true],
+      const ml.LineLayerProperties(lineColor: steel, lineWidth: 1, lineOpacity: 0.45, lineDasharray: [2, 3]),
+      filter: [
+        '==',
+        ['get', 'own'],
+        true,
+      ],
       enableInteraction: false,
     );
 
@@ -700,12 +756,24 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         circleStrokeOpacity: 0,
         circlePitchAlignment: 'map',
       ),
-      filter: ['==', ['get', 'k'], 'signal'],
+      filter: [
+        '==',
+        ['get', 'k'],
+        'signal',
+      ],
       enableInteraction: false,
     );
 
     // Avisos ambientales: ping que late en una calle cercana.
-    const toneColor = ['match', ['get', 't'], 'hostile', red, 'signal', steel, amber];
+    const toneColor = [
+      'match',
+      ['get', 't'],
+      'hostile',
+      red,
+      'signal',
+      steel,
+      amber,
+    ];
     await c.addCircleLayer(
       _Src.events,
       _Lyr.ping,
@@ -871,7 +939,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     return _diff(
       _Src.player,
       '${p.lat},${p.lng},${h?.round()}',
-      () => featureCollection([pointFeature(p, {'icon': icon, 'rot': h ?? 0})]),
+      () => featureCollection([
+        pointFeature(p, {'icon': icon, 'rot': h ?? 0}),
+      ]),
     );
   }
 
@@ -898,7 +968,13 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         if (pos == null || haversineM(pos, z.center) < 2500) z,
     ];
     final sig = [for (final z in zones) '${z.center.lat},${z.center.lng},${z.radiusM.round()}'].join(';');
-    return _diff(_Src.infect, sig, () => featureCollection([for (final z in zones) pointFeature(z.center, {'rm': z.radiusM})]));
+    return _diff(
+      _Src.infect,
+      sig,
+      () => featureCollection([
+        for (final z in zones) pointFeature(z.center, {'rm': z.radiusM}),
+      ]),
+    );
   }
 
   Json? _buildMarks(int now) {
@@ -923,8 +999,18 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         case ZombieSpawn z:
           final def = zombieDefs[z.zombieType]!;
           walkers = true;
-          marks.add(_Mark(s.id, at, MarkKind.zombie, echo ? 'Hostil' : def.name,
-              echo: echo, mortal: threatRating(def, level) >= 3, avatar: z.zombieType, z: 50));
+          marks.add(
+            _Mark(
+              s.id,
+              at,
+              MarkKind.zombie,
+              echo ? 'Hostil' : def.name,
+              echo: echo,
+              mortal: threatRating(def, level) >= 3,
+              avatar: z.zombieType,
+              z: 50,
+            ),
+          );
         case SupplySpawn _:
           marks.add(_Mark(s.id, at, MarkKind.supply, 'Saqueo', echo: echo, z: 40));
       }
@@ -941,7 +1027,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     }
     for (final z in _zoneClusters()) {
       if (far(z.center, _signalRadiusM)) continue;
-      marks.add(_Mark('zone:${cellId(cellOf(z.center))}', z.center, MarkKind.zone, 'Zona infectada', z: 20, weight: 1.35, radiusM: z.radiusM));
+      marks.add(
+        _Mark('zone:${cellId(cellOf(z.center))}', z.center, MarkKind.zone, 'Zona infectada', z: 20, weight: 1.35, radiusM: z.radiusM),
+      );
     }
 
     // Etiquetas: el seleccionado y los más cercanos que no se pisen.
@@ -997,9 +1085,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
         ..write(m.position.lat.toStringAsFixed(7))
         ..write(m.position.lng.toStringAsFixed(7))
         ..write(';');
-      feats.add(pointFeature(
-        m.position,
-        {
+      feats.add(
+        pointFeature(m.position, {
           'id': m.id,
           'k': m.kind.name,
           'icon': icon,
@@ -1008,9 +1095,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
           'dist': dist,
           'dc': hexColor(_distanceColor(m)),
           'toff': isLabelled ? MapIcons.distanceOffset(m.kind, spec.lines.length) : const [0.0, 0.0],
-        },
-        id: m.id,
-      ));
+        }, id: m.id),
+      );
     }
     _signalsOn = signals;
     _syncPulse();
@@ -1018,9 +1104,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   }
 
   static Color _distanceColor(_Mark m) => switch (m.kind) {
-        MarkKind.zombie || MarkKind.zone => const Color(0xFFF06A5E),
-        _ => markColor(m.kind, own: m.own),
-      };
+    MarkKind.zombie || MarkKind.zone => const Color(0xFFF06A5E),
+    _ => markColor(m.kind, own: m.own),
+  };
 
   Json? _buildCells(int now) {
     final w = app.world;
@@ -1162,7 +1248,10 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   }
 
   void _publishEvents(int now) {
-    final toasts = [for (final e in _events) if (now - e.at < _eventToastMs) e];
+    final toasts = [
+      for (final e in _events)
+        if (now - e.at < _eventToastMs) e,
+    ];
     final cur = widget.controller.events.value;
     if (toasts.length != cur.length || !toasts.every(cur.contains)) {
       widget.controller.events.value = List.unmodifiable(toasts.length > 2 ? toasts.sublist(toasts.length - 2) : toasts);
@@ -1305,14 +1394,30 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
   static List<Object> _metersToPx(double lat, double meters) {
     final ground = 40075016.686 * math.cos(lat * math.pi / 180);
     double px(int z) => meters / (ground / (512 * math.pow(2, z)));
-    return ['interpolate', ['exponential', 2], ['zoom'], 10, px(10), 22, px(22)];
+    return [
+      'interpolate',
+      ['exponential', 2],
+      ['zoom'],
+      10,
+      px(10),
+      22,
+      px(22),
+    ];
   }
 
   /// Igual que [_metersToPx] pero con los metros de una propiedad del feature.
   static List<Object> _metersToPxExpr(double lat, Object meters) {
     final ground = 40075016.686 * math.cos(lat * math.pi / 180);
     double k(int z) => 512 * math.pow(2, z) / ground;
-    return ['interpolate', ['exponential', 2], ['zoom'], 10, ['*', meters, k(10)], 22, ['*', meters, k(22)]];
+    return [
+      'interpolate',
+      ['exponential', 2],
+      ['zoom'],
+      10,
+      ['*', meters, k(10)],
+      22,
+      ['*', meters, k(22)],
+    ];
   }
 
   /// "Golpe" de cámara al disparar el pulso: un acercamiento breve y vuelta.
@@ -1401,9 +1506,11 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     _lastFix = p;
     widget.controller._setIntro(true);
     widget.controller._setFollow(true);
-    c.moveCamera(ml.CameraUpdate.newCameraPosition(
-      ml.CameraPosition(target: _ll(_introFrom(p)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
-    ));
+    c.moveCamera(
+      ml.CameraUpdate.newCameraPosition(
+        ml.CameraPosition(target: _ll(_introFrom(p)), zoom: kIntroZoom, tilt: kIntroPitch, bearing: kIntroBearing),
+      ),
+    );
     // Un instante sobre la ciudad (cargan las teselas lejanas) y a volar.
     _introTimer = Timer(const Duration(milliseconds: 500), () {
       final to = app.location.position ?? p;
@@ -1469,7 +1576,6 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
 
   void _onCameraMove(ml.CameraPosition cp) {
     _camera = cp;
-    debugPrint('ZCDBG cam z=${cp.zoom.toStringAsFixed(2)} tilt=${cp.tilt.toStringAsFixed(1)} b=${cp.bearing.toStringAsFixed(1)} intro=$_intro t=${_now % 100000}');
     widget.controller._setCamera(cp.bearing, cp.zoom, cp.target.latitude);
     // Las etiquetas dependen de la escala y el rumbo: recalcular si cambiaron bastante.
     final db = ((cp.bearing - _labelBearing + 540) % 360 - 180).abs();
@@ -1517,12 +1623,14 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     _segA = cam != null ? _core(cam.target) : p;
     _segB = p;
     c.animateCamera(
-      ml.CameraUpdate.newCameraPosition(ml.CameraPosition(
-        target: _ll(p),
-        zoom: math.max(cam?.zoom ?? kMapZoom, 15.5),
-        tilt: widget.controller.pitched ? kMapPitch : 0,
-        bearing: cam?.bearing ?? 0,
-      )),
+      ml.CameraUpdate.newCameraPosition(
+        ml.CameraPosition(
+          target: _ll(p),
+          zoom: math.max(cam?.zoom ?? kMapZoom, 15.5),
+          tilt: widget.controller.pitched ? kMapPitch : 0,
+          bearing: cam?.bearing ?? 0,
+        ),
+      ),
       duration: const Duration(milliseconds: 500),
     );
   }
@@ -1539,12 +1647,14 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     final cam = _cam;
     final far = cam == null || haversineM(_core(cam.target), p) > 2500;
     c.animateCamera(
-      ml.CameraUpdate.newCameraPosition(ml.CameraPosition(
-        target: _ll(p),
-        zoom: cam == null || far ? 15.8 : math.max(cam.zoom, 15.5),
-        tilt: cam?.tilt ?? 0,
-        bearing: cam?.bearing ?? 0,
-      )),
+      ml.CameraUpdate.newCameraPosition(
+        ml.CameraPosition(
+          target: _ll(p),
+          zoom: cam == null || far ? 15.8 : math.max(cam.zoom, 15.5),
+          tilt: cam?.tilt ?? 0,
+          bearing: cam?.bearing ?? 0,
+        ),
+      ),
       duration: Duration(milliseconds: far ? 1100 : 600),
     );
   }
@@ -1584,12 +1694,9 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
     _segA = cam != null ? _core(cam.target) : target;
     _segB = target;
     c.animateCamera(
-      ml.CameraUpdate.newCameraPosition(ml.CameraPosition(
-        target: _ll(target),
-        zoom: cam?.zoom ?? kMapZoom,
-        tilt: next ? kMapPitch : 0,
-        bearing: cam?.bearing ?? 0,
-      )),
+      ml.CameraUpdate.newCameraPosition(
+        ml.CameraPosition(target: _ll(target), zoom: cam?.zoom ?? kMapZoom, tilt: next ? kMapPitch : 0, bearing: cam?.bearing ?? 0),
+      ),
       duration: const Duration(milliseconds: 500),
     );
   }
@@ -1642,7 +1749,8 @@ class _GameMapState extends State<GameMap> with TickerProviderStateMixin {
           p.lng >= region.southwest.longitude &&
           p.lng <= region.northeast.longitude;
       final around = app.location.position ?? _core(cam.target);
-      final needs = _placement == null ||
+      final needs =
+          _placement == null ||
           _placementCenter == null ||
           haversineM(_placementCenter!, around) > 250 ||
           app.world.spawns.any((s) => s.placement == PlacementState.raw && inView(s.position));

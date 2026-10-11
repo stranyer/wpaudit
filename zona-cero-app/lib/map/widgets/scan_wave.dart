@@ -43,19 +43,22 @@ class _ScanWaveState extends State<ScanWave> with SingleTickerProviderStateMixin
   static const _tailMs = 420;
   static const _totalMs = WorldController.scanDurationMs + _tailMs;
   static const _shakeMs = 420;
-  static const _slow = int.fromEnvironment('ZC_WAVE_SLOWMO', defaultValue: 1); // TEMP capturas
 
   static Future<ui.FragmentProgram?>? _program;
   ui.FragmentShader? _shader;
 
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: _totalMs * _slow))
-    ..addListener(_onTick)
-    ..addStatusListener((s) {
-      if (s == AnimationStatus.completed) {
-        widget.shake.value = Offset.zero;
-        if (mounted) setState(() {});
-      }
-    });
+  late final AnimationController _c =
+      AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: _totalMs),
+        )
+        ..addListener(_onTick)
+        ..addStatusListener((s) {
+          if (s == AnimationStatus.completed) {
+            widget.shake.value = Offset.zero;
+            if (mounted) setState(() {});
+          }
+        });
   int _seen = 0;
   LatLng? _origin;
   int _seed = 0;
@@ -101,7 +104,7 @@ class _ScanWaveState extends State<ScanWave> with SingleTickerProviderStateMixin
     if (dt < 0 || dt >= WorldController.scanDurationMs) return;
     _origin = w.lastScanOrigin ?? app.location.position;
     _seed = w.lastScanAt;
-    _c.forward(from: dt / (_totalMs * _slow));
+    _c.forward(from: dt / _totalMs);
     setState(() {});
   }
 
@@ -231,12 +234,17 @@ class _WavePainter extends CustomPainter {
         center,
         r,
         Paint()
-          ..shader = ui.Gradient.radial(center, r, [
-            _steel.withValues(alpha: 0),
-            _steel.withValues(alpha: 0),
-            _steel.withValues(alpha: 0.16 * a),
-            _steel.withValues(alpha: 0.03 * a),
-          ], [0, 0.5, 0.96, 1]),
+          ..shader = ui.Gradient.radial(
+            center,
+            r,
+            [
+              _steel.withValues(alpha: 0),
+              _steel.withValues(alpha: 0),
+              _steel.withValues(alpha: 0.16 * a),
+              _steel.withValues(alpha: 0.03 * a),
+            ],
+            [0, 0.5, 0.96, 1],
+          ),
       );
       Paint ring(Color c, double w, double alpha, {double blur = 0, BlendMode mode = BlendMode.srcOver}) {
         final p = Paint()

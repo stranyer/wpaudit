@@ -14,60 +14,62 @@ Json emptyCollection() => featureCollection(const []);
 List<double> lngLat(LatLng p) => [p.lng, p.lat];
 
 Json pointFeature(LatLng p, Json props, {String? id}) => {
-      'type': 'Feature',
-      'id': ?id,
-      'properties': props,
-      'geometry': {'type': 'Point', 'coordinates': lngLat(p)},
-    };
+  'type': 'Feature',
+  'id': ?id,
+  'properties': props,
+  'geometry': {'type': 'Point', 'coordinates': lngLat(p)},
+};
 
 Json lineFeature(List<LatLng> pts, Json props) => {
-      'type': 'Feature',
-      'properties': props,
-      'geometry': {
-        'type': 'LineString',
-        'coordinates': [for (final p in pts) lngLat(p)],
-      },
-    };
+  'type': 'Feature',
+  'properties': props,
+  'geometry': {
+    'type': 'LineString',
+    'coordinates': [for (final p in pts) lngLat(p)],
+  },
+};
 
 /// Polígono: [anillo exterior, ...agujeros]; cada anillo se cierra solo.
 Json polygonFeature(List<List<LatLng>> rings, Json props) => {
-      'type': 'Feature',
-      'properties': props,
-      'geometry': {'type': 'Polygon', 'coordinates': [for (final r in rings) _closedRing(r)]},
-    };
+  'type': 'Feature',
+  'properties': props,
+  'geometry': {
+    'type': 'Polygon',
+    'coordinates': [for (final r in rings) _closedRing(r)],
+  },
+};
 
 Json multiPolygonFeature(List<List<List<LatLng>>> polygons, Json props) => {
-      'type': 'Feature',
-      'properties': props,
-      'geometry': {
-        'type': 'MultiPolygon',
-        'coordinates': [
-          for (final poly in polygons) [for (final r in poly) _closedRing(r)],
-        ],
-      },
-    };
+  'type': 'Feature',
+  'properties': props,
+  'geometry': {
+    'type': 'MultiPolygon',
+    'coordinates': [
+      for (final poly in polygons) [for (final r in poly) _closedRing(r)],
+    ],
+  },
+};
 
-List<List<double>> _closedRing(List<LatLng> r) => [
-      for (final p in r) lngLat(p),
-      if (r.isNotEmpty && r.first != r.last) lngLat(r.first),
-    ];
+List<List<double>> _closedRing(List<LatLng> r) => [for (final p in r) lngLat(p), if (r.isNotEmpty && r.first != r.last) lngLat(r.first)];
 
 /// Anillo aproximando un círculo de `radiusM` metros.
 List<LatLng> circleRing(LatLng center, double radiusM, {int steps = 72}) => [
-      for (var i = 0; i < steps; i++)
-        offsetM(center, math.cos(i / steps * 2 * math.pi) * radiusM, math.sin(i / steps * 2 * math.pi) * radiusM),
-    ];
+  for (var i = 0; i < steps; i++) offsetM(center, math.cos(i / steps * 2 * math.pi) * radiusM, math.sin(i / steps * 2 * math.pi) * radiusM),
+];
 
-Json circleCollection(LatLng center, double radiusM) =>
-    featureCollection([polygonFeature([circleRing(center, radiusM)], const {})]);
+Json circleCollection(LatLng center, double radiusM) => featureCollection([
+  polygonFeature([circleRing(center, radiusM)], const {}),
+]);
 
 // ---------------------------------------------------------------------------
 // Contagio: un punto por celda infestada (capa de calor = mancha roja difusa)
 // ---------------------------------------------------------------------------
 
 /// Clave estable del conjunto de celdas infestadas (para no reenviar lo mismo).
-String contagionKey(List<Zone> zones) =>
-    ([for (final z in zones) if (z.threat == ZoneThreat.infested) z.cellId]..sort()).join(',');
+String contagionKey(List<Zone> zones) => ([
+  for (final z in zones)
+    if (z.threat == ZoneThreat.infested) z.cellId,
+]..sort()).join(',');
 
 /// Centros de las celdas infestadas a menos de `maxM` de `around` (si se da).
 Json infestedHeatCollection(List<Zone> zones, {LatLng? around, double maxM = 2500}) {
@@ -93,9 +95,14 @@ Json cellsCollection(Map<String, String> cells) {
     // Pequeño margen para que se lean como habitaciones separadas.
     final sw = offsetM(b.sw, 5, 5);
     final ne = offsetM(b.ne, -5, -5);
-    feats.add(polygonFeature([
-      [sw, LatLng(sw.lat, ne.lng), ne, LatLng(ne.lat, sw.lng)],
-    ], {'st': e.value}));
+    feats.add(
+      polygonFeature(
+        [
+          [sw, LatLng(sw.lat, ne.lng), ne, LatLng(ne.lat, sw.lng)],
+        ],
+        {'st': e.value},
+      ),
+    );
   }
   return featureCollection(feats);
 }

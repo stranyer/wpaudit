@@ -16,16 +16,16 @@ enum WeatherKind { clear, partly, cloud, fog, drizzle, rain, snow, storm }
 
 /// Código WMO (`weather_code` de Open-Meteo) → tipo de ícono.
 WeatherKind weatherKindFor(int code) => switch (code) {
-      0 => WeatherKind.clear,
-      1 || 2 => WeatherKind.partly,
-      3 => WeatherKind.cloud,
-      45 || 48 => WeatherKind.fog,
-      >= 51 && <= 57 => WeatherKind.drizzle,
-      >= 61 && <= 67 || >= 80 && <= 82 => WeatherKind.rain,
-      >= 71 && <= 77 || 85 || 86 => WeatherKind.snow,
-      >= 95 && <= 99 => WeatherKind.storm,
-      _ => WeatherKind.cloud,
-    };
+  0 => WeatherKind.clear,
+  1 || 2 => WeatherKind.partly,
+  3 => WeatherKind.cloud,
+  45 || 48 => WeatherKind.fog,
+  >= 51 && <= 57 => WeatherKind.drizzle,
+  >= 61 && <= 67 || >= 80 && <= 82 => WeatherKind.rain,
+  >= 71 && <= 77 || 85 || 86 => WeatherKind.snow,
+  >= 95 && <= 99 => WeatherKind.storm,
+  _ => WeatherKind.cloud,
+};
 
 class WeatherReading {
   const WeatherReading({required this.tempC, required this.kind, required this.isDay});
@@ -41,10 +41,10 @@ class WeatherReading {
 double roundCoord(double v) => (v * 10).round() / 10;
 
 Uri weatherUri(LatLng p) => Uri.https('api.open-meteo.com', '/v1/forecast', {
-      'latitude': roundCoord(p.lat).toStringAsFixed(1),
-      'longitude': roundCoord(p.lng).toStringAsFixed(1),
-      'current': 'temperature_2m,weather_code,is_day',
-    });
+  'latitude': roundCoord(p.lat).toStringAsFixed(1),
+  'longitude': roundCoord(p.lng).toStringAsFixed(1),
+  'current': 'temperature_2m,weather_code,is_day',
+});
 
 /// Interpreta la respuesta JSON; null si no tiene lo necesario.
 WeatherReading? parseWeather(String body) {

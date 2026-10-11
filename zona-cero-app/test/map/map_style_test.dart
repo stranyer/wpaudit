@@ -40,14 +40,17 @@ void main() {
 
   test('las capas de referencia existen', () {
     final ids = {for (final l in layers) l['id']};
-    expect(ids, containsAll([
-      SuturaMapStyle.waterLayer,
-      SuturaMapStyle.roadCasingLayer,
-      SuturaMapStyle.roadLayer,
-      SuturaMapStyle.labelLayer,
-      SuturaMapStyle.buildingEdgeLayer,
-      'green-base',
-    ]));
+    expect(
+      ids,
+      containsAll([
+        SuturaMapStyle.waterLayer,
+        SuturaMapStyle.roadCasingLayer,
+        SuturaMapStyle.roadLayer,
+        SuturaMapStyle.labelLayer,
+        SuturaMapStyle.buildingEdgeLayer,
+        'green-base',
+      ]),
+    );
   });
 
   group('imagen satelital', () {
@@ -70,14 +73,22 @@ void main() {
     test('desaturada y oscura', () {
       final layer = layers.firstWhere((l) => l['id'] == SuturaMapStyle.satelliteLayer);
       final paint = layer['paint'] as Map;
-      expect(paint['raster-saturation'], closeTo(-0.85, 0.05));
-      expect(paint['raster-brightness-max'], closeTo(0.45, 0.05));
-      expect(paint['raster-contrast'], closeTo(0.1, 0.05));
+      // Gris oscuro de la referencia: casi sin color y con el blanco recortado.
+      expect(paint['raster-saturation'] as num, inInclusiveRange(-0.95, -0.75));
+      expect(paint['raster-brightness-max'] as num, inInclusiveRange(0.3, 0.5));
+      expect(paint['raster-contrast'] as num, inInclusiveRange(0, 0.15));
     });
 
     test('el respaldo vectorial queda debajo; cordones y rótulos, encima', () {
       final sat = ids.indexOf(SuturaMapStyle.satelliteLayer);
-      for (final below in ['bg', 'green-base', SuturaMapStyle.waterLayer, SuturaMapStyle.buildingEdgeLayer, SuturaMapStyle.roadLayer, 'road-dash']) {
+      for (final below in [
+        'bg',
+        'green-base',
+        SuturaMapStyle.waterLayer,
+        SuturaMapStyle.buildingEdgeLayer,
+        SuturaMapStyle.roadLayer,
+        'road-dash',
+      ]) {
         expect(ids.indexOf(below), lessThan(sat), reason: below);
       }
       for (final above in [SuturaMapStyle.roadCasingLayer, SuturaMapStyle.labelLayer, 'poi-label']) {

@@ -11,8 +11,7 @@ import '../core/core.dart';
 
 /// Metros por píxel lógico en la latitud `lat` y el zoom `zoom` de MapLibre
 /// (teselas de 512 px lógicos, cámara cenital).
-double metersPerPixel(double lat, double zoom) =>
-    40075016.686 * math.cos(lat * math.pi / 180).abs() / (512 * math.pow(2, zoom));
+double metersPerPixel(double lat, double zoom) => 40075016.686 * math.cos(lat * math.pi / 180).abs() / (512 * math.pow(2, zoom));
 
 /// Barra de escala: largo total en metros, ancho en píxeles y rótulos
 /// ("0", "100", "200 m").
@@ -186,7 +185,8 @@ Set<String> pickLabelled(
 }) {
   if (candidates.isEmpty || max <= 0) return {};
   double score(LabelCandidate c) => c.distanceM * c.weight * (previous.contains(c.id) ? 0.8 : 1);
-  final sorted = [...candidates]..sort((a, b) {
+  final sorted = [...candidates]
+    ..sort((a, b) {
       if (a.id == selectedId) return -1;
       if (b.id == selectedId) return 1;
       return score(a).compareTo(score(b));

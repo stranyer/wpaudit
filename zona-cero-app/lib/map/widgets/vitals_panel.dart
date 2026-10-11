@@ -32,7 +32,8 @@ class MapVitalsPanel extends StatelessWidget {
         final weapon = p == null ? null : displayedWeapon(p.equipment);
         final ammo = p == null ? 0 : countOf(p.inventory, ItemId.ammo);
         return Semantics(
-          label: 'Signos vitales ${hp.round()} de $hpMax. Resistencia ${st.round()}. '
+          label:
+              'Signos vitales ${hp.round()} de $hpMax. Resistencia ${st.round()}. '
               'Arma: ${weapon == null ? 'puños' : itemDefs[weapon]!.name}.',
           child: SizedBox(
             height: height,
@@ -44,9 +45,15 @@ class MapVitalsPanel extends StatelessWidget {
               cuts: _cuts,
               child: Row(
                 children: [
-                  Expanded(flex: 55, child: _Vitals(ratio: ratio, hp: hp.round(), hpMax: hpMax, stamina: stRatio, staminaValue: st.round())),
+                  Expanded(
+                    flex: 55,
+                    child: _Vitals(ratio: ratio, hp: hp.round(), hpMax: hpMax, stamina: stRatio, staminaValue: st.round()),
+                  ),
                   Container(width: 1, margin: const EdgeInsets.fromLTRB(10, 4, 12, 2), color: Sutura.lineStrong),
-                  Expanded(flex: 45, child: _Weapon(weapon: weapon, ammo: ammo)),
+                  Expanded(
+                    flex: 45,
+                    child: _Weapon(weapon: weapon, ammo: ammo),
+                  ),
                 ],
               ),
             ),
@@ -82,10 +89,18 @@ class _Vitals extends StatelessWidget {
                 EcgMonitor(ratio: ratio, width: (c.maxWidth * 0.5).clamp(50.0, 110.0), height: c.maxHeight - 2, showLabel: false),
                 const Spacer(),
                 Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: '$hp', style: TextStyle(color: color)),
-                    TextSpan(text: '/$hpMax', style: const TextStyle(fontSize: 12.5, color: Color(0xFF7E8183), fontWeight: FontWeight.w500)),
-                  ]),
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '$hp',
+                        style: TextStyle(color: color),
+                      ),
+                      TextSpan(
+                        text: '/$hpMax',
+                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF7E8183), fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
                   style: SuturaText.number.copyWith(fontSize: 29, letterSpacing: 0.4),
                 ),
               ],
@@ -97,7 +112,14 @@ class _Vitals extends StatelessWidget {
             Text('RES', style: _label.copyWith(letterSpacing: 1.6)),
             const SizedBox(width: 8),
             Expanded(
-              child: BlockBar(ratio: stamina, segments: 10, color: const Color(0xFF9CC5D8), height: 6, gap: 3.5, empty: const Color(0xFF26292C)),
+              child: BlockBar(
+                ratio: stamina,
+                segments: 10,
+                color: const Color(0xFF9CC5D8),
+                height: 6,
+                gap: 3.5,
+                empty: const Color(0xFF26292C),
+              ),
             ),
             const SizedBox(width: 8),
             Text('$staminaValue', style: SuturaText.label.copyWith(fontSize: 11, letterSpacing: 1, color: const Color(0xFF9CC5D8))),
@@ -151,24 +173,31 @@ class _Weapon extends StatelessWidget {
                     const SizedBox(height: 3),
                     if (split != null)
                       Text.rich(
-                        TextSpan(children: [
-                          TextSpan(
-                            text: split.loaded.toString().padLeft(2, '0'),
-                            style: TextStyle(color: split.loaded == 0 ? Sutura.danger : const Color(0xFFDEDBD4)),
-                          ),
-                          TextSpan(
-                            text: ' / ${split.reserve.toString().padLeft(2, '0')}',
-                            style: const TextStyle(fontSize: 14, color: Color(0xFF8C8F91), fontWeight: FontWeight.w500),
-                          ),
-                        ]),
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: split.loaded.toString().padLeft(2, '0'),
+                              style: TextStyle(color: split.loaded == 0 ? Sutura.danger : const Color(0xFFDEDBD4)),
+                            ),
+                            TextSpan(
+                              text: ' / ${split.reserve.toString().padLeft(2, '0')}',
+                              style: const TextStyle(fontSize: 14, color: Color(0xFF8C8F91), fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
                         style: SuturaText.number.copyWith(fontSize: 26),
                       )
                     else
                       Text.rich(
-                        TextSpan(children: [
-                          TextSpan(text: def?.weapon == null ? '3–6' : '${def!.weapon!.damage.min}–${def.weapon!.damage.max}'),
-                          const TextSpan(text: '  DAÑO', style: TextStyle(fontSize: 9, letterSpacing: 1.6, color: Color(0xFF8C8F91))),
-                        ]),
+                        TextSpan(
+                          children: [
+                            TextSpan(text: def?.weapon == null ? '3–6' : '${def!.weapon!.damage.min}–${def.weapon!.damage.max}'),
+                            const TextSpan(
+                              text: '  DAÑO',
+                              style: TextStyle(fontSize: 9, letterSpacing: 1.6, color: Color(0xFF8C8F91)),
+                            ),
+                          ],
+                        ),
                         style: SuturaText.number.copyWith(fontSize: 22),
                       ),
                   ],

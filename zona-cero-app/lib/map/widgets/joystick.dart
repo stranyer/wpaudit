@@ -114,15 +114,23 @@ class _JoystickPainter extends CustomPainter {
     final c = size.center(Offset.zero);
     final r = size.shortestSide / 2 - 1;
     canvas.drawCircle(c, r, Paint()..color = const Color(0xE8101213).withValues(alpha: active ? 0.9 : 0.7));
-    canvas.drawCircle(c, r, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = active ? Sutura.signal.withValues(alpha: 0.7) : const Color(0xFF575B5E));
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = active ? Sutura.signal.withValues(alpha: 0.7) : const Color(0xFF575B5E),
+    );
     // Anillo de carrera.
-    canvas.drawCircle(c, r - 7, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = (running ? Sutura.amber : Sutura.lineHair).withValues(alpha: running ? 0.8 : 1));
+    canvas.drawCircle(
+      c,
+      r - 7,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = (running ? Sutura.amber : Sutura.lineHair).withValues(alpha: running ? 0.8 : 1),
+    );
     // Retícula.
     final tick = Paint()
       ..color = Sutura.textLow
@@ -135,19 +143,24 @@ class _JoystickPainter extends CustomPainter {
     final k = c + offset;
     final hex = hexPath(k, knob / 2 - 2);
     if (active) {
-      canvas.drawPath(hex, Paint()
-        ..color = (running ? Sutura.amber : Sutura.signal).withValues(alpha: 0.35)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+      canvas.drawPath(
+        hex,
+        Paint()
+          ..color = (running ? Sutura.amber : Sutura.signal).withValues(alpha: 0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
     }
     canvas.drawPath(hex, Paint()..color = Sutura.surface2);
-    canvas.drawPath(hex, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..color = running ? Sutura.amber : (active ? Sutura.signal : Sutura.textHi));
+    canvas.drawPath(
+      hex,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = running ? Sutura.amber : (active ? Sutura.signal : Sutura.textHi),
+    );
     canvas.drawCircle(k, 2.5, Paint()..color = running ? Sutura.amber : Sutura.signal);
   }
 
   @override
-  bool shouldRepaint(_JoystickPainter old) =>
-      old.offset != offset || old.active != active || old.running != running;
+  bool shouldRepaint(_JoystickPainter old) => old.offset != offset || old.active != active || old.running != running;
 }

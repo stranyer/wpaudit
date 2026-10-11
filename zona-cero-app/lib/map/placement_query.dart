@@ -20,12 +20,14 @@ const _excludedLanduse = ['military', 'railway', 'industrial', 'quarry', 'landfi
 
 /// `around`/`radiusM`: solo se conservan segmentos y polígonos cercanos, así
 /// el ajuste (lineal en la cantidad de segmentos) sigue siendo barato.
-Future<PlacementData?> queryPlacementData(
-  ml.MapLibreMapController map, {
-  required LatLng around,
-  double radiusM = 1600,
-}) async {
-  final roads = await _query(map, 'transportation', ['match', ['get', 'class'], _walkableClasses, true, false]);
+Future<PlacementData?> queryPlacementData(ml.MapLibreMapController map, {required LatLng around, double radiusM = 1600}) async {
+  final roads = await _query(map, 'transportation', [
+    'match',
+    ['get', 'class'],
+    _walkableClasses,
+    true,
+    false,
+  ]);
   if (roads.isEmpty) return null;
 
   final near = _Near(around, radiusM);
@@ -79,8 +81,19 @@ Future<PlacementData?> queryPlacementData(
   }
 
   final water = await _query(map, 'water', null);
-  addPolygons([for (final f in water) if (_props(f)['brunnel'] != 'tunnel') f]);
-  addPolygons(await _query(map, 'landuse', ['match', ['get', 'class'], _excludedLanduse, true, false]));
+  addPolygons([
+    for (final f in water)
+      if (_props(f)['brunnel'] != 'tunnel') f,
+  ]);
+  addPolygons(
+    await _query(map, 'landuse', [
+      'match',
+      ['get', 'class'],
+      _excludedLanduse,
+      true,
+      false,
+    ]),
+  );
   addPolygons(await _query(map, 'aeroway', null));
   return PlacementData(walkable: walkable, excluded: excluded);
 }
@@ -130,9 +143,7 @@ List<LatLng> _points(Object? line) {
 
 /// Filtro barato por distancia (equirectangular, sin trigonometría por punto).
 class _Near {
-  _Near(this.c, double radiusM)
-      : _dLat = radiusM / 110574,
-        _dLng = radiusM / (111320 * math.max(0.05, math.cos(c.lat * math.pi / 180)));
+  _Near(this.c, double radiusM) : _dLat = radiusM / 110574, _dLng = radiusM / (111320 * math.max(0.05, math.cos(c.lat * math.pi / 180)));
   final LatLng c;
   final double _dLat;
   final double _dLng;
